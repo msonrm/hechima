@@ -1,0 +1,12 @@
+// Cloudflare Workers（静的アセット配信）の設定。
+// デプロイ: サイトをビルドしてから `npx wrangler deploy`
+//   cd site && npm ci && npm run build && cd .. && npx wrangler deploy
+// COOP/COEP ヘッダは site/public/_headers（→ site/dist/_headers）が全ページに付与する
+// （hechima-wasm は -pthread = SharedArrayBuffer 必須のため）。
+{
+  "name": "hechima-lab",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": "./site/dist"
+  }
+}

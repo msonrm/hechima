@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>hechima — オンライン日本語入力ラボ（仮）</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/keymap-engine/keymap-engine.js"></script>
+    <script src="/vendor/hechima/hechima.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>🧽 hechima</h1>
+      <p class="tagline">オンライン日本語入力ラボ（仮）— 設定不要で、新配列と本気の日本語変換をブラウザで</p>
+    </header>
+
+    <main>
+      <section class="controls">
+        <label>
+          配列:
+          <select id="keymap">
+            <option value="">ローマ字（内蔵）</option>
+            <option value="naginata_jis">薙刀式 v18（JIS）</option>
+            <option value="naginata_us">薙刀式 v18（US）</option>
+          </select>
+        </label>
+        <button id="clear" type="button">クリア</button>
+        <span id="status" class="status">変換エンジンを準備中…</span>
+      </section>
+
+      <section id="editor" class="editor" aria-label="試し書きエリア">
+        <span id="committed"></span><span id="composition"></span><span class="caret"></span>
+      </section>
+
+      <section class="hints">
+        <p>このページを開いたまま打鍵してください（OS 側の日本語 IME はオフ = 英数直接入力で）。
+          変換はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。</p>
+        <ul>
+          <li><b>Space</b> = 変換 / 次候補、<b>Enter</b> = 確定、<b>Esc</b> = 戻す、<b>←→</b> = 文節移動、<b>Shift+←→</b> = 文節伸縮</li>
+          <li>薙刀式では space+T / space+Y（文節伸縮）、M+V（確定）などの同時打鍵編集も効きます</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = hechima（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,194 @@
+// Hechima v0.4.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// 要 KeymapEngine >= 1.2.0（onHostAction の convert/confirm/insertAndConfirm 転送）。
+// 対応バンドル: hechima.js / hechima.min.js（UMD、グローバル名 `Hechima`）
+//             + hechima-worker.js（Worker 本体、電文 v0。connectWorker で接続する）
+// リファレンス: docs/hechima-session-embedding.md / docs/hechima-protocol.md
+// （logical-layout-labo リポジトリ）
+
+/** cb.show へ渡す表示文節。kind: yomi=未確定よみ / focus=注目文節 / other=非注目文節 */
+export interface SegmentView {
+  text: string;
+  kind: "yomi" | "focus" | "other";
+}
+
+/** cb.convert が返す文節。candidates 省略/空は key をそのまま候補にする */
+export interface ConvertSegment {
+  key: string;
+  candidates?: string[];
+}
+
+/**
+ * ホストが実装するコールバック契約（5 点）。ホストごとの差し替え点はここに閉じる。
+ *
+ * - show(segments): 未確定表示を描画する（文節配列）。
+ * - hide(): 表示消去（バッファが空になった）。
+ * - commit(text): 確定文字列を出力する。呼び元が hide → 注入の順で処理する
+ *   （例: QuuBee=SJIS 注入 / エディタ=挿入 / 試打サイト=追記）。
+ * - hostKey(name): ホスト文書へ実キーを 1 打注入する（name = KeyboardEvent.code 名、
+ *   例 'ArrowLeft' / 'Backspace'）。編集キーをバッファが空のときに実カーソル/BS へ
+ *   橋渡しするための口。省略可。
+ * - convert(yomi): かな→文節/候補のかな漢字変換（hechima-wasm 等を注入する差し替え点）。
+ *   null/省略/失敗 = フォールバック（よみ 1 文節・カタカナ/ひらがな巡回）。
+ * - resize(segmentIndex, offset): 文節伸縮（hechima-wasm v0.2.0+ の hechima_resize 等）。
+ *   省略可。segmentIndex 文節のよみを offset（よみ文字数、±）だけ伸縮し再変換後の全文節を
+ *   返す。null/空/失敗 = 伸縮不能（現状維持）。候補選択中の editSegmentLeft/Right
+ *   （薙刀式 space+T/Y 等）がこれを使う。未提供なら editSegment* は無害に飲まれる。
+ */
+export interface SessionCallbacks {
+  show(segments: SegmentView[]): void;
+  hide(): void;
+  commit(text: string): void;
+  hostKey?(name: string): void;
+  convert?(yomi: string): Promise<ConvertSegment[] | null> | ConvertSegment[] | null;
+  resize?(segmentIndex: number, offset: number): Promise<ConvertSegment[] | null> | ConvertSegment[] | null;
+}
+
+/** feed / feedUp が読む KeyboardEvent 互換の最小形（DOM 型に依存しない） */
+export interface KeyTap {
+  /** KeyboardEvent.key（内蔵ローマ字経路はこれだけ読む） */
+  key: string;
+  /** KeyboardEvent.code（engine 経路の HID 変換と編集キー二重経路の判定に使う） */
+  code?: string;
+  repeat?: boolean;
+  shiftKey?: boolean;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  metaKey?: boolean;
+}
+
+/** KeymapEngine の KeyEvent（構造互換。エンジン注入時のみ使う） */
+export interface KeyEvent {
+  keyCode: number;
+  characters: string;
+  modifiers: number;
+}
+
+/** setEngine に渡す KeyTap → KeyEvent 変換（KeymapEngine.keyEventFromBrowser がそのまま使える） */
+export type KeyEventOf = (tap: KeyTap) => KeyEvent | null;
+
+/**
+ * KeymapEngine の InputEngine（構造互換の最小形）。
+ * setEngine には `new KeymapEngine.InputEngine(...)` をそのまま渡す。
+ * onHostAction は hechima が配線する（KeymapEngine >= 1.2.0 が必要。1.1.0 以前だと
+ * Phase 2 の SandS 単打 convert が転送されず全角スペース挿入に化ける）。
+ */
+export interface InputEngineLike {
+  processKey(event: KeyEvent): unknown;
+  processKeyUp(event: KeyEvent): unknown;
+  getState(): {
+    composingKana: string;
+    pendingDisplay: string;
+    inputMode: string;
+    isComposing: boolean;
+  };
+  takeConfirmedText(): string;
+  reset(): void;
+  onStateChange: (() => void) | null;
+  onHostAction: ((action: { type: string }) => boolean) | null;
+}
+
+/** createFep が返すセッションオブジェクト（公開 API 契約） */
+export interface FepSession {
+  /** セッションが ON か */
+  readonly active: boolean;
+  /** ON/OFF を切り替える。OFF は未確定を破棄する。戻り値 = 新しい active */
+  setActive(on: boolean): boolean;
+  toggle(): boolean;
+  /** keydown 1 個を消費する。true = 飲んだ（ホスト/ゲストへ送らない → preventDefault） */
+  feed(e: KeyTap): boolean;
+  /** keyup を消費する（SandS の単打 convert が発火する）。内蔵ローマ字経路は常に false */
+  feedUp(e: KeyTap): boolean;
+  /**
+   * 配列エンジン（KeymapEngine の InputEngine）を注入する。null = 内蔵ローマ字。
+   * engine.onStateChange → fep.pumpEngine() の配線はホスト側で行うこと。
+   */
+  setEngine(engine: InputEngineLike | null, keyOf?: KeyEventOf | null): void;
+  /** engine.onStateChange（chord 窓満了）から呼ぶ */
+  pumpEngine(): void;
+  reset(): void;
+}
+
+/** 変換セッションを作る */
+export function createFep(cb: SessionCallbacks): FepSession;
+
+/** 内蔵ローマ字リゾルバ（テスト・診断用に公開） */
+export function resolveRomaji(kana: string, pend: string, flush: boolean): { kana: string; pend: string };
+
+/** フォールバック変換（よみ 1 文節・カタカナ/ひらがな巡回） */
+export function fallbackConvert(yomi: string): ConvertSegment[];
+
+/** このバンドルのバージョン（取り込み側が記録する用） */
+export const version: string;
+
+// ---- hechima-worker（電文 v0）。仕様の正典: docs/hechima-protocol.md ----
+
+/** 電文プロトコル版数（ready.protocol と一致する） */
+export const HECHIMA_PROTOCOL_VERSION: number;
+
+/** 変換結果の 1 文節（電文ペイロード）。key = よみ、candidates = 候補（先頭が第一候補） */
+export interface WireSegment {
+  key: string;
+  candidates: string[];
+}
+
+/** ホスト → Worker: 初期化。パスは worker スクリプト位置からの相対 URL（省略 = ./hechima-wasm.js / ./mozc.data） */
+export interface InitRequest { type: "init"; wasmJs?: string; dataUrl?: string }
+/** ホスト → Worker: かな漢字変換 */
+export interface ConvertRequest { type: "convert"; id: number; kana: string; maxCands?: number }
+/** ホスト → Worker: 文節伸縮（直近 convert 結果への stateful 操作。1 ホスト : 1 worker の間だけ成立） */
+export interface ResizeRequest { type: "resize"; id: number; segIdx: number; offset: number; maxCands?: number }
+export type WorkerRequest = InitRequest | ConvertRequest | ResizeRequest;
+
+/** Worker → ホスト: 辞書ダウンロード進捗（total 不明時は 0） */
+export interface ProgressMessage { type: "progress"; loaded: number; total: number }
+/** Worker → ホスト: 初期化完了 */
+export interface ReadyMessage { type: "ready"; protocol: number; version: string; features: { resize: boolean } }
+/** Worker → ホスト: 初期化失敗 */
+export interface ErrorMessage { type: "error"; message: string }
+/** Worker → ホスト: convert / resize の結果。segments null = 結果なし（error は診断用付帯） */
+export interface ResultMessage { type: "result"; id: number; segments: WireSegment[] | null; error?: string }
+export type WorkerResponse = ProgressMessage | ReadyMessage | ErrorMessage | ResultMessage;
+
+/** Worker の構造互換（DOM の Worker がそのまま渡せる） */
+export interface HechimaWorkerLike {
+  postMessage(m: WorkerRequest): void;
+  addEventListener(type: "message", listener: (ev: { data: WorkerResponse }) => void): void;
+}
+
+export interface ConnectWorkerOptions {
+  /** 文節あたりの最大候補数（既定 9） */
+  maxCands?: number;
+  /** 辞書ダウンロード進捗 */
+  onProgress?: (loaded: number, total: number) => void;
+}
+
+export interface WorkerInitPaths { wasmJs?: string; dataUrl?: string }
+
+/** init 完了時の情報（ready 電文の中身） */
+export interface ReadyInfo {
+  protocol: number;
+  version: string;
+  features: { resize: boolean };
+}
+
+export interface WorkerConnection {
+  /** 初期化を開始する。2 回目以降は最初の Promise を返す */
+  init(paths?: WorkerInitPaths): Promise<ReadyInfo>;
+  /** かな→文節/候補。ready まで待機して送る。失敗・init 失敗時は null（cb.convert 互換） */
+  convert(yomi: string): Promise<ConvertSegment[] | null>;
+  /** 文節伸縮。wasm 未対応（features.resize=false）・失敗時は null（cb.resize 互換） */
+  resize(segmentIndex: number, offset: number): Promise<ConvertSegment[] | null>;
+  /** createFep の cb にスプレッドできる形: { ...conn.callbacks(), show, hide, commit } */
+  callbacks(): {
+    convert: (yomi: string) => Promise<ConvertSegment[] | null>;
+    resize: (segmentIndex: number, offset: number) => Promise<ConvertSegment[] | null>;
+  };
+}
+
+/**
+ * hechima-worker（hechima-worker.js を読んだ Worker）へ接続する。
+ * id 相関・ready 待機・resize 機能検出をここに閉じる。
+ */
+export function connectWorker(worker: HechimaWorkerLike, opts?: ConnectWorkerOptions): WorkerConnection;
+
+export as namespace Hechima;

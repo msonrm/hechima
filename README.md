@@ -1,0 +1,50 @@
+# 🧽 hechima
+
+**OS 非依存の Web 向け日本語入力スタック。** 変換エンジンと配列をユーザーランドに取り戻す —
+URL ひとつで、設定不要の新配列と本気の日本語変換がブラウザの中だけで動く。
+
+> 名前の由来: 「へちま」の語源（糸瓜 → とうり → 「と」がいろは順で「へ」と「ち」の間 → へち間）。
+> かな順の言葉遊びがそのまま名前。IM が h-e-c-h-**im**-a に隠れている。
+
+## 構成（3 パッケージ + ラボサイト）
+
+| レイヤ | 中身 | 版 |
+|---|---|---|
+| `hechima` | 変換セッション層（よみ合成 → 非同期変換 → 文節候補選択 → 確定、編集キー二重経路、文節伸縮）+ hechima-worker（電文 v0） | v0.4.0 |
+| `hechima-keymap`（= KeymapEngine） | 配列エンジン。論理配列 JSON（薙刀式等）・同時打鍵/chord・SandS をデータ駆動で解決 | v1.2.0 |
+| `hechima-wasm` | Mozc（fcitx5-mozc）の Emscripten ビルド。「かな → 文節分割 + 候補 JSON」だけの最小 wasm。**powered by Mozc** | v0.2.0 |
+| `site/` | **オンライン日本語入力ラボ（仮）** — 上記スタックのショーケース。Cloudflare Workers（静的アセット）で配信 | — |
+
+各レイヤは差し替え可能（配列は JSON、変換は cb 注入、エンジン境界は電文 =
+「かな → 文節/候補 JSON」）。開発の本家は logical-layout-labo リポジトリで、
+本リポジトリはタグ付き成果物を pin して vendoring する（`site/public/vendor/VENDOR.md`）。
+
+## ラボサイトの開発
+
+```bash
+cd site
+npm ci
+npm run dev      # COOP/COEP ヘッダ付き dev サーバー（wasm の SharedArrayBuffer に必須）
+npm run build    # tsc --noEmit + vite build → site/dist/
+```
+
+## デプロイ（Cloudflare Workers 静的アセット）
+
+```bash
+cd site && npm ci && npm run build && cd ..
+npx wrangler deploy        # 初回は npx wrangler login
+```
+
+または Cloudflare ダッシュボードの Workers Builds（Git 連携）で
+ビルドコマンド `cd site && npm ci && npm run build`、デプロイコマンド `npx wrangler deploy` を設定
+すると push = デプロイになる。
+
+- COOP/COEP は `site/public/_headers` がサイト全体に付与（hechima-wasm は -pthread =
+  SharedArrayBuffer 必須）。外部リソースは埋め込まない（自己完結）
+- 1 ファイル 25MiB 制限: 辞書 `mozc.data` は 18.9MB で現状クリア
+
+## ライセンス
+
+自作部分は MIT。Mozc は BSD-3-Clause (Google)、fcitx5-mozc は BSD-3-Clause (fcitx-contrib) —
+**powered by Mozc**。詳細は [LICENSE](LICENSE) と
+[site/public/vendor/VENDOR.md](site/public/vendor/VENDOR.md)。
