@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.5.0";
+	const HECHIMA_VERSION = "0.5.1";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -323,6 +323,14 @@
 			clear();
 			cb.commit(text);
 		}
+		function ingestSegment(s) {
+			const cands = s.candidates && s.candidates.length ? [...new Set(s.candidates)] : [s.key];
+			return {
+				key: s.key,
+				candidates: cands,
+				idx: 0
+			};
+		}
 		function startConvert() {
 			kana = resolveRomaji(kana, pend, true).kana;
 			pend = "";
@@ -332,11 +340,7 @@
 			Promise.resolve(cb.convert ? cb.convert(yomi) : null).then((result) => {
 				if (gen !== genId || !composing() || kana !== yomi) return;
 				if (!result || !result.length) result = fallbackConvert(yomi);
-				segs = result.map((s) => ({
-					key: s.key,
-					candidates: s.candidates && s.candidates.length ? s.candidates : [s.key],
-					idx: 0
-				}));
+				segs = result.map(ingestSegment);
 				focus = 0;
 				render();
 			}).catch(() => {});
@@ -348,11 +352,7 @@
 			Promise.resolve(cb.resize(idx, offset)).then((result) => {
 				if (gen !== genId || !segs) return;
 				if (!result || !result.length) return;
-				segs = result.map((s) => ({
-					key: s.key,
-					candidates: s.candidates && s.candidates.length ? s.candidates : [s.key],
-					idx: 0
-				}));
+				segs = result.map(ingestSegment);
 				focus = Math.min(idx, segs.length - 1);
 				render();
 			}).catch(() => {});
