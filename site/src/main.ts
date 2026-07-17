@@ -58,6 +58,11 @@ function renderComposition(segments: Hechima.SegmentView[]): void {
   );
 }
 
+function deleteLastChar(): void {
+  committed = Array.from(committed).slice(0, -1).join("");
+  renderCommitted();
+}
+
 const fep = Hechima.createFep({
   show: (segments) => renderComposition(segments),
   hide: () => renderComposition([]),
@@ -67,11 +72,9 @@ const fep = Hechima.createFep({
     renderCommitted();
   },
   hostKey: (name) => {
-    // バッファが空のときの編集キー委譲。文書は末尾追記のみの単純ホストなので BS だけ実装
-    if (name === "Backspace") {
-      committed = committed.slice(0, -1);
-      renderCommitted();
-    }
+    // 編集キー委譲（薙刀式 U 等の specialAction → 空バッファ時）。
+    // 文書は末尾追記のみの単純ホストなので BS だけ実装
+    if (name === "Backspace") deleteLastChar();
   },
   ...conn.callbacks(),
 });
@@ -110,7 +113,17 @@ $<HTMLButtonElement>("clear").addEventListener("click", () => {
 window.addEventListener("keydown", (e) => {
   if (e.metaKey) return; // OS/ブラウザのショートカットは奪わない
   if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLButtonElement) return;
-  if (fep.feed(e)) e.preventDefault();
+  if (fep.feed(e)) {
+    e.preventDefault();
+    return;
+  }
+  // セッションが飲まなかったキー = ホスト（このページ）の文書操作。
+  // 内蔵ローマ字経路は空バッファの BS を消費しない設計（QuuBee ではホスト文書が処理する）
+  // なので、hostKey('Backspace') と同じ削除処理へ合流させる
+  if (e.key === "Backspace" && !e.ctrlKey && !e.altKey) {
+    deleteLastChar();
+    e.preventDefault();
+  }
 });
 window.addEventListener("keyup", (e) => {
   fep.feedUp(e);
