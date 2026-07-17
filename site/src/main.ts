@@ -79,7 +79,8 @@ function renderCandidatePopup(segments: Hechima.SegmentView[]): void {
   const seg = focusIdx >= 0 ? segments[focusIdx] : undefined;
   const cands = seg?.candidates;
   const idx = seg?.candidateIndex;
-  if (!seg || !cands || cands.length < 2 || idx === undefined) {
+  const additional = seg?.additional ?? [];
+  if (!seg || !cands || idx === undefined || (cands.length < 2 && additional.length === 0)) {
     popupEl.hidden = true;
     return;
   }
@@ -88,25 +89,45 @@ function renderCandidatePopup(segments: Hechima.SegmentView[]): void {
   // 戻ると前ページ（ハイライトは末尾行）。ページは選択位置から決まる純関数
   winStart = Math.floor(idx / WINDOW_SIZE) * WINDOW_SIZE;
 
+  const inAdditional = seg.additionalIndex !== undefined;
+  const rows: HTMLElement[] = [];
+
+  // 追加候補（↑ で段階展開。通常候補の上に注釈付きで表示 = KeyLogicKit と同配置）
+  additional.forEach((a, i) => {
+    const row = document.createElement("div");
+    row.className = "cand-row" + (inAdditional && i === seg.additionalIndex ? " selected" : "");
+    const ann = document.createElement("span");
+    ann.className = "cand-ann";
+    ann.textContent = a.annotation;
+    const label = document.createElement("span");
+    label.textContent = a.text;
+    row.append(ann, label);
+    rows.push(row);
+  });
+  if (additional.length > 0) {
+    const divider = document.createElement("div");
+    divider.className = "cand-divider";
+    rows.push(divider);
+  }
+
   const visible = cands.slice(winStart, winStart + WINDOW_SIZE);
-  popupEl.replaceChildren(
-    ...visible.map((text, i) => {
-      const abs = winStart + i;
-      const row = document.createElement("div");
-      row.className = "cand-row" + (abs === idx ? " selected" : "");
-      const num = document.createElement("span");
-      num.className = "cand-num";
-      num.textContent = String(i + 1);
-      const label = document.createElement("span");
-      label.textContent = text;
-      row.append(num, label);
-      row.addEventListener("mousedown", (ev) => {
-        ev.preventDefault(); // フォーカス移動を防ぐ
-        fep.selectCandidate(abs);
-      });
-      return row;
-    }),
-  );
+  visible.forEach((text, i) => {
+    const abs = winStart + i;
+    const row = document.createElement("div");
+    row.className = "cand-row" + (!inAdditional && abs === idx ? " selected" : "");
+    const num = document.createElement("span");
+    num.className = "cand-num";
+    num.textContent = String(i + 1);
+    const label = document.createElement("span");
+    label.textContent = text;
+    row.append(num, label);
+    row.addEventListener("mousedown", (ev) => {
+      ev.preventDefault(); // フォーカス移動を防ぐ
+      fep.selectCandidate(abs);
+    });
+    rows.push(row);
+  });
+  popupEl.replaceChildren(...rows);
   if (cands.length > WINDOW_SIZE) {
     const page = Math.floor(idx / WINDOW_SIZE) + 1;
     const pages = Math.ceil(cands.length / WINDOW_SIZE);

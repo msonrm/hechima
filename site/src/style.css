@@ -111,6 +111,16 @@ header h1 { margin: 0; font-size: 1.6rem; }
   font-size: 0.7rem;
   color: var(--muted);
 }
+.cand-ann {
+  min-width: 3.6em;
+  text-align: right;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+.cand-divider {
+  margin: 2px 4px;
+  border-top: 0.5px solid var(--line);
+}
 
 .hints { margin-top: 1.2rem; color: var(--muted); font-size: 0.85rem; }
 .hints ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }

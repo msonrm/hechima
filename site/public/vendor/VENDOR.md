@@ -5,7 +5,7 @@
 
 | ディレクトリ | 版 | 取得元 |
 |---|---|---|
-| `hechima/`（hechima.js / hechima-worker.js / hechima.d.ts） | **v0.5.1** | labo Release `hechima-v0.5.1`（main `bf64983`。候補公開 + selectCandidate + 表示値 dedupe） |
+| `hechima/`（hechima.js / hechima-worker.js / hechima.d.ts） | **v0.6.0** | labo Release `hechima-v0.6.0`（main `a50f985`。英字合成 Shift+英字 + 追加候補の段階展開） |
 | `keymap-engine/`（keymap-engine.js） | **v1.2.0** | labo main `5213831` の `web/public/engine/` |
 | `hechima-wasm/`（hechima-wasm.js / .wasm / mozc.data） | **v0.2.0** | labo Release `hechima-wasm-v0.2.0`。provenance: fcitx5-mozc `8b3d34c` / mozc `0651fbc` / emsdk 3.1.69（同梱 BUILD_INFO.txt） |
 | `keymaps/`（naginata_jis / naginata_us） | 薙刀式 v18 | labo main `5213831` の `web/public/keymaps/` |

@@ -1,4 +1,4 @@
-// Hechima v0.5.1 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// Hechima v0.6.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 1.2.0（onHostAction の convert/confirm/insertAndConfirm 転送）。
 // 対応バンドル: hechima.js / hechima.min.js（UMD、グローバル名 `Hechima`）
 //             + hechima-worker.js（Worker 本体、電文 v0。connectWorker で接続する）
@@ -18,6 +18,14 @@ export interface SegmentView {
   candidates?: string[];
   /** candidates 内の現在選択位置（v0.5.0+、候補選択中のみ） */
   candidateIndex?: number;
+  /**
+   * 展開済みの追加候補（v0.6.0+、注目文節のみ）。通常候補の先頭で ↑（内蔵経路は Shift+Space も）
+   * を押すたびに 1 つずつ展開される（ひらがな → カタカナ の順。KeyLogicKit / azooKey-Desktop 準拠）。
+   * UI は通常候補の上に注釈付きで表示する。
+   */
+  additional?: { text: string; annotation: string }[];
+  /** additional 内の選択位置（追加候補領域を選択中のみ。0 = 最上部） */
+  additionalIndex?: number;
 }
 
 /** cb.convert が返す文節。candidates 省略/空は key をそのまま候補にする */

@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.5.1";
+	const HECHIMA_VERSION = "0.6.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -279,6 +279,28 @@
 			candidates: kata !== yomi ? [kata, yomi] : [yomi]
 		}];
 	}
+	function toZenkakuAscii(s) {
+		let out = "";
+		for (const ch of s) {
+			const c = ch.codePointAt(0) ?? 0;
+			out += ch === " " ? "　" : c >= 33 && c <= 126 ? String.fromCodePoint(c + 65248) : ch;
+		}
+		return out;
+	}
+	function eijiVariants(raw) {
+		const lower = raw.toLowerCase();
+		const capital = lower ? lower[0].toUpperCase() + lower.slice(1) : lower;
+		return [{
+			key: raw,
+			candidates: [
+				raw,
+				lower,
+				raw.toUpperCase(),
+				capital,
+				toZenkakuAscii(raw)
+			]
+		}];
+	}
 	/**
 	* 変換セッションを作る。cb は SessionCallbacks（QuuBee 実証済みの 5 点契約）。
 	*
@@ -292,25 +314,102 @@
 		let segs = null;
 		let focus = 0;
 		let genId = 0;
+		let eiji = false;
+		let addlShown = 0;
+		let addlSel = null;
 		const composing = () => (kana + pend).length > 0;
+		const resetAddl = () => {
+			addlShown = 0;
+			addlSel = null;
+		};
 		const clear = () => {
 			kana = "";
 			pend = "";
 			segs = null;
 			focus = 0;
 			genId++;
+			eiji = false;
+			resetAddl();
 		};
 		const backToYomi = () => {
 			segs = null;
 			focus = 0;
 			genId++;
+			resetAddl();
 		};
+		function addlAll() {
+			if (!segs) return [];
+			const key = segs[focus].key;
+			const kata = toKatakana(key);
+			const out = [];
+			if (kata !== key) out.push({
+				text: kata,
+				annotation: "カタカナ"
+			});
+			out.push({
+				text: key,
+				annotation: "ひらがな"
+			});
+			return out;
+		}
+		function addlVisible() {
+			const all = addlAll();
+			const n = Math.min(addlShown, all.length);
+			return n <= 0 ? [] : all.slice(all.length - n);
+		}
+		/** 文節 i の現在の出力テキスト（注目文節で追加候補を選択中ならそれを優先） */
+		function segText(s, i) {
+			if (i === focus && addlSel !== null) {
+				const v = addlVisible();
+				if (addlSel < v.length) return v[addlSel].text;
+			}
+			return s.candidates[s.idx];
+		}
+		/** 次候補（↓ / Space / SandS 単打 convert）。追加候補領域内なら下へ、末尾で通常候補の先頭へ戻る */
+		function candNext() {
+			if (!segs) return;
+			if (addlSel !== null) {
+				if (addlSel + 1 < addlVisible().length) addlSel++;
+				else {
+					addlSel = null;
+					segs[focus].idx = 0;
+				}
+				render();
+				return;
+			}
+			const s = segs[focus];
+			s.idx = (s.idx + 1) % s.candidates.length;
+			render();
+		}
+		/** 前候補（↑ / 内蔵経路の Shift+Space）。通常候補の先頭でさらに上 = 追加候補を段階展開 */
+		function candPrev() {
+			if (!segs) return;
+			if (addlSel !== null) {
+				if (addlSel > 0) addlSel--;
+				else if (addlShown < addlAll().length) addlShown++;
+				render();
+				return;
+			}
+			const s = segs[focus];
+			if (s.idx === 0 && addlAll().length > 0) {
+				if (addlShown === 0) addlShown = 1;
+				addlSel = addlVisible().length - 1;
+				render();
+				return;
+			}
+			s.idx = (s.idx + s.candidates.length - 1) % s.candidates.length;
+			render();
+		}
 		function render() {
 			if (segs) cb.show(segs.map((s, i) => ({
-				text: s.candidates[s.idx],
+				text: segText(s, i),
 				kind: i === focus ? "focus" : "other",
 				candidates: s.candidates.slice(),
-				candidateIndex: s.idx
+				candidateIndex: s.idx,
+				...i === focus && addlShown > 0 ? {
+					additional: addlVisible(),
+					...addlSel !== null ? { additionalIndex: addlSel } : {}
+				} : {}
 			})));
 			else if (composing()) cb.show([{
 				text: kana + pend,
@@ -318,7 +417,7 @@
 			}]);
 			else cb.hide();
 		}
-		const joined = () => (segs ?? []).map((s) => s.candidates[s.idx]).join("");
+		const joined = () => (segs ?? []).map((s, i) => segText(s, i)).join("");
 		function commit(text) {
 			clear();
 			cb.commit(text);
@@ -337,11 +436,12 @@
 			render();
 			const yomi = kana;
 			const gen = ++genId;
-			Promise.resolve(cb.convert ? cb.convert(yomi) : null).then((result) => {
+			(eiji && /^[\x20-\x7e]+$/.test(yomi) ? Promise.resolve(eijiVariants(yomi)) : Promise.resolve(cb.convert ? cb.convert(yomi) : null)).then((result) => {
 				if (gen !== genId || !composing() || kana !== yomi) return;
 				if (!result || !result.length) result = fallbackConvert(yomi);
 				segs = result.map(ingestSegment);
 				focus = 0;
+				resetAddl();
 				render();
 			}).catch(() => {});
 		}
@@ -354,6 +454,7 @@
 				if (!result || !result.length) return;
 				segs = result.map(ingestSegment);
 				focus = Math.min(idx, segs.length - 1);
+				resetAddl();
 				render();
 			}).catch(() => {});
 		}
@@ -403,14 +504,16 @@
 					if (cb.resize) startResize(k === "ArrowRight" ? 1 : -1);
 					return true;
 				}
-				if (cur.length > 1) focus = (focus + (k === "ArrowRight" ? 1 : cur.length - 1)) % cur.length;
+				if (cur.length > 1) {
+					focus = (focus + (k === "ArrowRight" ? 1 : cur.length - 1)) % cur.length;
+					resetAddl();
+				}
 				render();
 				return true;
 			}
 			if (k === "ArrowUp" || k === "ArrowDown") {
-				const s = cur[focus];
-				s.idx = (s.idx + (k === "ArrowDown" ? 1 : s.candidates.length - 1)) % s.candidates.length;
-				render();
+				if (k === "ArrowDown") candNext();
+				else candPrev();
 				return true;
 			}
 			return true;
@@ -424,9 +527,7 @@
 			if (t === "convert" || t === "confirm" || t === "insertAndConfirm") {
 				if (!segs) return false;
 				if (t === "convert") {
-					const s = segs[focus];
-					s.idx = (s.idx + 1) % s.candidates.length;
-					render();
+					candNext();
 					return true;
 				}
 				commit(joined());
@@ -441,7 +542,10 @@
 					cb.hide();
 					return true;
 				}
-				if (segs.length > 1) focus = (focus + (t === "moveRight" ? 1 : segs.length - 1)) % segs.length;
+				if (segs.length > 1) {
+					focus = (focus + (t === "moveRight" ? 1 : segs.length - 1)) % segs.length;
+					resetAddl();
+				}
 				render();
 				return true;
 			}
@@ -520,16 +624,15 @@
 				if (segs) backToYomi();
 				else if (pend) pend = pend.slice(0, -1);
 				else kana = Array.from(kana).slice(0, -1).join("");
+				if (!composing()) eiji = false;
 				render();
 				return true;
 			}
 			if (k === " ") {
 				if (!composing()) return false;
-				if (segs) {
-					const s = segs[focus];
-					s.idx = (s.idx + 1) % s.candidates.length;
-					render();
-				} else startConvert();
+				if (segs) if (e.shiftKey) candPrev();
+				else candNext();
+				else startConvert();
 				return true;
 			}
 			if (k === "ArrowLeft" || k === "ArrowRight") {
@@ -540,21 +643,33 @@
 				}
 				if (segs && segs.length > 1) {
 					focus = (focus + (k === "ArrowRight" ? 1 : segs.length - 1)) % segs.length;
+					resetAddl();
 					render();
 				}
 				return true;
 			}
 			if (k === "ArrowUp" || k === "ArrowDown") {
 				if (!composing()) return false;
-				if (segs) {
-					const s = segs[focus];
-					const d = k === "ArrowDown" ? 1 : s.candidates.length - 1;
-					s.idx = (s.idx + d) % s.candidates.length;
-					render();
-				}
+				if (segs) if (k === "ArrowDown") candNext();
+				else candPrev();
 				return true;
 			}
 			if (k.length === 1 && k >= " " && k <= "~") {
+				if (/[a-zA-Z]/.test(k) && e.shiftKey) {
+					if (segs) commit(joined());
+					kana = resolveRomaji(kana, pend, true).kana + k;
+					pend = "";
+					eiji = true;
+					genId++;
+					render();
+					return true;
+				}
+				if (eiji && !segs) {
+					kana += k;
+					genId++;
+					render();
+					return true;
+				}
 				const ch = k.toLowerCase();
 				if (!composing() && !/[a-z]/.test(ch)) {
 					if (DIRECT_COMMIT[ch]) {
@@ -612,6 +727,7 @@
 				if (!segs) return false;
 				const s = segs[focus];
 				if (!Number.isInteger(index) || index < 0 || index >= s.candidates.length) return false;
+				addlSel = null;
 				s.idx = index;
 				render();
 				return true;
