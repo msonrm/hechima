@@ -76,6 +76,42 @@ header h1 { margin: 0; font-size: 1.6rem; }
 }
 @keyframes blink { 50% { opacity: 0; } }
 
+/* 変換候補ポップアップ（KeyLogicKit CandidatePopup の Web 移植: macOS IME 風） */
+.candidates {
+  position: absolute;
+  z-index: 10;
+  min-width: 120px;
+  max-width: 400px;
+  padding: 2px 0;
+  background: var(--bg);
+  border: 0.5px solid var(--line);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  font-size: 1.05rem;
+  user-select: none;
+}
+.cand-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.cand-row.selected { background: var(--focus-bg); }
+.cand-num {
+  min-width: 18px;
+  text-align: right;
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.cand-more {
+  padding: 1px 8px 3px;
+  text-align: right;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
 .hints { margin-top: 1.2rem; color: var(--muted); font-size: 0.85rem; }
 .hints ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
 

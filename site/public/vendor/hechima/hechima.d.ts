@@ -1,4 +1,4 @@
-// Hechima v0.4.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// Hechima v0.5.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 1.2.0（onHostAction の convert/confirm/insertAndConfirm 転送）。
 // 対応バンドル: hechima.js / hechima.min.js（UMD、グローバル名 `Hechima`）
 //             + hechima-worker.js（Worker 本体、電文 v0。connectWorker で接続する）
@@ -9,6 +9,14 @@
 export interface SegmentView {
   text: string;
   kind: "yomi" | "focus" | "other";
+  /**
+   * この文節の候補一覧（v0.5.0+、候補選択中 = kind focus/other のときのみ）。
+   * 候補 UI（ポップアップ等）の描画用。読み取り専用（コピー）。
+   * 選択は selectCandidate() / Space / ↑↓ で行う。
+   */
+  candidates?: string[];
+  /** candidates 内の現在選択位置（v0.5.0+、候補選択中のみ） */
+  candidateIndex?: number;
 }
 
 /** cb.convert が返す文節。candidates 省略/空は key をそのまま候補にする */
@@ -105,6 +113,11 @@ export interface FepSession {
   setEngine(engine: InputEngineLike | null, keyOf?: KeyEventOf | null): void;
   /** engine.onStateChange（chord 窓満了）から呼ぶ */
   pumpEngine(): void;
+  /**
+   * 候補選択中（Phase 2）に注目文節の候補を直接選択する（v0.5.0+）。
+   * ホストが候補 UI の数字キー/クリックから呼ぶ。範囲外・非 Phase 2 は false（現状維持）。
+   */
+  selectCandidate(index: number): boolean;
   reset(): void;
 }
 

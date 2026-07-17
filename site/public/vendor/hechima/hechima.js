@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.4.0";
+	const HECHIMA_VERSION = "0.5.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -308,7 +308,9 @@
 		function render() {
 			if (segs) cb.show(segs.map((s, i) => ({
 				text: s.candidates[s.idx],
-				kind: i === focus ? "focus" : "other"
+				kind: i === focus ? "focus" : "other",
+				candidates: s.candidates.slice(),
+				candidateIndex: s.idx
 			})));
 			else if (composing()) cb.show([{
 				text: kana + pend,
@@ -606,6 +608,14 @@
 				if (engine) engine.onHostAction = (action) => handleEngineAction(action);
 			},
 			pumpEngine,
+			selectCandidate(index) {
+				if (!segs) return false;
+				const s = segs[focus];
+				if (!Number.isInteger(index) || index < 0 || index >= s.candidates.length) return false;
+				s.idx = index;
+				render();
+				return true;
+			},
 			reset() {
 				clear();
 				if (engine) try {

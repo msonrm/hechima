@@ -36,7 +36,8 @@
         <p>このページを開いたまま打鍵してください（OS 側の日本語 IME はオフ = 英数直接入力で）。
           変換はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。</p>
         <ul>
-          <li><b>Space</b> = 変換 / 次候補、<b>Enter</b> = 確定、<b>Esc</b> = 戻す、<b>←→</b> = 文節移動、<b>Shift+←→</b> = 文節伸縮</li>
+          <li><b>Space</b> = 変換 / 次候補、<b>↑↓</b> = 前候補/次候補、<b>数字 1-9</b> = 直接選択（クリックでも可）</li>
+          <li><b>Enter</b> = 確定、<b>Esc</b> = 戻す、<b>←→</b> = 文節移動、<b>Shift+←→</b> = 文節伸縮</li>
           <li>薙刀式では space+T / space+Y（文節伸縮）、M+V（確定）などの同時打鍵編集も効きます</li>
         </ul>
       </section>
@@ -49,6 +50,8 @@
         配列エンジン / 変換セッション層 = hechima（MIT）。
       </p>
     </footer>
+
+    <div id="candidates" class="candidates" hidden></div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
