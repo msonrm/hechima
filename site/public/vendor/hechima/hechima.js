@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.8.1";
+	const HECHIMA_VERSION = "0.8.2";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -583,6 +583,7 @@
 		function engineDown(tap) {
 			if (!engine) return false;
 			if (segs) {
+				if (tap.key === "Shift" || tap.key === "Control" || tap.key === "Alt" || tap.key === "Meta") return true;
 				if (tap.ctrlKey || tap.altKey || tap.metaKey) {
 					commit(joined());
 					return false;

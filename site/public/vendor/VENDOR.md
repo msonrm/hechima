@@ -5,14 +5,14 @@
 
 | ディレクトリ | 版 | 取得元 |
 |---|---|---|
-| `hechima/`（hechima.js / hechima-worker.js / hechima.d.ts） | **v0.8.1** | labo Release `hechima-v0.8.1`（学習 + Phase 2 BS/U = よみに戻す） |
+| `hechima/`（hechima.js / hechima-worker.js / hechima.d.ts） | **v0.8.2** | labo Release `hechima-v0.8.2`（学習 + Phase 2 BS/U = よみに戻す + Shift 単体押下の確定バグ修正） |
 | `keymap-engine/`（keymap-engine.js） | **v1.2.0** | labo main `5213831` の `web/public/engine/` |
 | `hechima-wasm/`（hechima-wasm.js / .wasm / mozc.data） | **v0.4.0** | labo Release `hechima-wasm-v0.4.0`（+ hechima_learn / hechima_sync = Mozc 学習）。provenance: fcitx5-mozc `fd530f6` / emsdk 3.1.69（同梱 BUILD_INFO.txt。mozc.data も同 Release で更新） |
 | `keymaps/`（naginata_jis / naginata_us） | 薙刀式 v18 | labo main `5213831` の `web/public/keymaps/` |
 
 ## 互換性の要点
 
-- hechima v0.8.1 は **KeymapEngine >= 1.2.0 必須**（セット差し替え）
+- hechima v0.8.2 は **KeymapEngine >= 1.2.0 必須**（セット差し替え）
 - hechima-worker は hechima-wasm v0.4.0 とセット推奨（学習は v0.4.0+。旧 wasm では resize/learn が機能検出で段階的に無効）
 - `mozc.data` は Mozc の辞書（名前と帰属を保つため改名しない）
 
