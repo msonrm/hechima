@@ -7,7 +7,7 @@
 同梱の BUILD_INFO.txt を参照）。
 
 自作部分（サイト・hechima / hechima-keymap の各バンドル）のライセンスは
-[LICENSE](LICENSE)（MIT）です。
+[LICENSE](LICENSE)（MIT、Copyright (c) 2026 msonrm）です。
 
 ## Mozc（変換エンジン本体・wasm バイナリのコード部分）
 
