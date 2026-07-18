@@ -23,6 +23,9 @@ SOFTWARE.
 ---
 
 This repository vendors and distributes builds of Mozc — "powered by Mozc".
-Mozc is Copyright (c) Google LLC, licensed under the BSD-3-Clause license.
-fcitx5-mozc (the build harness) is Copyright (c) fcitx-contrib, BSD-3-Clause.
-See site/public/vendor/VENDOR.md for the exact pinned versions and provenance.
+Mozc is Copyright (c) Google Inc., licensed under the BSD-3-Clause license.
+fcitx5-mozc (the build harness) is Copyright (c) Fcitx contributors, BSD-3-Clause.
+The bundled dictionary (mozc.data) additionally includes entries under the
+NAIST License and Public Domain. Full license texts are reproduced in
+THIRD_PARTY_NOTICES.md. See site/public/vendor/VENDOR.md for the exact
+pinned versions and provenance.

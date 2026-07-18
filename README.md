@@ -19,8 +19,9 @@ L.L.L. は生まれ故郷の logical-layout-labo と同じ）: **https://luffa-l
 | `site/` | **へちまラボ（luffa lang labo）** — 上記スタックを備えたプレーンエディタ（カーソル/選択・OPFS 自動保存・undo/redo・文字数カウント）。Cloudflare Workers（静的アセット）で配信 | — |
 
 各レイヤは差し替え可能（配列は JSON、変換は cb 注入、エンジン境界は電文 =
-「かな → 文節/候補 JSON」）。開発の本家は logical-layout-labo リポジトリで、
-本リポジトリはタグ付き成果物を pin して vendoring する（`site/public/vendor/VENDOR.md`）。
+「かな → 文節/候補 JSON」）。開発の本家は logical-layout-labo リポジトリ（現在 private。
+順次公開予定）で、本リポジトリはそのタグ付き成果物を pin して vendoring する
+（`site/public/vendor/VENDOR.md`）。
 
 ## ラボサイトの開発
 
@@ -48,6 +49,8 @@ npx wrangler deploy        # 初回は npx wrangler login
 
 ## ライセンス
 
-自作部分は MIT。Mozc は BSD-3-Clause (Google)、fcitx5-mozc は BSD-3-Clause (fcitx-contrib) —
-**powered by Mozc**。詳細は [LICENSE](LICENSE) と
+自作部分は MIT（[LICENSE](LICENSE)）。Mozc は BSD-3-Clause (Google)、fcitx5-mozc は
+BSD-3-Clause (Fcitx contributors)、辞書は BSD-3 + NAIST License + Public Domain —
+**powered by Mozc**。第三者ライセンスの全文は
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、pin 版の詳細は
 [site/public/vendor/VENDOR.md](site/public/vendor/VENDOR.md)。

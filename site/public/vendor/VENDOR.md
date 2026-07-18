@@ -21,3 +21,4 @@
 - Mozc: Copyright (c) Google LLC, BSD-3-Clause
 - fcitx5-mozc（ビルドハーネス）: fcitx-contrib, BSD-3-Clause
 - 辞書: mozc システム辞書（BSD-3-Clause + NAIST License + Public Domain。CC BY-SA の Mozc UT は不同梱）
+- **ライセンス全文はリポジトリルートの THIRD_PARTY_NOTICES.md に再掲**
