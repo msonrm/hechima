@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.10.0";
+	const HECHIMA_VERSION = "0.11.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -836,6 +836,7 @@
 		const maxCands = opts?.maxCands ?? 9;
 		const pending = /* @__PURE__ */ new Map();
 		const pendingLearn = /* @__PURE__ */ new Map();
+		const pendingDict = /* @__PURE__ */ new Map();
 		let seq = 0;
 		let ready = null;
 		let initPromise = null;
@@ -864,6 +865,12 @@
 				if (resolve) {
 					pendingLearn.delete(m.id);
 					resolve(m.ok);
+				}
+			} else if (m.type === "dict") {
+				const resolve = pendingDict.get(m.id);
+				if (resolve) {
+					pendingDict.delete(m.id);
+					resolve(m.entries);
 				}
 			}
 		});
@@ -953,6 +960,39 @@
 				});
 			});
 		}
+		function dictRequest(msg) {
+			return whenReady().then((info) => {
+				if (!info || info.features.dict === false) return null;
+				return new Promise((resolve) => {
+					const id = ++seq;
+					pendingDict.set(id, resolve);
+					worker.postMessage({
+						...msg,
+						id
+					});
+				});
+			});
+		}
+		/** ユーザー辞書の一覧（v0.11.0+）。未対応は null */
+		function dictList() {
+			return dictRequest({ type: "dictList" });
+		}
+		/** ユーザー辞書へ登録（v0.11.0+。pos 省略 = 名詞）。成功 = 更新後の一覧、失敗 = null */
+		function dictAdd(reading, word, pos = 1) {
+			return dictRequest({
+				type: "dictAdd",
+				reading,
+				word,
+				pos
+			});
+		}
+		/** ユーザー辞書から削除（一覧の index）。成功 = 更新後の一覧、失敗 = null */
+		function dictRemove(index) {
+			return dictRequest({
+				type: "dictRemove",
+				index
+			});
+		}
 		async function clearLearning() {
 			if (!await whenReady()) return false;
 			return new Promise((resolve) => {
@@ -972,6 +1012,9 @@
 			learn,
 			revert,
 			clearLearning,
+			dictList,
+			dictAdd,
+			dictRemove,
 			callbacks: () => ({
 				convert,
 				resize,

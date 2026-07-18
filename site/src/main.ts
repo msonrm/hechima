@@ -499,6 +499,66 @@ $<HTMLButtonElement>("reset-learning").addEventListener("click", () => {
   void saveDocNow().then(() => conn.clearLearning()).finally(() => location.reload());
 });
 
+// ---- ユーザー辞書（ページ内直置き UI） ----
+
+const dictPanel = $<HTMLDetailsElement>("dict-panel");
+const dictListEl = $<HTMLUListElement>("dict-list");
+const dictMsgEl = $<HTMLSpanElement>("dict-msg");
+const POS_NAMES: Record<number, string> = { 1: "名詞", 4: "固有名詞", 5: "人名", 9: "地名" };
+
+function renderDict(entries: Hechima.DictEntry[] | null): void {
+  if (entries === null) {
+    dictMsgEl.textContent = "ユーザー辞書は利用できません";
+    return;
+  }
+  dictListEl.replaceChildren(
+    ...entries.map((e, i) => {
+      const li = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = `${e.reading} → ${e.word}（${POS_NAMES[e.pos] ?? "その他"}）`;
+      const del = document.createElement("button");
+      del.type = "button";
+      del.textContent = "削除";
+      del.addEventListener("click", () => {
+        void conn.dictRemove(i).then(renderDict);
+      });
+      li.append(label, del);
+      return li;
+    }),
+  );
+  if (!entries.length) {
+    const li = document.createElement("li");
+    li.textContent = "（登録なし。よみと単語を入れて登録すると、すぐ変換候補に出ます）";
+    dictListEl.replaceChildren(li);
+  }
+}
+
+dictPanel.addEventListener("toggle", () => {
+  if (dictPanel.open) void conn.dictList().then(renderDict);
+});
+
+$<HTMLFormElement>("dict-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const readingEl = $<HTMLInputElement>("dict-reading");
+  const wordEl = $<HTMLInputElement>("dict-word");
+  const reading = readingEl.value.trim();
+  const word = wordEl.value.trim();
+  const pos = Number($<HTMLSelectElement>("dict-pos").value) || 1;
+  if (!reading || !word) return;
+  dictMsgEl.textContent = "登録中…";
+  void conn.dictAdd(reading, word, pos).then((entries) => {
+    if (entries) {
+      dictMsgEl.textContent = "";
+      readingEl.value = "";
+      wordEl.value = "";
+      renderDict(entries);
+      readingEl.focus();
+    } else {
+      dictMsgEl.textContent = "登録できませんでした";
+    }
+  });
+});
+
 // ---- 再変換（確定済みテキストを選択して 変換キー / Ctrl+/） ----
 
 async function doReconvert(): Promise<void> {
@@ -522,7 +582,8 @@ async function doReconvert(): Promise<void> {
 
 window.addEventListener("keydown", (e) => {
   if (e.metaKey) return; // OS/ブラウザのショートカットは奪わない
-  if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLButtonElement) return;
+  if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLButtonElement ||
+      e.target instanceof HTMLInputElement) return; // 辞書フォーム等の入力は素通し
   // 候補ポップアップ表示中の数字 1-9 = ウィンドウ内の直接選択（標準 IME の作法）。
   // セッションのキー routing には触れず、ホスト側の方針としてここで先取りする
   if (popupVisible() && !e.ctrlKey && !e.altKey && /^[1-9]$/.test(e.key)) {

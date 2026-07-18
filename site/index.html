@@ -35,6 +35,23 @@
         <div class="statusline"><span id="counts">0 字 ・ 0 行</span></div>
       </section>
 
+      <details class="dict" id="dict-panel">
+        <summary>ユーザー辞書</summary>
+        <form id="dict-form" autocomplete="off">
+          <input id="dict-reading" placeholder="よみ（ひらがな）" required />
+          <input id="dict-word" placeholder="単語" required />
+          <select id="dict-pos" aria-label="品詞">
+            <option value="1">名詞</option>
+            <option value="4">固有名詞</option>
+            <option value="5">人名</option>
+            <option value="9">地名</option>
+          </select>
+          <button type="submit">登録</button>
+          <span id="dict-msg" class="status"></span>
+        </form>
+        <ul id="dict-list"></ul>
+      </details>
+
       <section class="hints">
         <p>このページを開いたまま打鍵してください（OS 側の日本語 IME はオフ = 英数直接入力で）。
           変換・学習・文書の保存はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。

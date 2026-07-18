@@ -1,4 +1,4 @@
-// Hechima v0.10.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// Hechima v0.11.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 1.2.0（onHostAction の convert/confirm/insertAndConfirm 転送）。
 // 対応バンドル: hechima.js / hechima.min.js（UMD、グローバル名 `Hechima`）
 //             + hechima-worker.js（Worker 本体、電文 v0。connectWorker で接続する）
@@ -195,19 +195,27 @@ export interface ClearLearningRequest { type: "clearLearning"; id: number }
 export interface RevertRequest { type: "revert"; id: number }
 /** ホスト → Worker: 再変換（v0.10.0+。表記 → 逆変換でよみ → 変換。応答は result で keys がよみ） */
 export interface ReconvertRequest { type: "reconvert"; id: number; surface: string; maxCands?: number }
-export type WorkerRequest = InitRequest | ConvertRequest | ResizeRequest | ReconvertRequest | LearnRequest | ClearLearningRequest | RevertRequest;
+export type WorkerRequest = InitRequest | ConvertRequest | ResizeRequest | ReconvertRequest | LearnRequest | ClearLearningRequest | RevertRequest | DictListRequest | DictAddRequest | DictRemoveRequest;
 
 /** Worker → ホスト: 辞書ダウンロード進捗（total 不明時は 0） */
 export interface ProgressMessage { type: "progress"; loaded: number; total: number }
 /** Worker → ホスト: 初期化完了。features.learn = 学習可、persist = OPFS 永続化可（v0.8.0+） */
-export interface ReadyMessage { type: "ready"; protocol: number; version: string; features: { resize: boolean; learn?: boolean; persist?: boolean } }
+export interface ReadyMessage { type: "ready"; protocol: number; version: string; features: { resize: boolean; learn?: boolean; persist?: boolean; dict?: boolean } }
 /** Worker → ホスト: 初期化失敗 */
 export interface ErrorMessage { type: "error"; message: string }
 /** Worker → ホスト: convert / resize の結果。segments null = 結果なし（error は診断用付帯） */
 export interface ResultMessage { type: "result"; id: number; segments: WireSegment[] | null; error?: string }
 /** Worker → ホスト: learn / clearLearning の結果（v0.8.0+） */
 export interface LearnedMessage { type: "learned"; id: number; ok: boolean }
-export type WorkerResponse = ProgressMessage | ReadyMessage | ErrorMessage | ResultMessage | LearnedMessage;
+/** ユーザー辞書の 1 項目（v0.11.0+。pos = Mozc PosType: 名詞1/固有名詞4/人名5/地名9 等） */
+export interface DictEntry { reading: string; word: string; pos: number }
+/** ホスト → Worker: 辞書一覧 / 登録 / 削除（v0.11.0+。応答は dict = 更新後の一覧） */
+export interface DictListRequest { type: "dictList"; id: number }
+export interface DictAddRequest { type: "dictAdd"; id: number; reading: string; word: string; pos?: number }
+export interface DictRemoveRequest { type: "dictRemove"; id: number; index: number }
+/** Worker → ホスト: 辞書操作の結果（entries = 一覧。失敗は null + error） */
+export interface DictMessage { type: "dict"; id: number; entries: DictEntry[] | null; error?: string }
+export type WorkerResponse = ProgressMessage | ReadyMessage | ErrorMessage | ResultMessage | LearnedMessage | DictMessage;
 
 /** Worker の構造互換（DOM の Worker がそのまま渡せる） */
 export interface HechimaWorkerLike {
@@ -235,7 +243,7 @@ export interface WorkerInitPaths {
 export interface ReadyInfo {
   protocol: number;
   version: string;
-  features: { resize: boolean; learn?: boolean; persist?: boolean };
+  features: { resize: boolean; learn?: boolean; persist?: boolean; dict?: boolean };
 }
 
 export interface WorkerConnection {
@@ -253,6 +261,12 @@ export interface WorkerConnection {
   revert(): Promise<boolean>;
   /** OPFS の学習保存分を削除（v0.8.0+。メモリ内の学習は再ロードまで残る） */
   clearLearning(): Promise<boolean>;
+  /** ユーザー辞書の一覧（v0.11.0+）。未対応は null */
+  dictList(): Promise<DictEntry[] | null>;
+  /** ユーザー辞書へ登録（v0.11.0+。pos 省略 = 名詞 = 1）。成功 = 更新後の一覧 */
+  dictAdd(reading: string, word: string, pos?: number): Promise<DictEntry[] | null>;
+  /** ユーザー辞書から削除（一覧の index）。成功 = 更新後の一覧 */
+  dictRemove(index: number): Promise<DictEntry[] | null>;
   /** createFep の cb にスプレッドできる形: { ...conn.callbacks(), show, hide, commit } */
   callbacks(): {
     convert: (yomi: string) => Promise<ConvertSegment[] | null>;

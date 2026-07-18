@@ -1,11 +1,12 @@
 (function() {
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.10.0";
+	const HECHIMA_VERSION = "0.11.0";
 	//#endregion
 	//#region src/hechima/worker-main.ts
 	let M = null;
 	let initStarted = false;
 	const LEARN_FILES = ["segment.db", "boundary.db"];
+	const PERSIST_FILES = [...LEARN_FILES, "user_dictionary.db"];
 	let learningEnabled = true;
 	let learnScope = "default";
 	let opfsDir = null;
@@ -22,7 +23,7 @@
 	}
 	async function restoreLearning() {
 		if (!opfsDir || !M) return;
-		for (const name of LEARN_FILES) try {
+		for (const name of PERSIST_FILES) try {
 			const fh = await opfsDir.getFileHandle(name);
 			const buf = new Uint8Array(await (await fh.getFile()).arrayBuffer());
 			if (buf.length) M.FS.writeFile(`/tmp/${name}`, buf);
@@ -35,7 +36,7 @@
 		} catch {
 			return;
 		}
-		for (const name of LEARN_FILES) {
+		for (const name of PERSIST_FILES) {
 			let data;
 			try {
 				data = M.FS.readFile(`/tmp/${name}`);
@@ -322,6 +323,110 @@
 			});
 		}
 	}
+	function parseDictEntries(json) {
+		try {
+			const p = JSON.parse(String(json));
+			if (p && Array.isArray(p.entries)) return p.entries;
+		} catch {}
+		return null;
+	}
+	function currentDictEntries() {
+		if (!M || typeof M._hechima_dict_list !== "function") return null;
+		try {
+			return parseDictEntries(M.ccall("hechima_dict_list", "string", [], []));
+		} catch {
+			return null;
+		}
+	}
+	function handleDictList(id) {
+		const entries = currentDictEntries();
+		self.postMessage({
+			type: "dict",
+			id,
+			entries,
+			...entries === null ? { error: "ユーザー辞書は利用できません（hechima-wasm v0.7.0+ が必要）" } : {}
+		});
+	}
+	function handleDictAdd(id, reading, word, pos) {
+		if (!M || typeof M._hechima_dict_add !== "function" || !reading || !word) {
+			self.postMessage({
+				type: "dict",
+				id,
+				entries: null,
+				error: "登録できません"
+			});
+			return;
+		}
+		try {
+			const r = M.ccall("hechima_dict_add", "number", [
+				"string",
+				"string",
+				"number"
+			], [
+				reading,
+				word,
+				pos | 0
+			]);
+			if (r !== 0) {
+				self.postMessage({
+					type: "dict",
+					id,
+					entries: null,
+					error: `登録に失敗 (r=${r})`
+				});
+				return;
+			}
+			scheduleSave();
+			self.postMessage({
+				type: "dict",
+				id,
+				entries: currentDictEntries()
+			});
+		} catch (e) {
+			self.postMessage({
+				type: "dict",
+				id,
+				entries: null,
+				error: String(e?.message ?? e)
+			});
+		}
+	}
+	function handleDictRemove(id, index) {
+		if (!M || typeof M._hechima_dict_remove !== "function") {
+			self.postMessage({
+				type: "dict",
+				id,
+				entries: null,
+				error: "削除できません"
+			});
+			return;
+		}
+		try {
+			const r = M.ccall("hechima_dict_remove", "number", ["number"], [index | 0]);
+			if (r !== 0) {
+				self.postMessage({
+					type: "dict",
+					id,
+					entries: null,
+					error: `削除に失敗 (r=${r})`
+				});
+				return;
+			}
+			scheduleSave();
+			self.postMessage({
+				type: "dict",
+				id,
+				entries: currentDictEntries()
+			});
+		} catch (e) {
+			self.postMessage({
+				type: "dict",
+				id,
+				entries: null,
+				error: String(e?.message ?? e)
+			});
+		}
+	}
 	/** 直近の learn を取り消す（確定アンドゥの学習巻き戻し）。成功したら保存も更新する */
 	function handleRevert(id) {
 		if (!M || !learningEnabled || typeof M._hechima_revert !== "function") {
@@ -387,7 +492,8 @@
 					features: {
 						resize: !!(M && (typeof M._hechima_convert2 === "function" || typeof M._hechima_resize === "function")),
 						learn: !!(M && learningEnabled && typeof M._hechima_learn === "function"),
-						persist: opfsDir !== null
+						persist: opfsDir !== null,
+						dict: !!(M && typeof M._hechima_dict_add === "function")
 					}
 				});
 			}, (e) => {
@@ -402,6 +508,9 @@
 		else if (m.type === "learn") handleLearn(m.id, m.kana, m.sizes, m.values);
 		else if (m.type === "revert") handleRevert(m.id);
 		else if (m.type === "clearLearning") handleClearLearning(m.id);
+		else if (m.type === "dictList") handleDictList(m.id);
+		else if (m.type === "dictAdd") handleDictAdd(m.id, m.reading, m.word, m.pos ?? 1);
+		else if (m.type === "dictRemove") handleDictRemove(m.id, m.index);
 	};
 	//#endregion
 })();
