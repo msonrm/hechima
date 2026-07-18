@@ -554,7 +554,8 @@ $<HTMLFormElement>("dict-form").addEventListener("submit", (e) => {
       renderDict(entries);
       readingEl.focus();
     } else {
-      dictMsgEl.textContent = "登録できませんでした";
+      // wasm 側で Mozc 純正のよみ検証（かな + 英数字は可、漢字等は不可）に弾かれた等
+      dictMsgEl.textContent = "登録できませんでした — よみに使えない文字（漢字など）があります";
     }
   });
 });

@@ -1,6 +1,6 @@
 hechima-wasm build info
-built-at: 2026-07-18T04:23:58Z
-labo-commit: 73c665100139e3cd02e668ac6a262e145b524cf5
+built-at: 2026-07-18T04:40:38Z
+labo-commit: 6c3bc802f16bc7e22c8c15ef3720472c4d808a62
 fcitx5-mozc: fd530f624916726c461fe71fca62ac0edc2ef3e8
 submodules:
    255c84dadd029fd8ad25c5efb5933e47beaa00c7 abseil-cpp (255c84d)
