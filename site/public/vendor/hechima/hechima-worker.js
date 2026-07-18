@@ -1,6 +1,6 @@
 (function() {
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.11.1";
+	const HECHIMA_VERSION = "0.12.0";
 	//#endregion
 	//#region src/hechima/worker-main.ts
 	let M = null;

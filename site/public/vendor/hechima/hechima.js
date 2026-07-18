@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.11.1";
+	const HECHIMA_VERSION = "0.12.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -529,6 +529,7 @@
 		}
 		let engine = null;
 		let engineKeyOf = null;
+		let commitYomiDirect = false;
 		function pumpEngine() {
 			if (!engine) return;
 			if (segs) {
@@ -537,9 +538,15 @@
 				commit(joined());
 			}
 			const confirmed = engine.takeConfirmedText();
+			const direct = commitYomiDirect;
+			commitYomiDirect = false;
 			if (confirmed) {
 				if (engine.getState().inputMode === "english") {
 					cb.commit(confirmed);
+					return;
+				}
+				if (direct) {
+					commit(kana + confirmed);
 					return;
 				}
 				kana += confirmed;
@@ -594,7 +601,10 @@
 			}
 			if (t === "convert" || t === "confirm" || t === "insertAndConfirm") {
 				const yomiRestored = !segs && composing() && !(engine && engine.getState().isComposing);
-				if (!segs && !yomiRestored) return false;
+				if (!segs && !yomiRestored) {
+					if (t === "insertAndConfirm" || t === "confirm" && engine && engine.getState().isComposing) commitYomiDirect = true;
+					return false;
+				}
 				if (t === "convert") {
 					if (segs) candNext();
 					else startConvert();
