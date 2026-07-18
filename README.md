@@ -19,8 +19,7 @@ L.L.L. は生まれ故郷の logical-layout-labo と同じ）: **https://luffa-l
 | `site/` | **へちまラボ（luffa lang labo）** — 上記スタックを備えたプレーンエディタ（カーソル/選択・OPFS 自動保存・undo/redo・文字数カウント）。Cloudflare Workers（静的アセット）で配信 | — |
 
 各レイヤは差し替え可能（配列は JSON、変換は cb 注入、エンジン境界は電文 =
-「かな → 文節/候補 JSON」）。開発の本家は logical-layout-labo リポジトリ（現在 private。
-順次公開予定）で、本リポジトリはそのタグ付き成果物を pin して vendoring する
+「かな → 文節/候補 JSON」）。開発の本家は logical-layout-labo リポジトリ（現在 private）で、本リポジトリはそのタグ付き成果物を pin して vendoring する
 （`site/public/vendor/VENDOR.md`）。
 
 ## ラボサイトの開発
