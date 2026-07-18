@@ -202,6 +202,7 @@ async function setKeymap(id: string): Promise<void> {
 
 keymapSelect.addEventListener("change", () => {
   void setKeymap(keymapSelect.value);
+  keymapSelect.blur(); // フォーカスを外してそのまま打鍵できるように（keydown はページ全体で受ける）
 });
 
 $<HTMLButtonElement>("clear").addEventListener("click", () => {

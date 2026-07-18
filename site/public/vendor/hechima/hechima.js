@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.8.0";
+	const HECHIMA_VERSION = "0.8.1";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -486,7 +486,7 @@
 			}
 			const st = engine.getState();
 			if (st.isComposing) cb.show([{
-				text: st.composingKana + st.pendingDisplay,
+				text: kana + st.composingKana + st.pendingDisplay,
 				kind: "yomi"
 			}]);
 			else if (!(kana || pend)) cb.hide();
@@ -500,9 +500,8 @@
 				return true;
 			}
 			if (k === "Escape" || k === "Backspace") {
-				clear();
-				engine?.reset();
-				cb.hide();
+				backToYomi();
+				render();
 				return true;
 			}
 			if (k === "ArrowLeft" || k === "ArrowRight") {
@@ -531,21 +530,22 @@
 				return true;
 			}
 			if (t === "convert" || t === "confirm" || t === "insertAndConfirm") {
-				if (!segs) return false;
+				const yomiRestored = !segs && composing() && !(engine && engine.getState().isComposing);
+				if (!segs && !yomiRestored) return false;
 				if (t === "convert") {
-					candNext();
+					if (segs) candNext();
+					else startConvert();
 					return true;
 				}
-				commit(joined());
+				commit(segs ? joined() : kana);
 				if (action.type === "insertAndConfirm") cb.commit(action.text);
 				return true;
 			}
 			if (t !== "moveLeft" && t !== "moveRight" && t !== "deleteBack") return false;
 			if (segs) {
 				if (t === "deleteBack") {
-					clear();
-					engine?.reset();
-					cb.hide();
+					backToYomi();
+					render();
 					return true;
 				}
 				if (segs.length > 1) {
@@ -557,6 +557,15 @@
 			}
 			if (engine && engine.getState().isComposing) {
 				if (t === "deleteBack") return false;
+				return true;
+			}
+			if (composing()) {
+				if (t === "deleteBack") {
+					kana = Array.from(kana).slice(0, -1).join("");
+					genId++;
+					render();
+					return true;
+				}
 				return true;
 			}
 			if (cb.hostKey) cb.hostKey(t === "deleteBack" ? "Backspace" : t === "moveRight" ? "ArrowRight" : "ArrowLeft");
@@ -591,7 +600,27 @@
 			}
 			if (tap.ctrlKey || tap.altKey || tap.metaKey) return false;
 			if (tap.repeat) return true;
-			if (!engine.getState().isComposing && tap.code !== void 0 && HOST_NAV_KEYS.has(tap.code)) return false;
+			const composingNow = engine.getState().isComposing;
+			if (!composingNow && composing()) {
+				const k = tap.key;
+				if (k === "Backspace") {
+					kana = Array.from(kana).slice(0, -1).join("");
+					genId++;
+					render();
+					return true;
+				}
+				if (k === "Enter") {
+					commit(kana);
+					return true;
+				}
+				if (k === "Escape") {
+					clear();
+					cb.hide();
+					return true;
+				}
+				if (k === "ArrowLeft" || k === "ArrowRight" || k === "ArrowUp" || k === "ArrowDown") return true;
+			}
+			if (!composingNow && tap.code !== void 0 && HOST_NAV_KEYS.has(tap.code)) return false;
 			const kev = engineKeyOf ? engineKeyOf(tap) : null;
 			if (!kev) return false;
 			engine.processKey(kev);

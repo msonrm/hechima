@@ -1,4 +1,4 @@
-// Hechima v0.8.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// Hechima v0.8.1 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 1.2.0（onHostAction の convert/confirm/insertAndConfirm 転送）。
 // 対応バンドル: hechima.js / hechima.min.js（UMD、グローバル名 `Hechima`）
 //             + hechima-worker.js（Worker 本体、電文 v0。connectWorker で接続する）
