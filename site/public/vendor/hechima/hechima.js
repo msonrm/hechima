@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.11.0";
+	const HECHIMA_VERSION = "0.11.1";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -301,6 +301,19 @@
 			]
 		}];
 	}
+	function mergeEijiConvert(raw, result) {
+		const variants = eijiVariants(raw)[0].candidates ?? [raw];
+		let engineCands = [];
+		if (result && result.length === 1 && result[0].key === raw) engineCands = (result[0].candidates ?? []).filter((c) => c !== raw);
+		return [{
+			key: raw,
+			candidates: [
+				variants[0],
+				...engineCands,
+				...variants.slice(1)
+			]
+		}];
+	}
 	/**
 	* 変換セッションを作る。cb は SessionCallbacks（QuuBee 実証済みの 5 点契約）。
 	*
@@ -492,7 +505,7 @@
 			render();
 			const yomi = kana;
 			const gen = ++genId;
-			(eiji && /^[\x20-\x7e]+$/.test(yomi) ? Promise.resolve(eijiVariants(yomi)) : Promise.resolve(cb.convert ? cb.convert(yomi) : null)).then((result) => {
+			(eiji && /^[\x20-\x7e]+$/.test(yomi) ? Promise.resolve(cb.convert ? cb.convert(yomi) : null).then((r) => mergeEijiConvert(yomi, r), () => eijiVariants(yomi)) : Promise.resolve(cb.convert ? cb.convert(yomi) : null)).then((result) => {
 				if (gen !== genId || !composing() || kana !== yomi) return;
 				if (!result || !result.length) result = fallbackConvert(yomi);
 				segs = result.map(ingestSegment);
