@@ -1,4 +1,4 @@
-// Hechima v0.7.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// Hechima v0.8.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 1.2.0（onHostAction の convert/confirm/insertAndConfirm 転送）。
 // 対応バンドル: hechima.js / hechima.min.js（UMD、グローバル名 `Hechima`）
 //             + hechima-worker.js（Worker 本体、電文 v0。connectWorker で接続する）
@@ -58,6 +58,12 @@ export interface SessionCallbacks {
   hostKey?(name: string): void;
   convert?(yomi: string): Promise<ConvertSegment[] | null> | ConvertSegment[] | null;
   resize?(segmentIndex: number, offset: number): Promise<ConvertSegment[] | null> | ConvertSegment[] | null;
+  /**
+   * 確定内容の学習通知（v0.8.0+、省略可・fire-and-forget）。候補選択中（Phase 2）の確定時に
+   * 各文節の「よみ + 確定表示値」の列で呼ばれる（英字合成の確定では呼ばれない）。
+   * connectWorker の callbacks() を繋げば Mozc の学習（候補選択 + 文節境界）に流れる。
+   */
+  learn?(segments: { key: string; value: string }[]): void;
 }
 
 /** feed / feedUp が読む KeyboardEvent 互換の最小形（DOM 型に依存しない） */
@@ -153,23 +159,29 @@ export interface WireSegment {
   candidates: string[];
 }
 
-/** ホスト → Worker: 初期化。パスは worker スクリプト位置からの相対 URL（省略 = ./hechima-wasm.js / ./mozc.data） */
-export interface InitRequest { type: "init"; wasmJs?: string; dataUrl?: string }
+/** ホスト → Worker: 初期化。パスは worker スクリプト位置からの相対 URL（省略 = ./hechima-wasm.js / ./mozc.data）。learning 省略 = true、scope 省略 = "default"（v0.8.0+） */
+export interface InitRequest { type: "init"; wasmJs?: string; dataUrl?: string; learning?: boolean; scope?: string }
 /** ホスト → Worker: かな漢字変換 */
 export interface ConvertRequest { type: "convert"; id: number; kana: string; maxCands?: number }
-/** ホスト → Worker: 文節伸縮（直近 convert 結果への stateful 操作。1 ホスト : 1 worker の間だけ成立） */
+/** ホスト → Worker: 文節伸縮（worker が接続固有状態から境界制約に翻訳。v0.7.0+ はステートレス wasm 経由） */
 export interface ResizeRequest { type: "resize"; id: number; segIdx: number; offset: number; maxCands?: number }
-export type WorkerRequest = InitRequest | ConvertRequest | ResizeRequest;
+/** ホスト → Worker: 確定内容の学習（v0.8.0+。値はエンジン中立 = 表示値） */
+export interface LearnRequest { type: "learn"; id: number; kana: string; sizes: number[]; values: string[] }
+/** ホスト → Worker: OPFS の学習保存分を削除（v0.8.0+） */
+export interface ClearLearningRequest { type: "clearLearning"; id: number }
+export type WorkerRequest = InitRequest | ConvertRequest | ResizeRequest | LearnRequest | ClearLearningRequest;
 
 /** Worker → ホスト: 辞書ダウンロード進捗（total 不明時は 0） */
 export interface ProgressMessage { type: "progress"; loaded: number; total: number }
-/** Worker → ホスト: 初期化完了 */
-export interface ReadyMessage { type: "ready"; protocol: number; version: string; features: { resize: boolean } }
+/** Worker → ホスト: 初期化完了。features.learn = 学習可、persist = OPFS 永続化可（v0.8.0+） */
+export interface ReadyMessage { type: "ready"; protocol: number; version: string; features: { resize: boolean; learn?: boolean; persist?: boolean } }
 /** Worker → ホスト: 初期化失敗 */
 export interface ErrorMessage { type: "error"; message: string }
 /** Worker → ホスト: convert / resize の結果。segments null = 結果なし（error は診断用付帯） */
 export interface ResultMessage { type: "result"; id: number; segments: WireSegment[] | null; error?: string }
-export type WorkerResponse = ProgressMessage | ReadyMessage | ErrorMessage | ResultMessage;
+/** Worker → ホスト: learn / clearLearning の結果（v0.8.0+） */
+export interface LearnedMessage { type: "learned"; id: number; ok: boolean }
+export type WorkerResponse = ProgressMessage | ReadyMessage | ErrorMessage | ResultMessage | LearnedMessage;
 
 /** Worker の構造互換（DOM の Worker がそのまま渡せる） */
 export interface HechimaWorkerLike {
@@ -184,13 +196,20 @@ export interface ConnectWorkerOptions {
   onProgress?: (loaded: number, total: number) => void;
 }
 
-export interface WorkerInitPaths { wasmJs?: string; dataUrl?: string }
+export interface WorkerInitPaths {
+  wasmJs?: string;
+  dataUrl?: string;
+  /** 学習（記録 + OPFS 永続化）。省略 = true（v0.8.0+） */
+  learning?: boolean;
+  /** 学習の保存スコープ（OPFS ディレクトリ名）。省略 = "default"（v0.8.0+） */
+  scope?: string;
+}
 
 /** init 完了時の情報（ready 電文の中身） */
 export interface ReadyInfo {
   protocol: number;
   version: string;
-  features: { resize: boolean };
+  features: { resize: boolean; learn?: boolean; persist?: boolean };
 }
 
 export interface WorkerConnection {
@@ -200,10 +219,15 @@ export interface WorkerConnection {
   convert(yomi: string): Promise<ConvertSegment[] | null>;
   /** 文節伸縮。wasm 未対応（features.resize=false）・失敗時は null（cb.resize 互換） */
   resize(segmentIndex: number, offset: number): Promise<ConvertSegment[] | null>;
+  /** 確定内容の学習（v0.8.0+）。true = 学習した（対応が取れない場合は false = 無害な no-op） */
+  learn(segments: { key: string; value: string }[]): Promise<boolean>;
+  /** OPFS の学習保存分を削除（v0.8.0+。メモリ内の学習は再ロードまで残る） */
+  clearLearning(): Promise<boolean>;
   /** createFep の cb にスプレッドできる形: { ...conn.callbacks(), show, hide, commit } */
   callbacks(): {
     convert: (yomi: string) => Promise<ConvertSegment[] | null>;
     resize: (segmentIndex: number, offset: number) => Promise<ConvertSegment[] | null>;
+    learn: (segments: { key: string; value: string }[]) => void;
   };
 }
 

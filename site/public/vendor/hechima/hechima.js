@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.7.0";
+	const HECHIMA_VERSION = "0.8.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -419,6 +419,12 @@
 		}
 		const joined = () => (segs ?? []).map((s, i) => segText(s, i)).join("");
 		function commit(text) {
+			if (segs && cb.learn && !eiji) try {
+				cb.learn(segs.map((s, i) => ({
+					key: s.key,
+					value: segText(s, i)
+				})));
+			} catch {}
 			clear();
 			cb.commit(text);
 		}
@@ -745,6 +751,7 @@
 	function connectWorker(worker, opts) {
 		const maxCands = opts?.maxCands ?? 9;
 		const pending = /* @__PURE__ */ new Map();
+		const pendingLearn = /* @__PURE__ */ new Map();
 		let seq = 0;
 		let ready = null;
 		let initPromise = null;
@@ -767,6 +774,12 @@
 				if (resolve) {
 					pending.delete(m.id);
 					resolve(m.segments);
+				}
+			} else if (m.type === "learned") {
+				const resolve = pendingLearn.get(m.id);
+				if (resolve) {
+					pendingLearn.delete(m.id);
+					resolve(m.ok);
 				}
 			}
 		});
@@ -817,13 +830,44 @@
 				});
 			});
 		}
+		async function learn(segments) {
+			const info = await whenReady();
+			if (!info || info.features.learn === false || !segments.length) return false;
+			return new Promise((resolve) => {
+				const id = ++seq;
+				pendingLearn.set(id, resolve);
+				worker.postMessage({
+					type: "learn",
+					id,
+					kana: segments.map((s) => s.key).join(""),
+					sizes: segments.map((s) => Array.from(s.key).length),
+					values: segments.map((s) => s.value)
+				});
+			});
+		}
+		async function clearLearning() {
+			if (!await whenReady()) return false;
+			return new Promise((resolve) => {
+				const id = ++seq;
+				pendingLearn.set(id, resolve);
+				worker.postMessage({
+					type: "clearLearning",
+					id
+				});
+			});
+		}
 		return {
 			init,
 			convert,
 			resize,
+			learn,
+			clearLearning,
 			callbacks: () => ({
 				convert,
-				resize
+				resize,
+				learn: (segments) => {
+					learn(segments);
+				}
 			})
 		};
 	}

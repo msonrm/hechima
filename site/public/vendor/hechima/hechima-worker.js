@@ -1,10 +1,63 @@
 (function() {
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.7.0";
+	const HECHIMA_VERSION = "0.8.0";
 	//#endregion
 	//#region src/hechima/worker-main.ts
 	let M = null;
 	let initStarted = false;
+	const LEARN_FILES = ["segment.db", "boundary.db"];
+	let learningEnabled = true;
+	let learnScope = "default";
+	let opfsDir = null;
+	let saveTimer = null;
+	async function openOpfs() {
+		opfsDir = null;
+		try {
+			const nav = globalThis.navigator;
+			if (!nav?.storage?.getDirectory) return;
+			opfsDir = await (await (await (await nav.storage.getDirectory()).getDirectoryHandle("hechima", { create: true })).getDirectoryHandle("user", { create: true })).getDirectoryHandle(learnScope, { create: true });
+		} catch {
+			opfsDir = null;
+		}
+	}
+	async function restoreLearning() {
+		if (!opfsDir || !M) return;
+		for (const name of LEARN_FILES) try {
+			const fh = await opfsDir.getFileHandle(name);
+			const buf = new Uint8Array(await (await fh.getFile()).arrayBuffer());
+			if (buf.length) M.FS.writeFile(`/tmp/${name}`, buf);
+		} catch {}
+	}
+	async function saveLearning() {
+		if (!opfsDir || !M || typeof M._hechima_sync !== "function") return;
+		try {
+			M.ccall("hechima_sync", "number", [], []);
+		} catch {
+			return;
+		}
+		for (const name of LEARN_FILES) {
+			let data;
+			try {
+				data = M.FS.readFile(`/tmp/${name}`);
+			} catch {
+				continue;
+			}
+			try {
+				const access = await (await opfsDir.getFileHandle(name, { create: true })).createSyncAccessHandle();
+				access.truncate(0);
+				access.write(data, { at: 0 });
+				access.flush();
+				access.close();
+			} catch {}
+		}
+	}
+	function scheduleSave() {
+		if (!opfsDir) return;
+		if (saveTimer !== null) clearTimeout(saveTimer);
+		saveTimer = setTimeout(() => {
+			saveLearning();
+		}, 3e3);
+	}
 	let lastYomi = null;
 	let lastKeys = null;
 	function rememberSegments(segments) {
@@ -71,6 +124,10 @@
 			cfg.ENV.TZ = tzName;
 		}];
 		M = await factory(cfg);
+		if (learningEnabled) {
+			await openOpfs();
+			await restoreLearning();
+		}
 		M.FS.writeFile("/mozc.data", buf);
 		const r = M.ccall("hechima_init", "number", ["string"], ["/mozc.data"]);
 		if (r !== 0) throw new Error(`hechima_init failed (r=${r})`);
@@ -198,6 +255,62 @@
 			});
 		}
 	}
+	/**
+	* 確定内容の学習。値はエンジン中立（表示値）で受け、wasm が変換を再現して
+	* 値一致で確定 → FinishConversion（all-or-nothing = 誤学習防止）。
+	* 成功したら debounce して OPFS へ書き戻す。
+	*/
+	function handleLearn(id, kana, sizes, values) {
+		if (!M || !learningEnabled || typeof M._hechima_learn !== "function" || !kana || !Array.isArray(values) || !values.length) {
+			self.postMessage({
+				type: "learned",
+				id,
+				ok: false
+			});
+			return;
+		}
+		try {
+			const sizesCsv = Array.isArray(sizes) ? sizes.join(",") : "";
+			const ok = M.ccall("hechima_learn", "number", [
+				"string",
+				"string",
+				"string"
+			], [
+				kana,
+				sizesCsv,
+				values.join("	")
+			]) === 0;
+			if (ok) scheduleSave();
+			self.postMessage({
+				type: "learned",
+				id,
+				ok
+			});
+		} catch {
+			self.postMessage({
+				type: "learned",
+				id,
+				ok: false
+			});
+		}
+	}
+	/** OPFS の学習保存分を削除する（メモリ内の学習はページ再ロードまで残る） */
+	async function handleClearLearning(id) {
+		let ok = true;
+		if (saveTimer !== null) {
+			clearTimeout(saveTimer);
+			saveTimer = null;
+		}
+		if (opfsDir) for (const name of LEARN_FILES) try {
+			await opfsDir.removeEntry(name);
+		} catch {}
+		else ok = false;
+		self.postMessage({
+			type: "learned",
+			id,
+			ok
+		});
+	}
 	self.onmessage = (ev) => {
 		const m = ev.data;
 		if (!m || typeof m !== "object") return;
@@ -210,12 +323,18 @@
 				return;
 			}
 			initStarted = true;
+			learningEnabled = m.learning !== false;
+			learnScope = m.scope || "default";
 			init(m.wasmJs ?? "./hechima-wasm.js", m.dataUrl ?? "./mozc.data").then(() => {
 				self.postMessage({
 					type: "ready",
 					protocol: 0,
 					version: HECHIMA_VERSION,
-					features: { resize: !!(M && (typeof M._hechima_convert2 === "function" || typeof M._hechima_resize === "function")) }
+					features: {
+						resize: !!(M && (typeof M._hechima_convert2 === "function" || typeof M._hechima_resize === "function")),
+						learn: !!(M && learningEnabled && typeof M._hechima_learn === "function"),
+						persist: opfsDir !== null
+					}
 				});
 			}, (e) => {
 				self.postMessage({
@@ -225,6 +344,8 @@
 			});
 		} else if (m.type === "convert") handleConvert(m.id, m.kana, m.maxCands ?? 9);
 		else if (m.type === "resize") handleResize(m.id, m.segIdx, m.offset, m.maxCands ?? 9);
+		else if (m.type === "learn") handleLearn(m.id, m.kana, m.sizes, m.values);
+		else if (m.type === "clearLearning") handleClearLearning(m.id);
 	};
 	//#endregion
 })();

@@ -39,7 +39,12 @@ const conn = Hechima.connectWorker(worker, {
 });
 conn
   .init({ wasmJs: "/vendor/hechima-wasm/hechima-wasm.js", dataUrl: "/vendor/hechima-wasm/mozc.data" })
-  .then((info) => setStatus(`準備完了 — Mozc 実変換（hechima v${info.version} / 電文 v${info.protocol}）`))
+  .then((info) => {
+    const learn = info.features.learn
+      ? info.features.persist ? " / 学習オン" : " / 学習オン（この環境では保存されません）"
+      : "";
+    setStatus(`準備完了 — Mozc 実変換（hechima v${info.version} / 電文 v${info.protocol}${learn}）`);
+  })
   .catch((e: Error) => setStatus(`エンジン初期化失敗: ${e.message} — フォールバック変換（カナ/かな巡回）で動作中`));
 
 // ---- セッション（ホスト = このページ。文書はただの文字列） ----
@@ -204,6 +209,11 @@ $<HTMLButtonElement>("clear").addEventListener("click", () => {
   renderCommitted();
   fep.reset();
   renderComposition([]);
+});
+
+$<HTMLButtonElement>("reset-learning").addEventListener("click", () => {
+  // OPFS の保存分を消してから再読み込み（メモリ内の学習は再ロードで消える）
+  void conn.clearLearning().finally(() => location.reload());
 });
 
 // ---- キー捕捉 ----

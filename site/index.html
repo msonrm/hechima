@@ -25,6 +25,7 @@
           </select>
         </label>
         <button id="clear" type="button">クリア</button>
+        <button id="reset-learning" type="button" title="保存された学習データを消去してページを再読み込みします">学習リセット</button>
         <span id="status" class="status">変換エンジンを準備中…</span>
       </section>
 
@@ -34,7 +35,9 @@
 
       <section class="hints">
         <p>このページを開いたまま打鍵してください（OS 側の日本語 IME はオフ = 英数直接入力で）。
-          変換はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。</p>
+          変換はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。
+          確定した変換は学習されて候補順に反映されます（学習データもブラウザ内にのみ保存。
+          「学習リセット」で消去できます）。</p>
         <ul>
           <li><b>Space</b> = 変換 / 次候補、<b>↑↓</b> = 前候補/次候補、<b>数字 1-9</b> = 直接選択（クリックでも可）</li>
           <li>先頭候補でさらに <b>↑</b>（または <b>Shift+Space</b>）= 追加候補（ひらがな/カタカナ）を展開</li>
