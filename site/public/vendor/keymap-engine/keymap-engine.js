@@ -321,6 +321,7 @@
 				shiftKeys: config.shiftKeys ?? [],
 				lookupTable: config.lookupTable ?? {},
 				specialActions: config.specialActions ?? {},
+				judgment: config.judgment === "mutual" ? "mutual" : "window",
 				simultaneousWindow: config.simultaneousWindow ?? .1
 			};
 			return {
@@ -1156,12 +1157,13 @@
 			shiftKeys,
 			shiftSingleTapActions,
 			keyBits,
+			judgment: config.judgment ?? "window",
 			simultaneousWindow: Math.round(config.simultaneousWindow * 1e3)
 		};
 	}
 	//#endregion
 	//#region src/engine/version.ts
-	const ENGINE_VERSION = "1.2.0";
+	const ENGINE_VERSION = "1.3.0";
 	//#endregion
 	//#region src/engine/key-router.ts
 	/** Route a KeyEvent to a KeyAction based on the expanded keymap */
@@ -1411,10 +1413,19 @@
 			this.onOutput = null;
 			this.onShiftSingle = null;
 			this.onSpecialAction = null;
+			this.mutualOrder = [];
+			this.mutualGroup = /* @__PURE__ */ new Set();
+			this.mutualCharCount = 0;
+			this.mutualPending = null;
+			this.mutualOutputted = false;
 			this.chord = chord;
 		}
 		/** Process key down */
 		keyDown(key) {
+			if (this.chord.judgment === "mutual") {
+				this.mutualKeyDown(key);
+				return;
+			}
 			this.pressedKeys.add(key);
 			switch (this.state.type) {
 				case "idle":
@@ -1433,6 +1444,10 @@
 		}
 		/** Process key up */
 		keyUp(key) {
+			if (this.chord.judgment === "mutual") {
+				this.mutualKeyUp(key);
+				return;
+			}
 			this.pressedKeys.delete(key);
 			if (this.state.type === "shiftHeld" && this.state.shiftKey === key) {
 				if (!this.state.used) {
@@ -1446,6 +1461,126 @@
 		reset() {
 			this.cancelTimer();
 			this.state = { type: "idle" };
+			this.clearMutualGroup();
+		}
+		/**
+		* 相互シフト方式の keyDown。
+		* 「押下中キー集合 + 新キー」の組合せがテーブルにあるかだけで chord / fall-through を判定する。
+		*/
+		mutualKeyDown(key) {
+			if (this.pressedKeys.has(key)) return;
+			this.pressedKeys.add(key);
+			const bit = this.getBit(key);
+			if (bit === void 0) return;
+			if (this.mutualGroup.has(key)) {
+				this.resolveMutualGroup();
+				this.startMutualGroup(key);
+				return;
+			}
+			if (this.mutualGroup.size === 0) {
+				this.startMutualGroup(key);
+				return;
+			}
+			let candidate = bit;
+			for (const k of this.mutualGroup) candidate += this.getBit(k) ?? 0;
+			if (this.chord.lookupTable.has(candidate) || this.chord.specialActions.has(candidate)) {
+				this.mutualGroup.add(key);
+				this.mutualOrder.push(key);
+				this.evaluateMutualChord(candidate);
+			} else {
+				this.resolveMutualGroup();
+				this.startMutualGroup(key);
+			}
+		}
+		/** 相互シフト方式の keyUp */
+		mutualKeyUp(key) {
+			this.pressedKeys.delete(key);
+			if (this.pressedKeys.size === 0) {
+				this.finalizeMutual();
+				return;
+			}
+			if (this.mutualGroup.has(key) && (this.mutualOutputted || this.mutualPending !== null)) {
+				if (this.mutualPending !== null) {
+					this.onSpecialAction?.(this.mutualPending);
+					this.mutualPending = null;
+					this.mutualOutputted = true;
+				}
+				this.mutualGroup.delete(key);
+				const idx = this.mutualOrder.indexOf(key);
+				if (idx >= 0) this.mutualOrder.splice(idx, 1);
+				this.mutualCharCount = 0;
+			}
+		}
+		/** グループを chord 評価する（lookup 優先、なければ specialAction を保留） */
+		evaluateMutualChord(bits) {
+			const text = this.chord.lookupTable.get(bits);
+			if (text !== void 0) {
+				this.onOutput?.(text, this.mutualCharCount);
+				this.mutualCharCount = text.length;
+				this.mutualPending = null;
+				this.mutualOutputted = true;
+				return;
+			}
+			const action = this.chord.specialActions.get(bits);
+			if (action) {
+				if (this.mutualCharCount > 0) {
+					this.onOutput?.("", this.mutualCharCount);
+					this.mutualCharCount = 0;
+				}
+				this.mutualPending = action;
+				this.mutualOutputted = false;
+			}
+		}
+		/**
+		* 現グループを解決する（fall-through / グループ在籍キー再打鍵時）。
+		* chord 出力済みなら何もしない。specialAction 保留中なら発火。
+		* 未出力なら押下順に単打出力する。解決後グループは空（disarm）。
+		*/
+		resolveMutualGroup() {
+			if (this.mutualPending !== null) this.onSpecialAction?.(this.mutualPending);
+			else if (!this.mutualOutputted) for (const k of this.mutualOrder) this.mutualSingleTap(k);
+			this.clearMutualGroup();
+		}
+		/** 全キーリリース時の確定。単打はここで出力される（chord は keyDown 時に出力済み） */
+		finalizeMutual() {
+			if (this.mutualGroup.size === 1) {
+				if (!this.mutualOutputted) {
+					const only = this.mutualOrder[0];
+					if (only !== void 0) this.mutualSingleTap(only);
+				}
+			} else if (this.mutualGroup.size >= 2) {
+				if (this.mutualPending !== null) this.onSpecialAction?.(this.mutualPending);
+				else if (!this.mutualOutputted) for (const k of this.mutualOrder) this.mutualSingleTap(k);
+			}
+			this.clearMutualGroup();
+		}
+		/** 単打出力（シフトキー → 単打アクション、specialAction 優先、なければ文字） */
+		mutualSingleTap(key) {
+			if (this.chord.shiftKeys.has(key)) {
+				const action = this.chord.shiftSingleTapActions.get(key);
+				if (action) this.onShiftSingle?.(action);
+				return;
+			}
+			const bit = this.getBit(key);
+			if (bit === void 0) return;
+			const action = this.chord.specialActions.get(bit);
+			if (action) {
+				this.onSpecialAction?.(action);
+				return;
+			}
+			const text = this.chord.lookupTable.get(bit);
+			if (text !== void 0) this.onOutput?.(text, 0);
+		}
+		startMutualGroup(key) {
+			this.mutualGroup = /* @__PURE__ */ new Set([key]);
+			this.mutualOrder = [key];
+		}
+		clearMutualGroup() {
+			this.mutualGroup.clear();
+			this.mutualOrder = [];
+			this.mutualCharCount = 0;
+			this.mutualPending = null;
+			this.mutualOutputted = false;
 		}
 		handleFirstKey(key) {
 			const bits = this.getBit(key);

@@ -6,9 +6,9 @@
 | ディレクトリ | 版 | 取得元 |
 |---|---|---|
 | `hechima/`（hechima.js / hechima-worker.js / hechima.d.ts） | **v0.11.1** | labo Release `hechima-v0.11.1`（+ ユーザー辞書 + 英字合成の辞書マージ） |
-| `keymap-engine/`（keymap-engine.js） | **v1.2.0** | labo main `5213831` の `web/public/engine/` |
+| `keymap-engine/`（keymap-engine.js） | **v1.3.0** | labo main `c434c6b` の `web/public/engine/`（judgment=mutual 相互シフト対応） |
 | `hechima-wasm/`（hechima-wasm.js / .wasm / mozc.data） | **v0.7.1** | labo Release `hechima-wasm-v0.7.1`（ユーザー辞書 + よみの Mozc 純正検証）。provenance: fcitx5-mozc `fd530f6` / emsdk 3.1.69（同梱 BUILD_INFO.txt。mozc.data も同 Release で更新） |
-| `keymaps/`（naginata_jis / naginata_us） | 薙刀式 v18 | labo main `5213831` の `web/public/keymaps/` |
+| `keymaps/`（naginata_jis / naginata_us） | 薙刀式 v18 + `judgment: mutual` | labo main `c434c6b` の `web/public/keymaps/`（同時押しを本家仕様の相互シフト = ミリ秒を見ない状態ベース判定に切替。keymap-engine v1.3.0 とセット差し替え必須） |
 
 ## 互換性の要点
 
