@@ -1,6 +1,6 @@
 (function() {
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.8.2";
+	const HECHIMA_VERSION = "0.9.0";
 	//#endregion
 	//#region src/hechima/worker-main.ts
 	let M = null;
@@ -294,6 +294,32 @@
 			});
 		}
 	}
+	/** 直近の learn を取り消す（確定アンドゥの学習巻き戻し）。成功したら保存も更新する */
+	function handleRevert(id) {
+		if (!M || !learningEnabled || typeof M._hechima_revert !== "function") {
+			self.postMessage({
+				type: "learned",
+				id,
+				ok: false
+			});
+			return;
+		}
+		try {
+			const ok = M.ccall("hechima_revert", "number", [], []) === 0;
+			if (ok) scheduleSave();
+			self.postMessage({
+				type: "learned",
+				id,
+				ok
+			});
+		} catch {
+			self.postMessage({
+				type: "learned",
+				id,
+				ok: false
+			});
+		}
+	}
 	/** OPFS の学習保存分を削除する（メモリ内の学習はページ再ロードまで残る） */
 	async function handleClearLearning(id) {
 		let ok = true;
@@ -345,6 +371,7 @@
 		} else if (m.type === "convert") handleConvert(m.id, m.kana, m.maxCands ?? 9);
 		else if (m.type === "resize") handleResize(m.id, m.segIdx, m.offset, m.maxCands ?? 9);
 		else if (m.type === "learn") handleLearn(m.id, m.kana, m.sizes, m.values);
+		else if (m.type === "revert") handleRevert(m.id);
 		else if (m.type === "clearLearning") handleClearLearning(m.id);
 	};
 	//#endregion

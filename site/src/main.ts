@@ -179,6 +179,13 @@ const fep = Hechima.createFep({
     // 文書は末尾追記のみの単純ホストなので BS だけ実装
     if (name === "Backspace") deleteLastChar();
   },
+  retract: (text) => {
+    // 確定アンドゥ（Ctrl+BS）の文書側協力: 末尾一致なら取り除く
+    if (!committed.endsWith(text)) return false;
+    committed = committed.slice(0, committed.length - text.length);
+    renderCommitted();
+    return true;
+  },
   ...conn.callbacks(),
 });
 fep.setActive(true);

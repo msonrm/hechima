@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.8.2";
+	const HECHIMA_VERSION = "0.9.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -418,15 +418,45 @@
 			else cb.hide();
 		}
 		const joined = () => (segs ?? []).map((s, i) => segText(s, i)).join("");
+		let lastCommit = null;
 		function commit(text) {
-			if (segs && cb.learn && !eiji) try {
+			const learned = !!(segs && cb.learn && !eiji);
+			if (learned && segs) try {
 				cb.learn(segs.map((s, i) => ({
 					key: s.key,
 					value: segText(s, i)
 				})));
 			} catch {}
+			lastCommit = segs ? {
+				text,
+				segs,
+				focus,
+				kana,
+				learned
+			} : null;
 			clear();
 			cb.commit(text);
+		}
+		function undoCommit() {
+			if (!lastCommit || composing() || !cb.retract) return false;
+			let removed = false;
+			try {
+				removed = cb.retract(lastCommit.text);
+			} catch {
+				removed = false;
+			}
+			if (!removed) return false;
+			segs = lastCommit.segs;
+			focus = lastCommit.focus;
+			kana = lastCommit.kana;
+			genId++;
+			resetAddl();
+			if (lastCommit.learned) try {
+				cb.unlearn?.();
+			} catch {}
+			lastCommit = null;
+			render();
+			return true;
 		}
 		function ingestSegment(s) {
 			const cands = s.candidates && s.candidates.length ? [...new Set(s.candidates)] : [s.key];
@@ -599,6 +629,7 @@
 				pumpEngine();
 				return true;
 			}
+			if (tap.key === "Backspace" && tap.ctrlKey && !tap.altKey && !tap.metaKey && !engine.getState().isComposing && !composing()) return undoCommit() ? true : false;
 			if (tap.ctrlKey || tap.altKey || tap.metaKey) return false;
 			if (tap.repeat) return true;
 			const composingNow = engine.getState().isComposing;
@@ -641,6 +672,7 @@
 		function feed(e) {
 			if (!active) return false;
 			if (engine) return engineDown(e);
+			if (e.key === "Backspace" && e.ctrlKey && !e.altKey && !e.metaKey && !composing()) return undoCommit() ? true : false;
 			if (e.ctrlKey || e.altKey || e.metaKey) return false;
 			const k = e.key;
 			if (k === "Enter") {
@@ -768,6 +800,7 @@
 				render();
 				return true;
 			},
+			undoCommit,
 			reset() {
 				clear();
 				if (engine) try {
@@ -875,6 +908,17 @@
 				});
 			});
 		}
+		async function revert() {
+			if (!await whenReady()) return false;
+			return new Promise((resolve) => {
+				const id = ++seq;
+				pendingLearn.set(id, resolve);
+				worker.postMessage({
+					type: "revert",
+					id
+				});
+			});
+		}
 		async function clearLearning() {
 			if (!await whenReady()) return false;
 			return new Promise((resolve) => {
@@ -891,12 +935,16 @@
 			convert,
 			resize,
 			learn,
+			revert,
 			clearLearning,
 			callbacks: () => ({
 				convert,
 				resize,
 				learn: (segments) => {
 					learn(segments);
+				},
+				unlearn: () => {
+					revert();
 				}
 			})
 		};

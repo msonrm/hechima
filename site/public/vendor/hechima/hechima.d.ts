@@ -1,4 +1,4 @@
-// Hechima v0.8.2 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// Hechima v0.9.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 1.2.0（onHostAction の convert/confirm/insertAndConfirm 転送）。
 // 対応バンドル: hechima.js / hechima.min.js（UMD、グローバル名 `Hechima`）
 //             + hechima-worker.js（Worker 本体、電文 v0。connectWorker で接続する）
@@ -64,6 +64,13 @@ export interface SessionCallbacks {
    * connectWorker の callbacks() を繋げば Mozc の学習（候補選択 + 文節境界）に流れる。
    */
   learn?(segments: { key: string; value: string }[]): void;
+  /**
+   * 確定アンドゥの文書側協力（v0.9.0+、省略可）。ホスト文書の末尾が text と一致するなら
+   * それを取り除いて true（一致しない = その後に編集があった等なら false = アンドゥ不成立）。
+   */
+  retract?(text: string): boolean;
+  /** 確定アンドゥ時の学習巻き戻し（v0.9.0+、省略可）。connectWorker の callbacks() で Mozc RevertConversion に流れる */
+  unlearn?(): void;
 }
 
 /** feed / feedUp が読む KeyboardEvent 互換の最小形（DOM 型に依存しない） */
@@ -133,6 +140,11 @@ export interface FepSession {
    * ホストが候補 UI の数字キー/クリックから呼ぶ。範囲外・非 Phase 2 は false（現状維持）。
    */
   selectCandidate(index: number): boolean;
+  /**
+   * 確定アンドゥ（v0.9.0+、標準 IME の Ctrl+BS 相当。セッションも Ctrl+BS を内部割当）。
+   * cb.retract の末尾一致が通ったときだけ成立し、学習も cb.unlearn で巻き戻る。
+   */
+  undoCommit(): boolean;
   reset(): void;
 }
 
@@ -169,7 +181,9 @@ export interface ResizeRequest { type: "resize"; id: number; segIdx: number; off
 export interface LearnRequest { type: "learn"; id: number; kana: string; sizes: number[]; values: string[] }
 /** ホスト → Worker: OPFS の学習保存分を削除（v0.8.0+） */
 export interface ClearLearningRequest { type: "clearLearning"; id: number }
-export type WorkerRequest = InitRequest | ConvertRequest | ResizeRequest | LearnRequest | ClearLearningRequest;
+/** ホスト → Worker: 直近の learn の取り消し（v0.9.0+。確定アンドゥの学習巻き戻し） */
+export interface RevertRequest { type: "revert"; id: number }
+export type WorkerRequest = InitRequest | ConvertRequest | ResizeRequest | LearnRequest | ClearLearningRequest | RevertRequest;
 
 /** Worker → ホスト: 辞書ダウンロード進捗（total 不明時は 0） */
 export interface ProgressMessage { type: "progress"; loaded: number; total: number }
@@ -221,6 +235,8 @@ export interface WorkerConnection {
   resize(segmentIndex: number, offset: number): Promise<ConvertSegment[] | null>;
   /** 確定内容の学習（v0.8.0+）。true = 学習した（対応が取れない場合は false = 無害な no-op） */
   learn(segments: { key: string; value: string }[]): Promise<boolean>;
+  /** 直近の learn の取り消し（v0.9.0+ = 確定アンドゥの学習巻き戻し） */
+  revert(): Promise<boolean>;
   /** OPFS の学習保存分を削除（v0.8.0+。メモリ内の学習は再ロードまで残る） */
   clearLearning(): Promise<boolean>;
   /** createFep の cb にスプレッドできる形: { ...conn.callbacks(), show, hide, commit } */
@@ -228,6 +244,7 @@ export interface WorkerConnection {
     convert: (yomi: string) => Promise<ConvertSegment[] | null>;
     resize: (segmentIndex: number, offset: number) => Promise<ConvertSegment[] | null>;
     learn: (segments: { key: string; value: string }[]) => void;
+    unlearn: () => void;
   };
 }
 
