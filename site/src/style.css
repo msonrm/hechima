@@ -30,6 +30,7 @@ body {
 }
 
 header h1 { margin: 0; font-size: 1.6rem; }
+header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted); margin-left: 0.4rem; letter-spacing: 0.04em; }
 .tagline { margin: 0.2rem 0 1rem; color: var(--muted); font-size: 0.9rem; }
 
 .controls {
