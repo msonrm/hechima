@@ -1,10 +1,18 @@
 (function() {
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.6.0";
+	const HECHIMA_VERSION = "0.7.0";
 	//#endregion
 	//#region src/hechima/worker-main.ts
 	let M = null;
 	let initStarted = false;
+	let lastYomi = null;
+	let lastKeys = null;
+	function rememberSegments(segments) {
+		if (segments && segments.length) {
+			lastKeys = segments.map((s) => s.key);
+			lastYomi = lastKeys.join("");
+		}
+	}
 	/** 辞書を fetch（進捗を電文で流す）。SPA フォールバックの HTML 混入も検出する */
 	async function fetchDictionary(dataUrl) {
 		const res = await fetch(new URL(dataUrl, self.location.href).href);
@@ -86,11 +94,12 @@
 			return;
 		}
 		try {
-			const json = M.ccall("hechima_convert", "string", ["string", "number"], [kana, maxCands | 0]);
+			const segments = parseSegments(M.ccall("hechima_convert", "string", ["string", "number"], [kana, maxCands | 0]));
+			rememberSegments(segments);
 			self.postMessage({
 				type: "result",
 				id,
-				segments: parseSegments(json)
+				segments
 			});
 		} catch (e) {
 			self.postMessage({
@@ -101,6 +110,12 @@
 			});
 		}
 	}
+	/**
+	* 文節伸縮。hechima-wasm v0.3.0+ では hechima_convert2（ステートレス）を使い、
+	* 「segIdx 文節を offset だけ伸縮」を「先頭からの文節よみ文字数の制約列」に翻訳して再変換する
+	* （制約は伸縮した文節まで。以降は Mozc の自由分節 = 実 IME と同じ挙動）。
+	* 旧 wasm（v0.2.0）では従来の hechima_resize（wasm 内 static 状態）にフォールバックする。
+	*/
 	function handleResize(id, segIdx, offset, maxCands) {
 		if (!M) {
 			self.postMessage({
@@ -111,17 +126,55 @@
 			});
 			return;
 		}
-		if (typeof M._hechima_resize !== "function") {
-			self.postMessage({
-				type: "result",
-				id,
-				segments: null,
-				error: "hechima_resize 未搭載（hechima-wasm v0.2.0+ が必要）"
-			});
-			return;
-		}
 		try {
-			const json = M.ccall("hechima_resize", "string", [
+			if (typeof M._hechima_convert2 === "function" && lastYomi && lastKeys) {
+				if (segIdx < 0 || segIdx >= lastKeys.length) {
+					self.postMessage({
+						type: "result",
+						id,
+						segments: null,
+						error: "segIdx 範囲外"
+					});
+					return;
+				}
+				const lens = lastKeys.map((k) => Array.from(k).length);
+				const target = lens[segIdx] + offset;
+				if (target < 1 || target > 255) {
+					self.postMessage({
+						type: "result",
+						id,
+						segments: null
+					});
+					return;
+				}
+				const sizes = [...lens.slice(0, segIdx), target];
+				const segments = parseSegments(M.ccall("hechima_convert2", "string", [
+					"string",
+					"string",
+					"number"
+				], [
+					lastYomi,
+					sizes.join(","),
+					maxCands | 0
+				]));
+				rememberSegments(segments);
+				self.postMessage({
+					type: "result",
+					id,
+					segments
+				});
+				return;
+			}
+			if (typeof M._hechima_resize !== "function") {
+				self.postMessage({
+					type: "result",
+					id,
+					segments: null,
+					error: "hechima_resize 未搭載（hechima-wasm v0.2.0+ が必要）"
+				});
+				return;
+			}
+			const segments = parseSegments(M.ccall("hechima_resize", "string", [
 				"number",
 				"number",
 				"number"
@@ -129,11 +182,12 @@
 				segIdx | 0,
 				offset | 0,
 				maxCands | 0
-			]);
+			]));
+			rememberSegments(segments);
 			self.postMessage({
 				type: "result",
 				id,
-				segments: parseSegments(json)
+				segments
 			});
 		} catch (e) {
 			self.postMessage({
@@ -161,7 +215,7 @@
 					type: "ready",
 					protocol: 0,
 					version: HECHIMA_VERSION,
-					features: { resize: !!(M && typeof M._hechima_resize === "function") }
+					features: { resize: !!(M && (typeof M._hechima_convert2 === "function" || typeof M._hechima_resize === "function")) }
 				});
 			}, (e) => {
 				self.postMessage({

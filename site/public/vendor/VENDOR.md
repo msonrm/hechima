@@ -5,15 +5,15 @@
 
 | ディレクトリ | 版 | 取得元 |
 |---|---|---|
-| `hechima/`（hechima.js / hechima-worker.js / hechima.d.ts） | **v0.6.0** | labo Release `hechima-v0.6.0`（main `a50f985`。英字合成 Shift+英字 + 追加候補の段階展開） |
+| `hechima/`（hechima.js / hechima-worker.js / hechima.d.ts） | **v0.7.0** | labo Release `hechima-v0.7.0`（main `433bed2` 相当。ステートレス resize 対応 worker） |
 | `keymap-engine/`（keymap-engine.js） | **v1.2.0** | labo main `5213831` の `web/public/engine/` |
-| `hechima-wasm/`（hechima-wasm.js / .wasm / mozc.data） | **v0.2.0** | labo Release `hechima-wasm-v0.2.0`。provenance: fcitx5-mozc `8b3d34c` / mozc `0651fbc` / emsdk 3.1.69（同梱 BUILD_INFO.txt） |
+| `hechima-wasm/`（hechima-wasm.js / .wasm / mozc.data） | **v0.3.0** | labo Release `hechima-wasm-v0.3.0`（候補 dedupe + ステートレス hechima_convert2）。provenance: fcitx5-mozc `fd530f6` / emsdk 3.1.69（同梱 BUILD_INFO.txt。mozc.data も同 Release で更新） |
 | `keymaps/`（naginata_jis / naginata_us） | 薙刀式 v18 | labo main `5213831` の `web/public/keymaps/` |
 
 ## 互換性の要点
 
-- hechima v0.4.0 は **KeymapEngine >= 1.2.0 必須**（セット差し替え）
-- hechima-worker は hechima-wasm v0.2.0 とセット（v0.1.0 でも動くが resize が機能検出で無効）
+- hechima v0.7.0 は **KeymapEngine >= 1.2.0 必須**（セット差し替え）
+- hechima-worker は hechima-wasm v0.3.0 とセット推奨（v0.2.0 では旧 resize に自動フォールバック、v0.1.0 は resize 無効）
 - `mozc.data` は Mozc の辞書（名前と帰属を保つため改名しない）
 
 ## 帰属 / powered by Mozc
