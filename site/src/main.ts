@@ -1,10 +1,12 @@
-// hechima ラボサイト — 最小デモ（実装順序 [0] の骨格）。
+// hechima ラボサイト — プレーンエディタ（実装順序 [1]: 保存 + undo + カウント）。
 //
-// 構成（すべて vendored、外部リソースなし = COEP: require-corp 下で自己完結）:
-//   keymap-engine.js（配列エンジン UMD）+ hechima.js（変換セッション層 UMD）を <script> で読み、
-//   hechima-worker.js（電文 v0）を Worker として起動して hechima-wasm（Mozc）に接続する。
-//
-// 候補一覧 UI（実装順序 5）= 下記の候補ポップアップ（9 件ページング + 数字/クリック選択）。
+// 文書モデル: contenteditable の平文運用。中身は「テキストノード + 未確定 span 1 個」だけ。
+//   - 未確定（composition）はカーソル位置にインライン挿入（標準 IME の見た目）
+//   - 貼り付けはプレーンテキストに剥がす（憲法「プレーンテキスト往復生存」）
+//   - 保存は OPFS（非対応環境は localStorage に degrade）へ自動保存
+//   - undo/redo は Ctrl+Z / Ctrl+Shift+Z・Ctrl+Y（スナップショット方式。Ctrl+BS の
+//     確定アンドゥ = IME 側の取り消しとは別物）
+// hechima 側の変更は不要 — cb 契約（show/hide/commit/hostKey/retract/learn/unlearn）で完結。
 
 declare const KeymapEngine: {
   version: string;
@@ -20,11 +22,16 @@ const $ = <T extends HTMLElement>(id: string): T => {
 };
 
 const statusEl = $<HTMLSpanElement>("status");
-const committedEl = $<HTMLSpanElement>("committed");
-const compositionEl = $<HTMLSpanElement>("composition");
+const editorEl = $<HTMLDivElement>("editor");
+const countsEl = $<HTMLSpanElement>("counts");
 const keymapSelect = $<HTMLSelectElement>("keymap");
 
-const setStatus = (text: string) => { statusEl.textContent = text; };
+let engineStatus = "変換エンジンを準備中…";
+let storageLabel = "";
+const refreshStatus = () => {
+  statusEl.textContent = storageLabel ? `${engineStatus} ・ ${storageLabel}` : engineStatus;
+};
+const setStatus = (text: string) => { engineStatus = text; refreshStatus(); };
 const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
 
 // ---- 変換エンジン（hechima-worker、電文 v0） ----
@@ -32,7 +39,7 @@ const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
 const worker = new Worker("/vendor/hechima/hechima-worker.js");
 const conn = Hechima.connectWorker(worker, {
   // 既定は 9（= ポップアップの 1 ウィンドウ分）だが、それだと 10 件目以降が
-  // 存在せずスクロールが起きない。ウィンドウ複数ページ分を取得する
+  // 存在せずページングが起きない。ウィンドウ複数ページ分を取得する
   maxCands: 50,
   onProgress: (loaded, total) =>
     setStatus(total > 0 ? `辞書を取得中… ${mb(loaded)} / ${mb(total)} MB` : `辞書を取得中… ${mb(loaded)} MB`),
@@ -47,16 +54,270 @@ conn
   })
   .catch((e: Error) => setStatus(`エンジン初期化失敗: ${e.message} — フォールバック変換（カナ/かな巡回）で動作中`));
 
-// ---- セッション（ホスト = このページ。文書はただの文字列） ----
+// ---- 文書モデル（contenteditable 平文 + 未確定 span） ----
 
-let committed = "";
+let compEl: HTMLSpanElement | null = null;
 
-function renderCommitted(): void {
-  committedEl.textContent = committed;
+const compositionActive = (): boolean => !!(compEl && compEl.isConnected);
+
+/** 本文（未確定 span を除いたテキスト） */
+function docText(): string {
+  let out = "";
+  const walker = document.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) =>
+      compEl && compEl.contains(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+  });
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) out += n.textContent ?? "";
+  return out;
 }
 
+/** editor 内のキャレット（無ければ末尾）。選択があれば focus 側に潰す */
+function caretRange(): Range {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0 && editorEl.contains(sel.getRangeAt(0).startContainer)) {
+    const r = sel.getRangeAt(0).cloneRange();
+    r.collapse(false);
+    return r;
+  }
+  const r = document.createRange();
+  r.selectNodeContents(editorEl);
+  r.collapse(false);
+  return r;
+}
+
+function selectRange(r: Range): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+
+function setCaretAfter(node: Node): void {
+  const r = document.createRange();
+  r.setStartAfter(node);
+  r.collapse(true);
+  selectRange(r);
+}
+
+/** キャレット位置（本文の UTF-16 オフセット。未確定 span は挿入位置として数えない） */
+function caretOffset(): number {
+  const r = caretRange();
+  const pre = document.createRange();
+  pre.selectNodeContents(editorEl);
+  pre.setEnd(r.startContainer, r.startOffset);
+  let out = 0;
+  const walker = document.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) =>
+      compEl && compEl.contains(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+  });
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const len = (n.textContent ?? "").length;
+    if (pre.comparePoint(n, 0) > 0) break; // キャレットより後ろのノード
+    const inPre = pre.comparePoint(n, len) <= 0 ? len
+      : (n === r.startContainer ? r.startOffset : 0);
+    out += inPre;
+    if (n === r.startContainer) break;
+  }
+  return out;
+}
+
+/** 本文オフセット [start, end) を指す Range（未確定 span が無い前提で使う） */
+function rangeAt(start: number, end: number): Range | null {
+  const r = document.createRange();
+  let acc = 0;
+  let started = false;
+  const walker = document.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const len = (n.textContent ?? "").length;
+    if (!started && start <= acc + len) {
+      r.setStart(n, start - acc);
+      started = true;
+    }
+    if (started && end <= acc + len) {
+      r.setEnd(n, Math.max(0, end - acc));
+      return r;
+    }
+    acc += len;
+  }
+  if (!started && start === acc) {
+    r.selectNodeContents(editorEl);
+    r.collapse(false);
+    return r;
+  }
+  if (started) {
+    r.setEnd(editorEl, editorEl.childNodes.length);
+    return r;
+  }
+  return null;
+}
+
+function setCaretByOffset(offset: number): void {
+  const r = rangeAt(offset, offset);
+  if (r) {
+    r.collapse(true);
+    selectRange(r);
+  }
+}
+
+function insertTextAtCaret(text: string): void {
+  const r = caretRange();
+  r.deleteContents();
+  const tn = document.createTextNode(text);
+  r.insertNode(tn);
+  setCaretAfter(tn);
+  editorEl.normalize();
+}
+
+/** キャレット直前の n 文字（コードポイント）を削除。成功で true */
+function deleteBeforeCaret(nChars: number): boolean {
+  const off = caretOffset();
+  const before = docText().slice(0, off);
+  if (!before) return false;
+  const chars = Array.from(before);
+  const take = Math.min(nChars, chars.length);
+  const units = chars.slice(chars.length - take).join("").length;
+  const r = rangeAt(off - units, off);
+  if (!r) return false;
+  r.deleteContents();
+  editorEl.normalize();
+  setCaretByOffset(off - units);
+  return true;
+}
+
+// ---- 保存（OPFS → localStorage に degrade）・undo/redo・カウント ----
+
+const DOC_FILE = "document.txt";
+const DOC_LS_KEY = "hechima-doc";
+let opfsDoc: { getFileHandle(name: string, o?: { create?: boolean }): Promise<FileSystemFileHandle> } | null = null;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function initStorage(): Promise<string> {
+  try {
+    const root = await navigator.storage.getDirectory();
+    const dir = await root.getDirectoryHandle("hechima", { create: true });
+    const fh = await dir.getFileHandle(DOC_FILE, { create: true });
+    const text = await (await fh.getFile()).text();
+    // createWritable の存在だけ確認（呼んで close すると既存内容が空になるため呼ばない。
+    // Safari 旧版などメソッド自体が無い環境は localStorage へ）
+    if (typeof (fh as { createWritable?: unknown }).createWritable !== "function") {
+      throw new Error("createWritable なし");
+    }
+    opfsDoc = dir as never;
+    storageLabel = "自動保存: この端末（OPFS）";
+    return text;
+  } catch {
+    opfsDoc = null;
+    try {
+      const text = localStorage.getItem(DOC_LS_KEY) ?? "";
+      storageLabel = "自動保存: この端末（localStorage）";
+      return text;
+    } catch {
+      storageLabel = "自動保存: 不可（この環境では保存されません）";
+      return "";
+    }
+  }
+}
+
+async function saveDocNow(): Promise<void> {
+  const text = docText();
+  if (opfsDoc) {
+    try {
+      const fh = await opfsDoc.getFileHandle(DOC_FILE, { create: true });
+      const w = await (fh as unknown as { createWritable(): Promise<{ write(d: string): Promise<void>; close(): Promise<void> }> }).createWritable();
+      await w.write(text);
+      await w.close();
+      return;
+    } catch {
+      // 書けなければ localStorage へ
+    }
+  }
+  try { localStorage.setItem(DOC_LS_KEY, text); } catch { /* 保存不可環境 */ }
+}
+
+function scheduleSave(): void {
+  if (saveTimer !== null) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { void saveDocNow(); }, 800);
+}
+
+function updateCounts(): void {
+  const t = docText();
+  const chars = Array.from(t.replace(/\n/g, "")).length;
+  const lines = t.length ? t.split("\n").length : 0;
+  countsEl.textContent = `${chars} 字 ・ ${lines} 行`;
+}
+
+interface DocState { text: string; caret: number }
+const undoStack: DocState[] = [];
+const redoStack: DocState[] = [];
+
+function currentState(): DocState {
+  return { text: docText(), caret: caretOffset() };
+}
+
+/** 変更の直前に呼ぶ（native 編集は beforeinput から） */
+function snapshot(): void {
+  const cur = currentState();
+  const top = undoStack[undoStack.length - 1];
+  if (top && top.text === cur.text) return; // 同一テキストは積まない
+  undoStack.push(cur);
+  if (undoStack.length > 200) undoStack.shift();
+  redoStack.length = 0;
+}
+
+function applyState(s: DocState): void {
+  compEl = null;
+  editorEl.textContent = s.text;
+  setCaretByOffset(Math.min(s.caret, s.text.length));
+  afterEdit();
+}
+
+function undo(): void {
+  if (!undoStack.length || compositionActive()) return;
+  redoStack.push(currentState());
+  applyState(undoStack.pop()!);
+}
+
+function redo(): void {
+  if (!redoStack.length || compositionActive()) return;
+  undoStack.push(currentState());
+  applyState(redoStack.pop()!);
+}
+
+/** 編集後の共通処理（保存 + カウント） */
+function afterEdit(): void {
+  scheduleSave();
+  updateCounts();
+}
+
+// ---- 未確定表示（インライン）と候補ポップアップ ----
+
 function renderComposition(segments: Hechima.SegmentView[]): void {
-  compositionEl.replaceChildren(
+  if (!segments.length) {
+    if (compositionActive() && compEl) {
+      const marker = document.createTextNode("");
+      compEl.replaceWith(marker);
+      setCaretAfter(marker);
+      editorEl.normalize();
+    }
+    compEl = null;
+    renderCandidatePopup(segments);
+    return;
+  }
+  if (!compositionActive()) {
+    // 選択がある状態での入力開始は選択を置き換える（標準エディタの挙動）
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed &&
+        editorEl.contains(sel.getRangeAt(0).startContainer)) {
+      snapshot();
+      sel.getRangeAt(0).deleteContents();
+      editorEl.normalize();
+    }
+    compEl = document.createElement("span");
+    compEl.className = "composition";
+    const r = caretRange();
+    r.insertNode(compEl);
+  }
+  compEl!.replaceChildren(
     ...segments.map((s) => {
       const span = document.createElement("span");
       span.className = `seg-${s.kind}`;
@@ -64,6 +325,7 @@ function renderComposition(segments: Hechima.SegmentView[]): void {
       return span;
     }),
   );
+  setCaretAfter(compEl!);
   renderCandidatePopup(segments);
 }
 
@@ -145,8 +407,8 @@ function renderCandidatePopup(segments: Hechima.SegmentView[]): void {
 
   // 配置: 注目文節スパンの直下（gap 4px）。下端はみ出しで上にフリップ、右端でクランプ
   const GAP = 4;
-  const anchorSpan = compositionEl.children[focusIdx] as HTMLElement | undefined;
-  const anchor = (anchorSpan ?? compositionEl).getBoundingClientRect();
+  const anchorSpan = compEl?.children[focusIdx] as HTMLElement | undefined;
+  const anchor = (anchorSpan ?? editorEl).getBoundingClientRect();
   const popupW = popupEl.offsetWidth;
   const popupH = popupEl.offsetHeight;
   let x = anchor.left + window.scrollX;
@@ -161,29 +423,39 @@ function renderCandidatePopup(segments: Hechima.SegmentView[]): void {
   popupEl.style.top = `${Math.max(0, y)}px`;
 }
 
-function deleteLastChar(): void {
-  committed = Array.from(committed).slice(0, -1).join("");
-  renderCommitted();
-}
+// ---- セッション（ホスト = このエディタ） ----
 
 const fep = Hechima.createFep({
   show: (segments) => renderComposition(segments),
   hide: () => renderComposition([]),
   commit: (text) => {
-    renderComposition([]);
-    committed += text;
-    renderCommitted();
+    snapshot();
+    renderComposition([]); // 未確定 span を畳んでから
+    insertTextAtCaret(text);
+    afterEdit();
   },
   hostKey: (name) => {
-    // 編集キー委譲（薙刀式 U 等の specialAction → 空バッファ時）。
-    // 文書は末尾追記のみの単純ホストなので BS だけ実装
-    if (name === "Backspace") deleteLastChar();
+    // 編集キー委譲（薙刀式 T/Y/U の specialAction → 空バッファ時）
+    const sel = window.getSelection();
+    const canModify = !!sel && typeof sel.modify === "function";
+    if (name === "ArrowLeft") { if (canModify) sel.modify("move", "backward", "character"); }
+    else if (name === "ArrowRight") { if (canModify) sel.modify("move", "forward", "character"); }
+    else if (name === "Backspace") {
+      snapshot();
+      if (deleteBeforeCaret(1)) afterEdit();
+    }
   },
   retract: (text) => {
-    // 確定アンドゥ（Ctrl+BS）の文書側協力: 末尾一致なら取り除く
-    if (!committed.endsWith(text)) return false;
-    committed = committed.slice(0, committed.length - text.length);
-    renderCommitted();
+    // 確定アンドゥ（Ctrl+BS）の文書側協力: キャレット直前が確定テキストと一致するなら取り除く
+    const off = caretOffset();
+    if (!docText().slice(0, off).endsWith(text)) return false;
+    snapshot();
+    const r = rangeAt(off - text.length, off);
+    if (!r) return false;
+    r.deleteContents();
+    editorEl.normalize();
+    setCaretByOffset(off - text.length);
+    afterEdit();
     return true;
   },
   ...conn.callbacks(),
@@ -209,19 +481,22 @@ async function setKeymap(id: string): Promise<void> {
 
 keymapSelect.addEventListener("change", () => {
   void setKeymap(keymapSelect.value);
-  keymapSelect.blur(); // フォーカスを外してそのまま打鍵できるように（keydown はページ全体で受ける）
+  editorEl.focus(); // そのまま打鍵を続けられるように
 });
 
 $<HTMLButtonElement>("clear").addEventListener("click", () => {
-  committed = "";
-  renderCommitted();
+  snapshot();
   fep.reset();
-  renderComposition([]);
+  compEl = null;
+  editorEl.textContent = "";
+  popupEl.hidden = true;
+  afterEdit();
+  editorEl.focus();
 });
 
 $<HTMLButtonElement>("reset-learning").addEventListener("click", () => {
   // OPFS の保存分を消してから再読み込み（メモリ内の学習は再ロードで消える）
-  void conn.clearLearning().finally(() => location.reload());
+  void saveDocNow().then(() => conn.clearLearning()).finally(() => location.reload());
 });
 
 // ---- キー捕捉 ----
@@ -241,14 +516,65 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     return;
   }
-  // セッションが飲まなかったキー = ホスト（このページ）の文書操作。
-  // 内蔵ローマ字経路は空バッファの BS を消費しない設計（QuuBee ではホスト文書が処理する）
-  // なので、hostKey('Backspace') と同じ削除処理へ合流させる
-  if (e.key === "Backspace" && !e.ctrlKey && !e.altKey) {
-    deleteLastChar();
+  // ---- セッションが飲まなかったキー = エディタの文書操作 ----
+  if (e.ctrlKey && !e.altKey && (e.key === "z" || e.key === "Z")) {
     e.preventDefault();
+    if (e.shiftKey) redo();
+    else undo();
+    return;
   }
+  if (e.ctrlKey && !e.altKey && (e.key === "y" || e.key === "Y")) {
+    e.preventDefault();
+    redo();
+    return;
+  }
+  if (e.key === "Enter" && !e.ctrlKey && !e.altKey) {
+    // contenteditable の native Enter は <div>/<br> を作るので平文の \n に統一する
+    e.preventDefault();
+    snapshot();
+    insertTextAtCaret("\n");
+    afterEdit();
+    return;
+  }
+  // Backspace / 矢印 / Home / End / Delete などは contenteditable の native に任せる
+  // （native 編集のスナップショットは beforeinput で取る）
 });
 window.addEventListener("keyup", (e) => {
   fep.feedUp(e);
+});
+
+// native 編集（BS・Delete・数字等の透過入力）の undo スナップショットと保存
+editorEl.addEventListener("beforeinput", () => snapshot());
+editorEl.addEventListener("input", () => afterEdit());
+
+// 貼り付けはプレーンテキストに剥がす
+editorEl.addEventListener("paste", (e) => {
+  e.preventDefault();
+  const text = e.clipboardData?.getData("text/plain") ?? "";
+  if (!text) return;
+  snapshot();
+  insertTextAtCaret(text);
+  afterEdit();
+});
+
+// 未確定のままエディタをクリック → 現在の内容で確定してからカーソル移動（標準 IME の挙動）
+editorEl.addEventListener("mousedown", () => {
+  if (compositionActive()) fep.feed({ key: "Enter" });
+});
+
+// ページを離れるときに保存を確実に
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") void saveDocNow();
+});
+
+// ---- 起動: 保存文書の復元 ----
+
+void initStorage().then((text) => {
+  if (text) {
+    editorEl.textContent = text;
+    setCaretByOffset(text.length);
+  }
+  updateCounts();
+  refreshStatus();
+  editorEl.focus();
 });

@@ -29,20 +29,23 @@
         <span id="status" class="status">変換エンジンを準備中…</span>
       </section>
 
-      <section id="editor" class="editor" aria-label="試し書きエリア">
-        <span id="committed"></span><span id="composition"></span><span class="caret"></span>
+      <section class="editor-wrap">
+        <div id="editor" class="editor" contenteditable="true" spellcheck="false"
+          aria-label="プレーンエディタ" data-placeholder="ここに書く…"></div>
+        <div class="statusline"><span id="counts">0 字 ・ 0 行</span></div>
       </section>
 
       <section class="hints">
         <p>このページを開いたまま打鍵してください（OS 側の日本語 IME はオフ = 英数直接入力で）。
-          変換はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。
-          確定した変換は学習されて候補順に反映されます（学習データもブラウザ内にのみ保存。
-          「学習リセット」で消去できます）。</p>
+          変換・学習・文書の保存はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。
+          文書はこの端末に自動保存され、確定した変換は学習されて候補順に反映されます
+          （「学習リセット」で学習を消去、「クリア」で文書を消去）。</p>
         <ul>
           <li><b>Space</b> = 変換 / 次候補、<b>↑↓</b> = 前候補/次候補、<b>数字 1-9</b> = 直接選択（クリックでも可）</li>
           <li>先頭候補でさらに <b>↑</b>（または <b>Shift+Space</b>）= 追加候補（ひらがな/カタカナ）を展開</li>
           <li><b>Shift+英字</b> = 英単語をそのまま入力（Space で 大文字/小文字/全角 の綴り変換）</li>
           <li><b>Enter</b> = 確定、<b>Esc</b> = 戻す、<b>←→</b> = 文節移動、<b>Shift+←→</b> = 文節伸縮、<b>Ctrl+BS</b> = 確定取り消し（学習も巻き戻し）</li>
+          <li>エディタ: クリック / 矢印キーでカーソル移動、<b>Ctrl+Z</b> / <b>Ctrl+Y</b> = 文書の undo / redo、貼り付けはプレーンテキスト化</li>
           <li>薙刀式では space+T / space+Y（文節伸縮）、M+V（確定）などの同時打鍵編集も効きます</li>
         </ul>
       </section>
