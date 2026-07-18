@@ -1,6 +1,6 @@
 (function() {
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.9.0";
+	const HECHIMA_VERSION = "0.10.0";
 	//#endregion
 	//#region src/hechima/worker-main.ts
 	let M = null;
@@ -255,6 +255,34 @@
 			});
 		}
 	}
+	/** 再変換（表記 → 逆変換でよみ → 通常変換）。結果は convert と同形（keys がよみ） */
+	function handleReconvert(id, surface, maxCands) {
+		if (!M || typeof M._hechima_reconvert !== "function") {
+			self.postMessage({
+				type: "result",
+				id,
+				segments: null,
+				error: "hechima_reconvert 未搭載（hechima-wasm v0.6.0+ が必要）"
+			});
+			return;
+		}
+		try {
+			const segments = parseSegments(M.ccall("hechima_reconvert", "string", ["string", "number"], [surface, maxCands | 0]));
+			rememberSegments(segments);
+			self.postMessage({
+				type: "result",
+				id,
+				segments
+			});
+		} catch (e) {
+			self.postMessage({
+				type: "result",
+				id,
+				segments: null,
+				error: String(e?.message ?? e)
+			});
+		}
+	}
 	/**
 	* 確定内容の学習。値はエンジン中立（表示値）で受け、wasm が変換を再現して
 	* 値一致で確定 → FinishConversion（all-or-nothing = 誤学習防止）。
@@ -370,6 +398,7 @@
 			});
 		} else if (m.type === "convert") handleConvert(m.id, m.kana, m.maxCands ?? 9);
 		else if (m.type === "resize") handleResize(m.id, m.segIdx, m.offset, m.maxCands ?? 9);
+		else if (m.type === "reconvert") handleReconvert(m.id, m.surface, m.maxCands ?? 9);
 		else if (m.type === "learn") handleLearn(m.id, m.kana, m.sizes, m.values);
 		else if (m.type === "revert") handleRevert(m.id);
 		else if (m.type === "clearLearning") handleClearLearning(m.id);

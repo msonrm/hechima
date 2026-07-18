@@ -499,6 +499,25 @@ $<HTMLButtonElement>("reset-learning").addEventListener("click", () => {
   void saveDocNow().then(() => conn.clearLearning()).finally(() => location.reload());
 });
 
+// ---- 再変換（確定済みテキストを選択して 変換キー / Ctrl+/） ----
+
+async function doReconvert(): Promise<void> {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  if (!editorEl.contains(range.startContainer) || !editorEl.contains(range.endContainer)) return;
+  const surface = sel.toString();
+  if (!surface || surface.includes("\n") || Array.from(surface).length > 64) return;
+  snapshot(); // 逆変換不能時や Ctrl+Z での復元用
+  range.deleteContents();
+  editorEl.normalize();
+  range.collapse(true);
+  selectRange(range); // キャレットを取り除いた位置へ（composition がここに開く）
+  const ok = await fep.reconvert(surface);
+  if (!ok) insertTextAtCaret(surface); // 逆変換不能 → 元に戻す
+  afterEdit();
+}
+
 // ---- キー捕捉 ----
 
 window.addEventListener("keydown", (e) => {
@@ -509,6 +528,16 @@ window.addEventListener("keydown", (e) => {
   if (popupVisible() && !e.ctrlKey && !e.altKey && /^[1-9]$/.test(e.key)) {
     if (fep.selectCandidate(winStart + Number(e.key) - 1)) {
       e.preventDefault();
+      return;
+    }
+  }
+  // 再変換: 確定済みテキストを選択して 変換キー（JIS）/ Ctrl+/（US 向け）
+  if (!compositionActive() && (e.code === "Convert" || (e.ctrlKey && !e.altKey && e.key === "/"))) {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed &&
+        editorEl.contains(sel.getRangeAt(0).startContainer)) {
+      e.preventDefault();
+      void doReconvert();
       return;
     }
   }

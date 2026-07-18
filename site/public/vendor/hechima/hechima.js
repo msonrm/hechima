@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.9.0";
+	const HECHIMA_VERSION = "0.10.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -437,6 +437,26 @@
 			clear();
 			cb.commit(text);
 		}
+		async function reconvert(surface) {
+			if (!active || !cb.reconvert || segs || composing()) return false;
+			if (engine && engine.getState().isComposing) return false;
+			if (!surface) return false;
+			const gen = ++genId;
+			let result = null;
+			try {
+				result = await Promise.resolve(cb.reconvert(surface));
+			} catch {
+				result = null;
+			}
+			if (gen !== genId || segs || composing()) return false;
+			if (!result || !result.length) return false;
+			segs = result.map(ingestSegment);
+			kana = segs.map((s) => s.key).join("");
+			focus = 0;
+			resetAddl();
+			render();
+			return true;
+		}
 		function undoCommit() {
 			if (!lastCommit || composing() || !cb.retract) return false;
 			let removed = false;
@@ -801,6 +821,7 @@
 				return true;
 			},
 			undoCommit,
+			reconvert,
 			reset() {
 				clear();
 				if (engine) try {
@@ -908,6 +929,19 @@
 				});
 			});
 		}
+		async function reconvert(surface) {
+			if (!await whenReady()) return null;
+			return new Promise((resolve) => {
+				const id = ++seq;
+				pending.set(id, resolve);
+				worker.postMessage({
+					type: "reconvert",
+					id,
+					surface,
+					maxCands
+				});
+			});
+		}
 		async function revert() {
 			if (!await whenReady()) return false;
 			return new Promise((resolve) => {
@@ -934,12 +968,14 @@
 			init,
 			convert,
 			resize,
+			reconvert,
 			learn,
 			revert,
 			clearLearning,
 			callbacks: () => ({
 				convert,
 				resize,
+				reconvert,
 				learn: (segments) => {
 					learn(segments);
 				},
