@@ -6,6 +6,12 @@
 {
   "name": "hechima-lab",
   "compatibility_date": "2026-07-01",
+  // 正式ドメイン（Cloudflare Registrar で取得済みゾーン。deploy が DNS/証明書まで自動設定）。
+  "routes": [
+    { "pattern": "luffa-lang-labo.dev", "custom_domain": true }
+  ],
+  // routes を書くと workers.dev が既定で無効になるため、旧 URL 併存のため明示的に有効化
+  "workers_dev": true,
   "assets": {
     "directory": "./site/dist"
   }
