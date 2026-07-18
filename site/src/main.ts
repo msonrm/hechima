@@ -653,6 +653,24 @@ editorEl.addEventListener("mousedown", () => {
   if (compositionActive()) fep.feed({ key: "Enter" });
 });
 
+// OS 側 IME の検出: このページは自前で変換するため、OS の日本語 IME がオンだと
+// 未確定文字の混入・同時打鍵の判定崩れが起きる。composition イベント / key="Process" で
+// 検出して警告し、直ったら（通常キーが来たら）表示を戻す
+let osImeWarned = false;
+function warnOsIme(): void {
+  osImeWarned = true;
+  statusEl.textContent =
+    "⚠ OS 側の日本語 IME がオンのようです。このページは自前で変換するので、OS の IME はオフ（英数直接入力）にしてください";
+}
+editorEl.addEventListener("compositionstart", warnOsIme);
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Process" || e.keyCode === 229) warnOsIme();
+  else if (osImeWarned && e.key.length === 1) {
+    osImeWarned = false;
+    refreshStatus(); // IME オフに直った → 通常表示へ
+  }
+}, true);
+
 // ページを離れるときに保存を確実に
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") void saveDocNow();
