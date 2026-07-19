@@ -50,6 +50,7 @@
 		"convert",
 		"confirm",
 		"escape",
+		"undo",
 		"moveLeft",
 		"moveRight",
 		"moveUp",
@@ -114,6 +115,7 @@
 			"rowSpan",
 			"colSpan",
 			"label",
+			"composingLabel",
 			"tap",
 			"flick",
 			"repeat"
@@ -135,6 +137,7 @@
 		if (tap === null && Object.keys(flick).length === 0) fail(`${where} に tap も flick も無い`);
 		const label = optStr(raw, "label", where) ?? (typeof tap === "string" ? tap : null);
 		if (label === null) fail(`${where} はアクションキーなので label が必須`);
+		const composingLabel = optStr(raw, "composingLabel", where);
 		const repeat = raw.repeat === void 0 ? false : raw.repeat;
 		if (typeof repeat !== "boolean") fail(`${where}.repeat は boolean であるべき`);
 		return {
@@ -143,6 +146,7 @@
 			rowSpan,
 			colSpan,
 			label,
+			composingLabel,
 			tap,
 			flick,
 			repeat
@@ -276,6 +280,10 @@
 		convert: { key: " " },
 		confirm: { key: "Enter" },
 		escape: { key: "Escape" },
+		undo: {
+			key: "Backspace",
+			ctrlKey: true
+		},
 		moveLeft: { key: "ArrowLeft" },
 		moveRight: { key: "ArrowRight" },
 		moveUp: { key: "ArrowUp" },
@@ -396,7 +404,8 @@
 .fe-key { display: flex; align-items: center; justify-content: center;
   background: var(--fe-key-bg, #ffffff); color: var(--fe-key-fg, #111827);
   border-radius: 6px; box-shadow: 0 1px 0 rgba(0,0,0,.25);
-  font-size: clamp(14px, 3.2vmin, 22px); line-height: 1; cursor: pointer; }
+  font-size: clamp(14px, 3.2vmin, 22px); line-height: 1; cursor: pointer;
+  touch-action: none; }
 .fe-key.fe-fn { background: var(--fe-fn-bg, #9ca3af); color: var(--fe-fn-fg, #111827);
   font-size: clamp(11px, 2.4vmin, 16px); }
 .fe-key.fe-active { background: var(--fe-active-bg, #93c5fd); }
@@ -427,6 +436,9 @@
 		const root = doc.createElement("div");
 		root.className = "fe-root";
 		container.appendChild(root);
+		let composing = false;
+		const keyEls = /* @__PURE__ */ new Map();
+		const labelFor = (key) => composing && key.composingLabel !== void 0 ? key.composingLabel : key.label;
 		let press = null;
 		function emitOps(ops) {
 			for (const op of ops) {
@@ -530,6 +542,7 @@
 		function onMove(e) {
 			if (!press || e.pointerId !== press.pointerId) return;
 			const g = classifyGesture(e.clientX - press.startX, e.clientY - press.startY, press.cellW, map.threshold);
+			if (g.kind === "flick" && !press.petal && Object.keys(press.key.flick).length > 0) showPetal();
 			highlightPetal(g.kind === "flick" ? g.dir : null);
 			if (g.kind === "flick" && press.repeatTimer !== null && !press.repeatFired) {
 				clearTimeout(press.repeatTimer);
@@ -556,12 +569,14 @@
 		function render() {
 			root.querySelectorAll(".fe-key, .fe-petal").forEach((el) => el.remove());
 			if (press) clearPress();
+			keyEls.clear();
 			const layer = map.layers[resolver.layer];
 			root.style.gridTemplate = `repeat(${layer.rows}, 1fr) / repeat(${layer.cols}, 1fr)`;
 			for (const key of layer.keys) {
 				const el = doc.createElement("div");
 				el.className = typeof key.tap === "string" ? "fe-key" : "fe-key fe-fn";
-				el.textContent = key.label;
+				el.textContent = labelFor(key);
+				keyEls.set(el, key);
 				el.style.gridRow = `${key.row + 1} / span ${key.rowSpan}`;
 				el.style.gridColumn = `${key.col + 1} / span ${key.colSpan}`;
 				el.addEventListener("pointerdown", (e) => onDown(e, key, el));
@@ -584,6 +599,12 @@
 				if (ok) render();
 				return ok;
 			},
+			setComposing(on) {
+				on = !!on;
+				if (composing === on) return;
+				composing = on;
+				for (const [el, key] of keyEls) el.textContent = labelFor(key);
+			},
 			destroy() {
 				clearPress();
 				root.remove();
@@ -592,7 +613,7 @@
 	}
 	//#endregion
 	//#region src/flick/version.ts
-	const FLICK_ENGINE_VERSION = "1.0.0";
+	const FLICK_ENGINE_VERSION = "1.1.0";
 	//#endregion
 	exports.DEFAULT_POST_MODIFY_CYCLES = DEFAULT_POST_MODIFY_CYCLES;
 	exports.classifyGesture = classifyGesture;

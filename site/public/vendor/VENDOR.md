@@ -6,7 +6,7 @@
 | ディレクトリ | 版 | 取得元 |
 |---|---|---|
 | `hechima/`（hechima.js / hechima-worker.js / hechima.d.ts） | **v0.13.0** | labo Release `hechima-v0.13.0`（`insertKana` = かな直接注入。フリック入力の配線先。additive） |
-| `flick/`（flick-engine.js / flick_standard.json） | **v1.0.0** | labo main `9385aa8` の `web/public/flick/` + `web/public/flickmaps/`（フリック入力フロント + 12キー標準 flickmap。hechima v0.13.0+ とセット） |
+| `flick/`（flick-engine.js / flick_standard.json） | **v1.1.0** | labo main `b2ec916` の `web/public/flick/` + `web/public/flickmaps/`（iPhone 実機フィードバック反映: 配置改訂・戻す/カーソルフリック・composingLabel・ペタル抑制。hechima v0.13.0+ とセット） |
 | `keymap-engine/`（keymap-engine.js） | **v1.4.0** | labo main `84199d5` の `web/public/engine/`（英数モードの chord 解釈 = H+J 日本語復帰 / space+X 大文字 + mutual 再入バグ修正） |
 | `hechima-wasm/`（hechima-wasm.js / .wasm / mozc.data） | **v0.7.1** | labo Release `hechima-wasm-v0.7.1`（ユーザー辞書 + よみの Mozc 純正検証）。provenance: fcitx5-mozc `fd530f6` / emsdk 3.1.69（同梱 BUILD_INFO.txt。mozc.data も同 Release で更新） |
 | `keymaps/`（naginata_jis / naginata_us） | 薙刀式 v18 + `judgment: mutual` | labo main `c434c6b` の `web/public/keymaps/`（同時押しを本家仕様の相互シフト = ミリ秒を見ない状態ベース判定に切替。keymap-engine v1.3.0 とセット差し替え必須） |

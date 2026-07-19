@@ -27,6 +27,8 @@ body {
   color: var(--fg);
   background: var(--bg);
   line-height: 1.7;
+  /* ボタン連打がダブルタップズームに化けるのを防ぐ（スクロールは許可） */
+  touch-action: manipulation;
 }
 
 header h1 { margin: 0; font-size: 1.6rem; }

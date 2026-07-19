@@ -28,7 +28,13 @@ declare const FlickEngine: {
     container: HTMLElement,
     map: unknown,
     opts: { onOp(op: FlickOp): void; getComposingTail?: () => string },
-  ): { element: HTMLElement; layer: string; setLayer(name: string): boolean; destroy(): void };
+  ): {
+    element: HTMLElement;
+    layer: string;
+    setLayer(name: string): boolean;
+    setComposing(on: boolean): void;
+    destroy(): void;
+  };
 };
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -447,10 +453,12 @@ let flickComposingText = "";
 const fep = Hechima.createFep({
   show: (segments) => {
     flickComposingText = segments.map((s) => s.text).join("");
+    flickKbd?.setComposing(segments.length > 0); // 空白⇄変換・改行⇄確定のラベル切替
     renderComposition(segments);
   },
   hide: () => {
     flickComposingText = "";
+    flickKbd?.setComposing(false);
     renderComposition([]);
   },
   commit: (text) => {
@@ -703,17 +711,21 @@ window.addEventListener("keydown", (e) => {
 const flickToggle = $<HTMLButtonElement>("flick-toggle");
 const flickPanel = $<HTMLDivElement>("flick-panel");
 const flickArea = $<HTMLDivElement>("flick-area");
-let flickKbd: { destroy(): void } | null = null;
+let flickKbd: { setComposing(on: boolean): void; destroy(): void } | null = null;
 
 // fep が飲まなかった機能キー = エディタ操作（物理キーボード keydown の素通し分と同じ扱い）
 function applyFlickHostKey(tap: Hechima.KeyTap): void {
   const sel = window.getSelection();
   const canModify = !!sel && typeof sel.modify === "function";
+  // 戻す（undo アクション = Ctrl+BS）: 確定アンドゥ不成立で透過されたら文書 undo に落とす
+  if (tap.ctrlKey && tap.key === "Backspace") { undo(); return; }
   if (tap.key === "Enter") { snapshot(); insertTextAtCaret("\n"); afterEdit(); }
   else if (tap.key === " ") { snapshot(); insertTextAtCaret(" "); afterEdit(); }
   else if (tap.key === "Backspace") { snapshot(); if (deleteBeforeCaret(1)) afterEdit(); }
   else if (tap.key === "ArrowLeft") { if (canModify) sel.modify("move", "backward", "character"); }
   else if (tap.key === "ArrowRight") { if (canModify) sel.modify("move", "forward", "character"); }
+  else if (tap.key === "ArrowUp") { if (canModify) sel.modify("move", "backward", "line"); }
+  else if (tap.key === "ArrowDown") { if (canModify) sel.modify("move", "forward", "line"); }
 }
 
 async function enableFlick(): Promise<void> {

@@ -6,18 +6,20 @@
   "flickConfig": {
     "inputStyle": "flick",
     "threshold": 0.35,
-    "petalDelayMs": 0,
+    "petalDelayMs": 350,
     "repeat": { "delayMs": 500, "intervalMs": 80 }
   },
   "initialLayer": "kana",
+  "_comment_layout": "左端列 = 戻す / ←(↑↓フリック) / 英数トグル / ひらがな。右端列 = ⌫ / →(↑↓フリック) / 空白(合成中=変換) / 改行(合成中=確定)。英数トグルのスロットはレイヤごとに切替先が変わる（かな→英字、英字→数字、数字→英字）",
   "layers": {
     "kana": {
       "grid": { "rows": 4, "cols": 5 },
       "keys": [
-        { "row": 0, "col": 0, "label": "☆123", "tap": { "action": "setLayer", "layer": "digit" } },
-        { "row": 1, "col": 0, "label": "ABC", "tap": { "action": "setLayer", "layer": "eiji" } },
-        { "row": 2, "col": 0, "label": "あいう", "tap": { "action": "setLayer", "layer": "kana" } },
-        { "row": 3, "col": 0, "label": "←", "tap": { "action": "moveLeft" } },
+        { "row": 0, "col": 0, "label": "戻す", "tap": { "action": "undo" } },
+        { "row": 1, "col": 0, "label": "←", "tap": { "action": "moveLeft" },
+          "flick": { "up": { "action": "moveUp" }, "down": { "action": "moveDown" } } },
+        { "row": 2, "col": 0, "label": "英数", "tap": { "action": "setLayer", "layer": "eiji" } },
+        { "row": 3, "col": 0, "label": "ひらがな", "tap": { "action": "setLayer", "layer": "kana" } },
 
         { "row": 0, "col": 1, "tap": "あ", "flick": { "left": "い", "up": "う", "right": "え", "down": "お" } },
         { "row": 0, "col": 2, "tap": "か", "flick": { "left": "き", "up": "く", "right": "け", "down": "こ" } },
@@ -33,19 +35,21 @@
         { "row": 3, "col": 3, "tap": "、", "flick": { "left": "。", "up": "？", "right": "！", "down": "…" } },
 
         { "row": 0, "col": 4, "label": "⌫", "tap": { "action": "deleteBack" }, "repeat": true },
-        { "row": 1, "col": 4, "label": "空白", "tap": { "action": "convert" } },
-        { "row": 2, "col": 4, "label": "確定", "tap": { "action": "confirm" } },
-        { "row": 3, "col": 4, "label": "→", "tap": { "action": "moveRight" } }
+        { "row": 1, "col": 4, "label": "→", "tap": { "action": "moveRight" },
+          "flick": { "up": { "action": "moveUp" }, "down": { "action": "moveDown" } } },
+        { "row": 2, "col": 4, "label": "空白", "composingLabel": "変換", "tap": { "action": "convert" } },
+        { "row": 3, "col": 4, "label": "改行", "composingLabel": "確定", "tap": { "action": "confirm" } }
       ]
     },
     "eiji": {
       "output": "direct",
       "grid": { "rows": 4, "cols": 5 },
       "keys": [
-        { "row": 0, "col": 0, "label": "☆123", "tap": { "action": "setLayer", "layer": "digit" } },
-        { "row": 1, "col": 0, "label": "ABC", "tap": { "action": "setLayer", "layer": "eiji" } },
-        { "row": 2, "col": 0, "label": "あいう", "tap": { "action": "setLayer", "layer": "kana" } },
-        { "row": 3, "col": 0, "label": "←", "tap": { "action": "moveLeft" } },
+        { "row": 0, "col": 0, "label": "戻す", "tap": { "action": "undo" } },
+        { "row": 1, "col": 0, "label": "←", "tap": { "action": "moveLeft" },
+          "flick": { "up": { "action": "moveUp" }, "down": { "action": "moveDown" } } },
+        { "row": 2, "col": 0, "label": "☆123", "tap": { "action": "setLayer", "layer": "digit" } },
+        { "row": 3, "col": 0, "label": "ひらがな", "tap": { "action": "setLayer", "layer": "kana" } },
 
         { "row": 0, "col": 1, "label": "@#/&", "tap": "@", "flick": { "left": "#", "up": "/", "right": "&" } },
         { "row": 0, "col": 2, "label": "abc", "tap": "a", "flick": { "left": "b", "up": "c" } },
@@ -61,19 +65,21 @@
         { "row": 3, "col": 3, "label": "-_/:", "tap": "-", "flick": { "left": "_", "up": "/", "right": ":" } },
 
         { "row": 0, "col": 4, "label": "⌫", "tap": { "action": "deleteBack" }, "repeat": true },
-        { "row": 1, "col": 4, "label": "空白", "tap": { "action": "convert" } },
-        { "row": 2, "col": 4, "label": "確定", "tap": { "action": "confirm" } },
-        { "row": 3, "col": 4, "label": "→", "tap": { "action": "moveRight" } }
+        { "row": 1, "col": 4, "label": "→", "tap": { "action": "moveRight" },
+          "flick": { "up": { "action": "moveUp" }, "down": { "action": "moveDown" } } },
+        { "row": 2, "col": 4, "label": "空白", "composingLabel": "変換", "tap": { "action": "convert" } },
+        { "row": 3, "col": 4, "label": "改行", "composingLabel": "確定", "tap": { "action": "confirm" } }
       ]
     },
     "digit": {
       "output": "direct",
       "grid": { "rows": 4, "cols": 5 },
       "keys": [
-        { "row": 0, "col": 0, "label": "☆123", "tap": { "action": "setLayer", "layer": "digit" } },
-        { "row": 1, "col": 0, "label": "ABC", "tap": { "action": "setLayer", "layer": "eiji" } },
-        { "row": 2, "col": 0, "label": "あいう", "tap": { "action": "setLayer", "layer": "kana" } },
-        { "row": 3, "col": 0, "label": "←", "tap": { "action": "moveLeft" } },
+        { "row": 0, "col": 0, "label": "戻す", "tap": { "action": "undo" } },
+        { "row": 1, "col": 0, "label": "←", "tap": { "action": "moveLeft" },
+          "flick": { "up": { "action": "moveUp" }, "down": { "action": "moveDown" } } },
+        { "row": 2, "col": 0, "label": "ABC", "tap": { "action": "setLayer", "layer": "eiji" } },
+        { "row": 3, "col": 0, "label": "ひらがな", "tap": { "action": "setLayer", "layer": "kana" } },
 
         { "row": 0, "col": 1, "tap": "1" },
         { "row": 0, "col": 2, "tap": "2" },
@@ -89,9 +95,10 @@
         { "row": 3, "col": 3, "label": ".,-/", "tap": ".", "flick": { "left": ",", "up": "-", "right": "/" } },
 
         { "row": 0, "col": 4, "label": "⌫", "tap": { "action": "deleteBack" }, "repeat": true },
-        { "row": 1, "col": 4, "label": "空白", "tap": { "action": "convert" } },
-        { "row": 2, "col": 4, "label": "確定", "tap": { "action": "confirm" } },
-        { "row": 3, "col": 4, "label": "→", "tap": { "action": "moveRight" } }
+        { "row": 1, "col": 4, "label": "→", "tap": { "action": "moveRight" },
+          "flick": { "up": { "action": "moveUp" }, "down": { "action": "moveDown" } } },
+        { "row": 2, "col": 4, "label": "空白", "composingLabel": "変換", "tap": { "action": "convert" } },
+        { "row": 3, "col": 4, "label": "改行", "composingLabel": "確定", "tap": { "action": "confirm" } }
       ]
     }
   }
