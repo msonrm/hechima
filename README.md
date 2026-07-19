@@ -14,10 +14,11 @@ L.L.L. は生まれ故郷の logical-layout-labo と同じ）: **https://luffa-l
 
 | レイヤ | 中身 | 版 |
 |---|---|---|
-| `hechima` | 変換セッション層 + hechima-worker（電文 v0）。よみ合成・文節候補選択・文節伸縮・編集キー二重経路・英字合成（Shift+英字）・追加候補・**学習**（OPFS 永続化）・**確定アンドゥ**（Ctrl+BS）・**再変換**・ユーザー辞書 RPC | v0.11.1 |
-| `hechima-keymap`（= KeymapEngine） | 配列エンジン。論理配列 JSON（薙刀式等）・同時打鍵/chord・SandS をデータ駆動で解決 | v1.2.0 |
+| `hechima` | 変換セッション層 + hechima-worker（電文 v0）。よみ合成・文節候補選択・文節伸縮・編集キー二重経路・英字合成（Shift+英字）・追加候補・**学習**（OPFS 永続化）・**確定アンドゥ**（Ctrl+BS）・**再変換**・ユーザー辞書 RPC・かな直接注入 `insertKana`（フリック等の非キーボード入力フロント用） | v0.13.0 |
+| `hechima-keymap`（= KeymapEngine） | 配列エンジン。論理配列 JSON（薙刀式等）・同時打鍵/chord（時間窓 + **相互シフト** = 薙刀式本家仕様の状態ベース判定）・SandS をデータ駆動で解決 | v1.4.0 |
 | `hechima-wasm` | Mozc（fcitx5-mozc）の Emscripten ビルド。かな → 文節/候補 JSON に加え、学習（FinishConversion）・取り消し・逆変換・ユーザー辞書の最小 C API。**powered by Mozc** | v0.7.1 |
-| `site/` | **へちまラボ（luffa lang labo）** — 上記スタックを備えたプレーンエディタ（カーソル/選択・OPFS 自動保存・undo/redo・文字数カウント）。Cloudflare Workers（静的アセット）で配信 | — |
+| `flick-engine` | フリック入力フロント。flickmap（flick-1）データ駆動の 12 キーフリック（゛゜小トグル・英字/数字レイヤ・ペタル）— **スマホでも OS IME 非依存の日本語入力**が成立する | v1.1.1 |
+| `site/` | **へちまラボ（luffa lang labo）** — 上記スタックを備えたプレーンエディタ（カーソル/選択・OPFS 自動保存・undo/redo・文字数カウント）。**PC = 物理キーボード + 候補ポップアップ / スマホ = フリック + 候補バー**の両 UI。Cloudflare Workers（静的アセット）で配信 | — |
 
 各レイヤは差し替え可能（配列は JSON、変換は cb 注入、エンジン境界は電文 =
 「かな → 文節/候補 JSON」）。開発の本家は logical-layout-labo リポジトリ（現在 private）で、本リポジトリはそのタグ付き成果物を pin して vendoring する
