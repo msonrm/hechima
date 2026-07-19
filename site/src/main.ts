@@ -15,6 +15,22 @@ declare const KeymapEngine: {
   keyEventFromBrowser(tap: Hechima.KeyTap): Hechima.KeyEvent | null;
 };
 
+type FlickOp =
+  | { type: "kana"; text: string; replace: number }
+  | { type: "key"; tap: Hechima.KeyTap }
+  | { type: "text"; text: string }
+  | { type: "layer"; layer: string };
+
+declare const FlickEngine: {
+  version: string;
+  decodeFlickmap(json: unknown): unknown;
+  mount(
+    container: HTMLElement,
+    map: unknown,
+    opts: { onOp(op: FlickOp): void; getComposingTail?: () => string },
+  ): { element: HTMLElement; layer: string; setLayer(name: string): boolean; destroy(): void };
+};
+
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
   if (!el) throw new Error(`#${id} が見つからない`);
@@ -425,9 +441,18 @@ function renderCandidatePopup(segments: Hechima.SegmentView[]): void {
 
 // ---- セッション（ホスト = このエディタ） ----
 
+// フリック postModify（゛゜小トグル）の対象特定用: cb.show の合成表示テキストを控える
+let flickComposingText = "";
+
 const fep = Hechima.createFep({
-  show: (segments) => renderComposition(segments),
-  hide: () => renderComposition([]),
+  show: (segments) => {
+    flickComposingText = segments.map((s) => s.text).join("");
+    renderComposition(segments);
+  },
+  hide: () => {
+    flickComposingText = "";
+    renderComposition([]);
+  },
   commit: (text) => {
     snapshot();
     renderComposition([]); // 未確定 span を畳んでから
@@ -670,6 +695,65 @@ window.addEventListener("keydown", (e) => {
     refreshStatus(); // IME オフに直った → 通常表示へ
   }
 }, true);
+
+// ---- フリック入力（タッチ端末向け。flick-engine + flickmap 駆動） ----
+// エディタは inputmode="none" で OS ソフトウェアキーボードを抑止し、自前フリック UI
+// だけを入力手段にする（hechima は OS IME 非依存なので成立する）。
+
+const flickToggle = $<HTMLButtonElement>("flick-toggle");
+const flickPanel = $<HTMLDivElement>("flick-panel");
+const flickArea = $<HTMLDivElement>("flick-area");
+let flickKbd: { destroy(): void } | null = null;
+
+// fep が飲まなかった機能キー = エディタ操作（物理キーボード keydown の素通し分と同じ扱い）
+function applyFlickHostKey(tap: Hechima.KeyTap): void {
+  const sel = window.getSelection();
+  const canModify = !!sel && typeof sel.modify === "function";
+  if (tap.key === "Enter") { snapshot(); insertTextAtCaret("\n"); afterEdit(); }
+  else if (tap.key === " ") { snapshot(); insertTextAtCaret(" "); afterEdit(); }
+  else if (tap.key === "Backspace") { snapshot(); if (deleteBeforeCaret(1)) afterEdit(); }
+  else if (tap.key === "ArrowLeft") { if (canModify) sel.modify("move", "backward", "character"); }
+  else if (tap.key === "ArrowRight") { if (canModify) sel.modify("move", "forward", "character"); }
+}
+
+async function enableFlick(): Promise<void> {
+  if (flickKbd) return;
+  const res = await fetch("/vendor/flick/flick_standard.json");
+  const map = FlickEngine.decodeFlickmap(await res.json());
+  flickKbd = FlickEngine.mount(flickArea, map, {
+    getComposingTail: () => flickComposingText,
+    onOp(op) {
+      if (op.type === "kana") fep.insertKana(op.text, op.replace);
+      else if (op.type === "key") { if (!fep.feed(op.tap)) applyFlickHostKey(op.tap); }
+      else if (op.type === "text") { snapshot(); insertTextAtCaret(op.text); afterEdit(); }
+    },
+  });
+  flickPanel.hidden = false;
+  document.body.classList.add("flick-on");
+  editorEl.setAttribute("inputmode", "none");
+  flickToggle.textContent = "フリックを隠す";
+  editorEl.focus();
+}
+
+function disableFlick(): void {
+  if (!flickKbd) return;
+  flickKbd.destroy();
+  flickKbd = null;
+  flickPanel.hidden = true;
+  document.body.classList.remove("flick-on");
+  editorEl.removeAttribute("inputmode");
+  flickToggle.textContent = "フリック";
+}
+
+flickToggle.addEventListener("click", () => {
+  if (flickKbd) disableFlick();
+  else void enableFlick();
+});
+
+// タッチ主体の端末（または ?flick=1 — デスクトップでの検証用）でボタンを出す
+if (matchMedia("(pointer: coarse)").matches || new URLSearchParams(location.search).has("flick")) {
+  flickToggle.hidden = false;
+}
 
 // ページを離れるときに保存を確実に
 document.addEventListener("visibilitychange", () => {

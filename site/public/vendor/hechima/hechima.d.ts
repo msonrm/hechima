@@ -155,6 +155,13 @@ export interface FepSession {
    * 文書から該当テキストを取り除いておく（false 時の復元もホスト責務）。cb.reconvert 必須。
    */
   reconvert(surface: string): Promise<boolean>;
+  /**
+   * かな直接注入（v0.13.0+、フリック等の非キーボード入力フロント用）。
+   * idle = 合成開始 / 合成中 = 末尾 replaceCount 字を置換して連結（postModify の 1 字置換等）/
+   * 候補選択中 = 現候補を確定して新規合成 / よみ復帰中 = 連結。
+   * 候補選択中の置換・末尾字数を超える置換・engine（配列）合成中は false（現状維持）。
+   */
+  insertKana(kana: string, replaceCount?: number): boolean;
   reset(): void;
 }
 

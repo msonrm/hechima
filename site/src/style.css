@@ -179,3 +179,24 @@ footer {
   font-size: 0.8rem;
 }
 footer a { color: var(--accent); }
+
+/* ---- フリックキーボード（タッチ端末向け） ---- */
+.flick-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--line) 40%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.flick-area {
+  max-width: 30rem;
+  margin: 0 auto;
+  aspect-ratio: 5 / 3.2;
+  max-height: 300px;
+}
+/* キーボード表示中は下端のコンテンツが隠れないよう余白を足す */
+body.flick-on main { padding-bottom: min(70vw, 340px); }

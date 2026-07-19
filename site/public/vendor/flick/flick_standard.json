@@ -1,0 +1,98 @@
+{
+  "formatVersion": "flick-1",
+  "name": "12キー標準フリック",
+  "description": "iOS / Android 標準相当の12キーフリック入力（かな・英字・数字の3レイヤ）",
+  "output": "kana",
+  "flickConfig": {
+    "inputStyle": "flick",
+    "threshold": 0.35,
+    "petalDelayMs": 0,
+    "repeat": { "delayMs": 500, "intervalMs": 80 }
+  },
+  "initialLayer": "kana",
+  "layers": {
+    "kana": {
+      "grid": { "rows": 4, "cols": 5 },
+      "keys": [
+        { "row": 0, "col": 0, "label": "☆123", "tap": { "action": "setLayer", "layer": "digit" } },
+        { "row": 1, "col": 0, "label": "ABC", "tap": { "action": "setLayer", "layer": "eiji" } },
+        { "row": 2, "col": 0, "label": "あいう", "tap": { "action": "setLayer", "layer": "kana" } },
+        { "row": 3, "col": 0, "label": "←", "tap": { "action": "moveLeft" } },
+
+        { "row": 0, "col": 1, "tap": "あ", "flick": { "left": "い", "up": "う", "right": "え", "down": "お" } },
+        { "row": 0, "col": 2, "tap": "か", "flick": { "left": "き", "up": "く", "right": "け", "down": "こ" } },
+        { "row": 0, "col": 3, "tap": "さ", "flick": { "left": "し", "up": "す", "right": "せ", "down": "そ" } },
+        { "row": 1, "col": 1, "tap": "た", "flick": { "left": "ち", "up": "つ", "right": "て", "down": "と" } },
+        { "row": 1, "col": 2, "tap": "な", "flick": { "left": "に", "up": "ぬ", "right": "ね", "down": "の" } },
+        { "row": 1, "col": 3, "tap": "は", "flick": { "left": "ひ", "up": "ふ", "right": "へ", "down": "ほ" } },
+        { "row": 2, "col": 1, "tap": "ま", "flick": { "left": "み", "up": "む", "right": "め", "down": "も" } },
+        { "row": 2, "col": 2, "tap": "や", "flick": { "left": "「", "up": "ゆ", "right": "」", "down": "よ" } },
+        { "row": 2, "col": 3, "tap": "ら", "flick": { "left": "り", "up": "る", "right": "れ", "down": "ろ" } },
+        { "row": 3, "col": 1, "label": "゛゜小", "tap": { "action": "postModify" } },
+        { "row": 3, "col": 2, "tap": "わ", "flick": { "left": "を", "up": "ん", "right": "ー" } },
+        { "row": 3, "col": 3, "tap": "、", "flick": { "left": "。", "up": "？", "right": "！", "down": "…" } },
+
+        { "row": 0, "col": 4, "label": "⌫", "tap": { "action": "deleteBack" }, "repeat": true },
+        { "row": 1, "col": 4, "label": "空白", "tap": { "action": "convert" } },
+        { "row": 2, "col": 4, "label": "確定", "tap": { "action": "confirm" } },
+        { "row": 3, "col": 4, "label": "→", "tap": { "action": "moveRight" } }
+      ]
+    },
+    "eiji": {
+      "output": "direct",
+      "grid": { "rows": 4, "cols": 5 },
+      "keys": [
+        { "row": 0, "col": 0, "label": "☆123", "tap": { "action": "setLayer", "layer": "digit" } },
+        { "row": 1, "col": 0, "label": "ABC", "tap": { "action": "setLayer", "layer": "eiji" } },
+        { "row": 2, "col": 0, "label": "あいう", "tap": { "action": "setLayer", "layer": "kana" } },
+        { "row": 3, "col": 0, "label": "←", "tap": { "action": "moveLeft" } },
+
+        { "row": 0, "col": 1, "label": "@#/&", "tap": "@", "flick": { "left": "#", "up": "/", "right": "&" } },
+        { "row": 0, "col": 2, "label": "abc", "tap": "a", "flick": { "left": "b", "up": "c" } },
+        { "row": 0, "col": 3, "label": "def", "tap": "d", "flick": { "left": "e", "up": "f" } },
+        { "row": 1, "col": 1, "label": "ghi", "tap": "g", "flick": { "left": "h", "up": "i" } },
+        { "row": 1, "col": 2, "label": "jkl", "tap": "j", "flick": { "left": "k", "up": "l" } },
+        { "row": 1, "col": 3, "label": "mno", "tap": "m", "flick": { "left": "n", "up": "o" } },
+        { "row": 2, "col": 1, "label": "pqrs", "tap": "p", "flick": { "left": "q", "up": "r", "right": "s" } },
+        { "row": 2, "col": 2, "label": "tuv", "tap": "t", "flick": { "left": "u", "up": "v" } },
+        { "row": 2, "col": 3, "label": "wxyz", "tap": "w", "flick": { "left": "x", "up": "y", "right": "z" } },
+        { "row": 3, "col": 1, "label": "'\"()", "tap": "'", "flick": { "left": "\"", "up": "(", "right": ")" } },
+        { "row": 3, "col": 2, "label": ".,?!", "tap": ".", "flick": { "left": ",", "up": "?", "right": "!" } },
+        { "row": 3, "col": 3, "label": "-_/:", "tap": "-", "flick": { "left": "_", "up": "/", "right": ":" } },
+
+        { "row": 0, "col": 4, "label": "⌫", "tap": { "action": "deleteBack" }, "repeat": true },
+        { "row": 1, "col": 4, "label": "空白", "tap": { "action": "convert" } },
+        { "row": 2, "col": 4, "label": "確定", "tap": { "action": "confirm" } },
+        { "row": 3, "col": 4, "label": "→", "tap": { "action": "moveRight" } }
+      ]
+    },
+    "digit": {
+      "output": "direct",
+      "grid": { "rows": 4, "cols": 5 },
+      "keys": [
+        { "row": 0, "col": 0, "label": "☆123", "tap": { "action": "setLayer", "layer": "digit" } },
+        { "row": 1, "col": 0, "label": "ABC", "tap": { "action": "setLayer", "layer": "eiji" } },
+        { "row": 2, "col": 0, "label": "あいう", "tap": { "action": "setLayer", "layer": "kana" } },
+        { "row": 3, "col": 0, "label": "←", "tap": { "action": "moveLeft" } },
+
+        { "row": 0, "col": 1, "tap": "1" },
+        { "row": 0, "col": 2, "tap": "2" },
+        { "row": 0, "col": 3, "tap": "3" },
+        { "row": 1, "col": 1, "tap": "4" },
+        { "row": 1, "col": 2, "tap": "5" },
+        { "row": 1, "col": 3, "tap": "6" },
+        { "row": 2, "col": 1, "tap": "7" },
+        { "row": 2, "col": 2, "tap": "8" },
+        { "row": 2, "col": 3, "tap": "9" },
+        { "row": 3, "col": 1, "label": "()[]", "tap": "(", "flick": { "left": ")", "up": "[", "right": "]" } },
+        { "row": 3, "col": 2, "tap": "0" },
+        { "row": 3, "col": 3, "label": ".,-/", "tap": ".", "flick": { "left": ",", "up": "-", "right": "/" } },
+
+        { "row": 0, "col": 4, "label": "⌫", "tap": { "action": "deleteBack" }, "repeat": true },
+        { "row": 1, "col": 4, "label": "空白", "tap": { "action": "convert" } },
+        { "row": 2, "col": 4, "label": "確定", "tap": { "action": "confirm" } },
+        { "row": 3, "col": 4, "label": "→", "tap": { "action": "moveRight" } }
+      ]
+    }
+  }
+}

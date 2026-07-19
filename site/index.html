@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="/src/style.css" />
     <script src="/vendor/keymap-engine/keymap-engine.js"></script>
     <script src="/vendor/hechima/hechima.js"></script>
+    <script src="/vendor/flick/flick-engine.js"></script>
   </head>
   <body>
     <header>
@@ -33,6 +34,7 @@
         </label>
         <button id="clear" type="button">クリア</button>
         <button id="reset-learning" type="button" title="保存された学習データを消去してページを再読み込みします">学習リセット</button>
+        <button id="flick-toggle" type="button" hidden title="タッチ用フリックキーボードを表示します（実験中）">フリック</button>
         <span id="status" class="status">変換エンジンを準備中…</span>
       </section>
 
@@ -72,6 +74,7 @@
           <li>エディタ: クリック / 矢印キーでカーソル移動、<b>Ctrl+Z</b> / <b>Ctrl+Y</b> = 文書の undo / redo、貼り付けはプレーンテキスト化</li>
           <li>確定済みテキストを<b>選択して 変換キー / Ctrl+/</b> = 再変換（よみに開き直して選び直す）</li>
           <li>薙刀式では space+T / space+Y（文節伸縮）、M+V（確定）などの同時打鍵編集も効きます</li>
+          <li>タッチ端末では<b>「フリック」ボタン</b>で 12 キーフリック入力（実験中。゛゜小・英字・数字レイヤ対応）</li>
         </ul>
       </section>
     </main>
@@ -86,6 +89,10 @@
     </footer>
 
     <div id="candidates" class="candidates" hidden></div>
+
+    <div id="flick-panel" class="flick-panel" hidden>
+      <div id="flick-area" class="flick-area"></div>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

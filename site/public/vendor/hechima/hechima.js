@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.12.0";
+	const HECHIMA_VERSION = "0.13.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -800,6 +800,29 @@
 			}
 			return composing();
 		}
+		function insertKana(text, replaceCount = 0) {
+			if (!active) return false;
+			if (typeof text !== "string" || text.length === 0) return false;
+			if (!Number.isInteger(replaceCount) || replaceCount < 0) return false;
+			if (engine && engine.getState().isComposing) return false;
+			if (segs) {
+				if (replaceCount > 0) return false;
+				commit(joined());
+			}
+			if (pend) {
+				kana = resolveRomaji(kana, pend, true).kana;
+				pend = "";
+			}
+			if (replaceCount > 0) {
+				const chars = Array.from(kana);
+				if (chars.length < replaceCount) return false;
+				kana = chars.slice(0, chars.length - replaceCount).join("");
+			}
+			kana += text;
+			genId++;
+			render();
+			return true;
+		}
 		return {
 			get active() {
 				return active;
@@ -845,6 +868,7 @@
 			},
 			undoCommit,
 			reconvert,
+			insertKana,
 			reset() {
 				clear();
 				if (engine) try {
