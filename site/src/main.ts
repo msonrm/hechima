@@ -369,6 +369,13 @@ function popupVisible(): boolean {
 }
 
 function renderCandidatePopup(segments: Hechima.SegmentView[]): void {
+  // フリック中はポップアップ（縦長でキーボードと干渉する）の代わりに
+  // キーボード上部の候補バーへ出す
+  if (flickKbd) {
+    popupEl.hidden = true;
+    renderFlickCandBar(segments);
+    return;
+  }
   const focusIdx = segments.findIndex((s) => s.kind === "focus");
   const seg = focusIdx >= 0 ? segments[focusIdx] : undefined;
   const cands = seg?.candidates;
@@ -749,6 +756,7 @@ function disableFlick(): void {
   if (!flickKbd) return;
   flickKbd.destroy();
   flickKbd = null;
+  flickCandsEl.replaceChildren();
   flickPanel.hidden = true;
   document.body.classList.remove("flick-on");
   editorEl.removeAttribute("inputmode");
@@ -760,8 +768,68 @@ flickToggle.addEventListener("click", () => {
   else void enableFlick();
 });
 
-// パネルの余白タップがダブルタップズームに化けないように（キーボード root 側のガードと重ねる）
-flickPanel.addEventListener("touchend", (e) => e.preventDefault(), { passive: false });
+// パネルの余白タップがダブルタップズームに化けないように（キーボード root 側のガードと重ねる）。
+// 候補バーだけは除外する（touchend を止めると iOS の慣性スクロールが死ぬ。
+// バー自体は touch-action: pan-x でズームを抑止）
+flickPanel.addEventListener("touchend", (e) => {
+  if ((e.target as HTMLElement).closest?.("#flick-cands")) return;
+  e.preventDefault();
+}, { passive: false });
+
+// ---- 候補バー（フリック時のポップアップ代替。キーボード上部の横スクロール帯） ----
+// 高さは常時確保（候補の出入りでキーボードが上下にズレないように）。
+// タップ選択は pointer イベント + 移動量判別（横スクロールと区別）。
+// 追加候補（ひらがな/カタカナ展開）は注釈スタイルで表示のみ — 選択は ↑↓（カーソル
+// キーの上下フリック）で行う（selectCandidate は通常候補のみ対象のため）。
+
+const flickCandsEl = $<HTMLDivElement>("flick-cands");
+
+function renderFlickCandBar(segments: Hechima.SegmentView[]): void {
+  const focusIdx = segments.findIndex((s) => s.kind === "focus");
+  const seg = focusIdx >= 0 ? segments[focusIdx] : undefined;
+  const cands = seg?.candidates;
+  const idx = seg?.candidateIndex;
+  const additional = seg?.additional ?? [];
+  if (!seg || !cands || idx === undefined || (cands.length < 2 && additional.length === 0)) {
+    flickCandsEl.replaceChildren();
+    return;
+  }
+  const inAdditional = seg.additionalIndex !== undefined;
+  const items: HTMLElement[] = [];
+  additional.forEach((a, i) => {
+    const item = document.createElement("span");
+    item.className = "fcand fcand-addl" + (inAdditional && i === seg.additionalIndex ? " selected" : "");
+    item.textContent = a.text;
+    item.title = a.annotation;
+    items.push(item);
+  });
+  cands.forEach((text, i) => {
+    const item = document.createElement("span");
+    item.className = "fcand" + (!inAdditional && i === idx ? " selected" : "");
+    item.textContent = text;
+    item.dataset.idx = String(i);
+    items.push(item);
+  });
+  flickCandsEl.replaceChildren(...items);
+  flickCandsEl.querySelector(".selected")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+let flickCandPress: { x: number; y: number; idx: number } | null = null;
+flickCandsEl.addEventListener("pointerdown", (e) => {
+  const t = (e.target as HTMLElement).closest?.(".fcand") as HTMLElement | null;
+  flickCandPress = t?.dataset.idx !== undefined
+    ? { x: e.clientX, y: e.clientY, idx: Number(t.dataset.idx) }
+    : null;
+});
+flickCandsEl.addEventListener("pointerup", (e) => {
+  if (!flickCandPress) return;
+  const moved = Math.hypot(e.clientX - flickCandPress.x, e.clientY - flickCandPress.y);
+  const idx = flickCandPress.idx;
+  flickCandPress = null;
+  if (moved < 8) fep.selectCandidate(idx);
+});
+// デスクトップ（?flick=1）でエディタのフォーカスを奪わない（タッチは panel の touchend 抑止が担う）
+flickCandsEl.addEventListener("mousedown", (e) => e.preventDefault());
 
 // タッチ主体の端末（または ?flick=1 — デスクトップでの検証用）でボタンを出す
 if (matchMedia("(pointer: coarse)").matches || new URLSearchParams(location.search).has("flick")) {

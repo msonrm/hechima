@@ -200,5 +200,34 @@ footer a { color: var(--accent); }
   aspect-ratio: 5 / 3.2;
   max-height: 300px;
 }
-/* キーボード表示中は下端のコンテンツが隠れないよう余白を足す */
-body.flick-on main { padding-bottom: min(70vw, 340px); }
+/* キーボード表示中は下端のコンテンツが隠れないよう余白を足す（候補バー分込み） */
+body.flick-on main { padding-bottom: min(82vw, 400px); }
+
+/* 候補バー（フリック時のポップアップ代替） */
+.flick-cands {
+  max-width: 30rem;
+  margin: 0 auto 6px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  overflow-x: auto;
+  min-height: 2.3rem;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.flick-cands::-webkit-scrollbar { display: none; }
+.fcand {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 0.95rem;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.fcand.selected { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.fcand-addl { color: var(--muted); border-style: dashed; }
+.fcand-addl.selected { color: var(--bg); border-style: solid; }
