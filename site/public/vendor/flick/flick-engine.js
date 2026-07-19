@@ -586,6 +586,7 @@
 		root.addEventListener("pointermove", onMove);
 		root.addEventListener("pointerup", onUp);
 		root.addEventListener("pointercancel", onCancel);
+		root.addEventListener("touchend", (e) => e.preventDefault(), { passive: false });
 		render();
 		return {
 			get element() {
@@ -613,7 +614,7 @@
 	}
 	//#endregion
 	//#region src/flick/version.ts
-	const FLICK_ENGINE_VERSION = "1.1.0";
+	const FLICK_ENGINE_VERSION = "1.1.1";
 	//#endregion
 	exports.DEFAULT_POST_MODIFY_CYCLES = DEFAULT_POST_MODIFY_CYCLES;
 	exports.classifyGesture = classifyGesture;

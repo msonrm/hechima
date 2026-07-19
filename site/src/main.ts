@@ -314,6 +314,11 @@ function afterEdit(): void {
 // ---- 未確定表示（インライン）と候補ポップアップ ----
 
 function renderComposition(segments: Hechima.SegmentView[]): void {
+  // フリック連携はここで一元更新する。cb.show / cb.hide だけに仕込むと、確定時
+  // （セッションは cb.hide を呼ばず、ホストの cb.commit がここを直接呼ぶ契約）に
+  // ラベルと postModify 用テキストが取り残される
+  flickComposingText = segments.map((s) => s.text).join("");
+  flickKbd?.setComposing(segments.length > 0);
   if (!segments.length) {
     if (compositionActive() && compEl) {
       const marker = document.createTextNode("");
@@ -447,20 +452,13 @@ function renderCandidatePopup(segments: Hechima.SegmentView[]): void {
 
 // ---- セッション（ホスト = このエディタ） ----
 
-// フリック postModify（゛゜小トグル）の対象特定用: cb.show の合成表示テキストを控える
+// フリック postModify（゛゜小トグル）の対象特定用: 合成表示テキストを控える
+// （更新は renderComposition の先頭で一元的に行う）
 let flickComposingText = "";
 
 const fep = Hechima.createFep({
-  show: (segments) => {
-    flickComposingText = segments.map((s) => s.text).join("");
-    flickKbd?.setComposing(segments.length > 0); // 空白⇄変換・改行⇄確定のラベル切替
-    renderComposition(segments);
-  },
-  hide: () => {
-    flickComposingText = "";
-    flickKbd?.setComposing(false);
-    renderComposition([]);
-  },
+  show: (segments) => renderComposition(segments),
+  hide: () => renderComposition([]),
   commit: (text) => {
     snapshot();
     renderComposition([]); // 未確定 span を畳んでから
@@ -761,6 +759,9 @@ flickToggle.addEventListener("click", () => {
   if (flickKbd) disableFlick();
   else void enableFlick();
 });
+
+// パネルの余白タップがダブルタップズームに化けないように（キーボード root 側のガードと重ねる）
+flickPanel.addEventListener("touchend", (e) => e.preventDefault(), { passive: false });
 
 // タッチ主体の端末（または ?flick=1 — デスクトップでの検証用）でボタンを出す
 if (matchMedia("(pointer: coarse)").matches || new URLSearchParams(location.search).has("flick")) {
