@@ -69,6 +69,7 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
 }
 .status { color: var(--muted); font-size: 0.8rem; }
 
+.editor-wrap { position: relative; } /* 縦書きの自前キャレット（.vcaret）の座標基準 */
 .editor {
   min-height: 12rem;
   max-height: 60vh;

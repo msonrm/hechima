@@ -485,7 +485,9 @@ export function initLabPage(config: LabPageConfig = {}): void {
     if (!vcaretEl) {
       vcaretEl = document.createElement("div");
       vcaretEl.className = "vcaret";
-      document.body.appendChild(vcaretEl);
+      // エディタ枠（.editor-wrap、position: relative）の中に置く。ステータス文言の出現などで
+      // 上流のレイアウトが動いても枠ごと一緒に動くので、描画済みキャレットが陳腐化しない
+      (editorEl.parentElement ?? document.body).appendChild(vcaretEl);
     }
     const sel = window.getSelection();
     if (
@@ -531,9 +533,10 @@ export function initLabPage(config: LabPageConfig = {}): void {
       box.right - w,
     );
     const top = Math.min(Math.max(rect.top, box.top + 2), box.bottom - 4);
+    const hostRect = (vcaretEl.parentElement ?? document.body).getBoundingClientRect();
     vcaretEl.style.display = "";
-    vcaretEl.style.left = `${left + window.scrollX}px`;
-    vcaretEl.style.top = `${top + window.scrollY}px`;
+    vcaretEl.style.left = `${left - hostRect.left}px`;
+    vcaretEl.style.top = `${top - hostRect.top}px`;
     vcaretEl.style.width = `${w}px`;
     // 点滅は移動のたびに先頭から（実 IME キャレットの作法）
     vcaretEl.style.animation = "none";
