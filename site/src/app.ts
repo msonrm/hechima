@@ -157,12 +157,22 @@ export function initLabPage(config: LabPageConfig = {}): void {
   const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
 
   // 実機リモート調査用: サブリソース（CSS/script 等）の読込失敗を表面化する。
-  // resource error はバブルしないため capture で拾う（window 自身のエラーは tagName 無しで除外）
+  // resource error はバブルしないため capture で拾う（window 自身のエラーは tagName 無しで除外）。
+  // iPad Safari は COI サイトで URL 欄 navigation 後にキャッシュ済み応答（style/worker）の
+  // 再利用を誤ブロックする（COI は維持・新規ネットワーク取得は成功する）実機事象があるため、
+  // CSS はキャッシュキーをずらして 1 回だけ自動再取得し自己回復する
+  const retriedCss = new Set<string>();
   window.addEventListener("error", (e) => {
-    const t = e.target as (Element & { src?: string; href?: string }) | null;
-    if (t && t.tagName) {
-      diagLabel = `⚠ 読込失敗: ${t.tagName.toLowerCase()} ${t.src ?? t.href ?? ""}`;
-      refreshStatus();
+    const t = e.target as (Element & { src?: string; href?: string; rel?: string }) | null;
+    if (!t || !t.tagName) return;
+    diagLabel = `⚠ 読込失敗: ${t.tagName.toLowerCase()} ${t.src ?? t.href ?? ""}`;
+    refreshStatus();
+    if (t.tagName === "LINK" && t.rel === "stylesheet" && t.href && !retriedCss.has(t.href)) {
+      retriedCss.add(t.href);
+      const fresh = document.createElement("link");
+      fresh.rel = "stylesheet";
+      fresh.href = `${t.href}${t.href.includes("?") ? "&" : "?"}r=${Date.now()}`;
+      document.head.appendChild(fresh);
     }
   }, true);
 
@@ -174,7 +184,9 @@ export function initLabPage(config: LabPageConfig = {}): void {
 
   // ---- 変換エンジン（hechima-worker、電文 v0） ----
 
-  const worker = new Worker("/vendor/hechima/hechima-worker.js");
+  // worker スクリプトは毎回キャッシュキーをずらして必ずネットワークから取る（14KB）。
+  // 上記の Safari キャッシュ再利用ブロックの回避 — 汚染済みエントリに当たらない
+  const worker = new Worker(`/vendor/hechima/hechima-worker.js?t=${Date.now()}`);
   // worker スクリプト自体のロード失敗（404 等）は message が一切来ず init が沈黙ハングする
   // （connectWorker は error イベントを見ない）ため、ホスト側でここに表面化する
   worker.addEventListener("error", (e) =>

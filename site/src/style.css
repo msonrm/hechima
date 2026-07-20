@@ -1,4 +1,7 @@
 :root {
+  /* Safari キャッシュ汚染事象からの復旧用ハッシュ更新。コメントはミニファイで
+     剥がれてハッシュが変わらないため、実体のあるダミー宣言を使う */
+  --cache-bust: 20260721;
   color-scheme: light dark;
   --fg: #1a1a1a;
   --bg: #fbfaf7;
