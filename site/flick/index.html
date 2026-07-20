@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>フリック入力（OS キーボードなし）— へちまラボ</title>
+    <meta name="description" content="スマホ標準の 12 キーフリック入力を、OS のソフトウェアキーボードを出さずにページ内で再現。盤面の描画・フリック判定・候補バー・Mozc 実変換・学習まで、すべてブラウザのページ側で動きます。" />
+    <meta property="og:title" content="フリック入力（OS キーボードなし）— へちまラボ" />
+    <meta property="og:description" content="12 キーフリックを OS キーボードなしで。判定・候補バー・変換まで全部ページ内。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://luffa-lang-labo.dev/flick/" />
+    <meta property="og:site_name" content="へちまラボ" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/hechima/hechima.js"></script>
+    <script src="/vendor/flick/flick-engine.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>🧽 へちまラボ <span class="formal">luffa lang labo</span></h1>
+      <p class="tagline">設定不要で、新配列と本気の日本語変換が動くオンライン日本語入力ラボ — powered by hechima</p>
+      <nav class="labnav">実験室:
+        <a href="/">ローマ字入力</a> ・
+        <a href="/naginata/">薙刀式</a> ・
+        <span class="here">フリック入力</span>
+      </nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>フリック入力</h2>
+        <p>スマホ標準の 12 キーフリックを、<b>OS のソフトウェアキーボードを出さずに</b>再現する実験です。
+          エディタは inputmode="none" で OS のキーボードを封じ、盤面の描画・フリック判定・
+          候補バー・変換・学習まで、すべてページ側でやっています。</p>
+        <p>スマホでこのページを開くと、下にキーボードが出ます（PC でもマウスのドラッグで
+          フリックを試せます）。キーボード上部の帯が変換候補です。</p>
+      </section>
+
+      <div id="app"></div>
+
+      <section class="hints">
+        <p>スマホ推奨。変換・学習・ユーザー辞書・文書は<a href="/">トップページ</a>と共有です。</p>
+        <ul>
+          <li>キーボード上部の帯 = 変換候補。タップで選択、はみ出した分は横スクロール</li>
+          <li><b>「←」の上下フリック</b> = 候補送り（↑ / ↓）、左右キーはカーソル移動</li>
+          <li><b>゛゜小</b> = 直前の文字を濁点・半濁点・小書きにトグル、英数レイヤは左列のキーで切替</li>
+          <li>変換中はキーの表示が変わります: <b>空白 → 変換</b>、<b>改行 → 確定</b></li>
+          <li><b>戻す</b> = 確定の取り消し（学習も巻き戻し）。もう一度で文書の undo</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちまラボ（正式名 <i>luffa lang labo</i> — 頭文字 L.L.L.）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/flick.ts"></script>
+  </body>
+</html>

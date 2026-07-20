@@ -33,7 +33,15 @@ body {
 
 header h1 { margin: 0; font-size: 1.6rem; }
 header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted); margin-left: 0.4rem; letter-spacing: 0.04em; }
-.tagline { margin: 0.2rem 0 1rem; color: var(--muted); font-size: 0.9rem; }
+.tagline { margin: 0.2rem 0 0.4rem; color: var(--muted); font-size: 0.9rem; }
+
+/* 実験室ナビ（全ページ共通）と各ページの実験説明 */
+.labnav { margin: 0 0 1.2rem; font-size: 0.85rem; color: var(--muted); }
+.labnav a { color: var(--accent); }
+.labnav .here { font-weight: 600; color: var(--fg); }
+.intro { margin: 0 0 1.2rem; font-size: 0.95rem; }
+.intro h2 { margin: 0 0 0.3rem; font-size: 1.15rem; }
+.intro p { margin: 0.4rem 0; }
 
 .controls {
   display: flex;

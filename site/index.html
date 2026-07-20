@@ -4,15 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>へちまラボ（luffa lang labo）— ブラウザで動く日本語入力ラボ</title>
-    <meta name="description" content="設定不要・ブラウザ完結の日本語入力ラボ。Mozc のかな漢字変換、薙刀式などの新配列、学習・確定アンドゥ・再変換・ユーザー辞書までクライアント側だけで動きます。打鍵は一切外部に送信されません。powered by Mozc / hechima。" />
+    <meta name="description" content="設定不要・ブラウザ完結の日本語入力ラボ。Mozc のかな漢字変換、薙刀式などの新配列、フリック入力、学習・確定アンドゥ・再変換・ユーザー辞書までクライアント側だけで動きます。打鍵は一切外部に送信されません。powered by Mozc / hechima。" />
     <meta property="og:title" content="へちまラボ（luffa lang labo）" />
-    <meta property="og:description" content="設定不要・ブラウザ完結の日本語入力ラボ。Mozc 実変換・新配列・学習・ユーザー辞書をクライアント側だけで。" />
+    <meta property="og:description" content="設定不要・ブラウザ完結の日本語入力ラボ。Mozc 実変換・新配列・フリック入力・学習・ユーザー辞書をクライアント側だけで。" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://luffa-lang-labo.dev/" />
     <meta property="og:site_name" content="へちまラボ" />
     <meta name="twitter:card" content="summary" />
     <link rel="stylesheet" href="/src/style.css" />
-    <script src="/vendor/keymap-engine/keymap-engine.js"></script>
     <script src="/vendor/hechima/hechima.js"></script>
     <script src="/vendor/flick/flick-engine.js"></script>
   </head>
@@ -20,52 +19,32 @@
     <header>
       <h1>🧽 へちまラボ <span class="formal">luffa lang labo</span></h1>
       <p class="tagline">設定不要で、新配列と本気の日本語変換が動くオンライン日本語入力ラボ — powered by hechima</p>
+      <nav class="labnav">実験室:
+        <span class="here">ローマ字入力</span> ・
+        <a href="/naginata/">薙刀式</a> ・
+        <a href="/flick/">フリック入力</a>
+      </nav>
     </header>
 
     <main>
-      <section class="controls">
-        <label>
-          配列:
-          <select id="keymap">
-            <option value="">ローマ字（内蔵）</option>
-            <option value="naginata_jis">薙刀式 v18（JIS）</option>
-            <option value="naginata_us">薙刀式 v18（US）</option>
-          </select>
-        </label>
-        <button id="clear" type="button">クリア</button>
-        <button id="reset-learning" type="button" title="保存された学習データを消去してページを再読み込みします">学習リセット</button>
-        <button id="flick-toggle" type="button" hidden title="タッチ用フリックキーボードを表示します">フリック</button>
-        <span id="status" class="status">変換エンジンを準備中…</span>
+      <section class="intro">
+        <p><b>hechima</b>（へちま）は、日本語入力の一式 — 配列・かな漢字変換・学習・辞書 — を
+          OS から引き取って、ブラウザのページの中に置くためのソフトウェア群です。
+          ここ「へちまラボ」はその実験場。各ページが、OS の IME ではできない
+          （あるいは、しにくい）入力のデモになっています。</p>
+        <p>まずはこの下のエディタで、ふだんどおりローマ字で打って Space で変換してみてください。
+          <b>ふだんどおりに動くのに、OS の IME を使っていない</b> — それがこのページの実験です。
+          未確定の下線も、候補窓も、学習も、ぜんぶこのページが自前で描いています。</p>
       </section>
 
-      <section class="editor-wrap">
-        <div id="editor" class="editor" contenteditable="true" spellcheck="false"
-          aria-label="プレーンエディタ" data-placeholder="ここに書く…"></div>
-        <div class="statusline"><span id="counts">0 字 ・ 0 行</span></div>
-      </section>
-
-      <details class="dict" id="dict-panel">
-        <summary>ユーザー辞書</summary>
-        <form id="dict-form" autocomplete="off">
-          <input id="dict-reading" placeholder="よみ（ひらがな）" required />
-          <input id="dict-word" placeholder="単語" required />
-          <select id="dict-pos" aria-label="品詞">
-            <option value="1">名詞</option>
-            <option value="4">固有名詞</option>
-            <option value="5">人名</option>
-            <option value="9">地名</option>
-          </select>
-          <button type="submit">登録</button>
-          <span id="dict-msg" class="status"></span>
-        </form>
-        <ul id="dict-list"></ul>
-      </details>
+      <div id="app"></div>
 
       <section class="hints">
         <p>このページを開いたまま打鍵してください（OS 側の日本語 IME はオフ = 英数直接入力で）。
           変換・学習・文書の保存はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。
           文書はこの端末に自動保存され、確定した変換は学習されて候補順に反映されます
-          （「学習リセット」で学習を消去、「クリア」で文書を消去）。</p>
+          （「学習リセット」で学習を消去、「クリア」で文書を消去）。
+          学習・ユーザー辞書・文書は、ラボ内の実験ページ間で共有されます。</p>
         <ul>
           <li><b>Space</b> = 変換 / 次候補、<b>↑↓</b> = 前候補/次候補、<b>数字 1-9</b> = 直接選択（クリックでも可）</li>
           <li>先頭候補でさらに <b>↑</b>（または <b>Shift+Space</b>）= 追加候補（ひらがな/カタカナ）を展開</li>
@@ -73,8 +52,7 @@
           <li><b>Enter</b> = 確定、<b>Esc</b> = 戻す、<b>←→</b> = 文節移動、<b>Shift+←→</b> = 文節伸縮、<b>Ctrl+BS</b> = 確定取り消し（学習も巻き戻し）</li>
           <li>エディタ: クリック / 矢印キーでカーソル移動、<b>Ctrl+Z</b> / <b>Ctrl+Y</b> = 文書の undo / redo、貼り付けはプレーンテキスト化</li>
           <li>確定済みテキストを<b>選択して 変換キー / Ctrl+/</b> = 再変換（よみに開き直して選び直す）</li>
-          <li>薙刀式では space+T / space+Y（文節伸縮）、M+V（確定）などの同時打鍵編集も効きます</li>
-          <li>タッチ端末では<b>「フリック」ボタン</b>で 12 キーフリック入力（゛゜小・英字/数字レイヤ・キーボード上部の候補バー・戻す・カーソル上下フリック = ↑↓ 候補送り）</li>
+          <li>タッチ端末では<b>「フリック」ボタン</b>で 12 キーフリック入力（詳しくは<a href="/flick/">フリック入力のページ</a>へ）</li>
         </ul>
       </section>
     </main>
@@ -88,13 +66,6 @@
       </p>
     </footer>
 
-    <div id="candidates" class="candidates" hidden></div>
-
-    <div id="flick-panel" class="flick-panel" hidden>
-      <div id="flick-cands" class="flick-cands"></div>
-      <div id="flick-area" class="flick-area"></div>
-    </div>
-
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/pages/home.ts"></script>
   </body>
 </html>

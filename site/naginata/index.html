@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>薙刀式 v18 をブラウザで — へちまラボ</title>
+    <meta name="description" content="同時打鍵かな配列・薙刀式 v18 をインストール不要で。相互シフト（キーを押している間だけ面が変わる）をブラウザ内の配列エンジンで忠実に再現し、Mozc 実変換・学習つき。iPad + 物理キーボードでも動きます。" />
+    <meta property="og:title" content="薙刀式 v18 をブラウザで — へちまラボ" />
+    <meta property="og:description" content="同時打鍵かな配列・薙刀式 v18 をインストール不要で。URL を開くだけ、iPad の物理キーボードでも。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://luffa-lang-labo.dev/naginata/" />
+    <meta property="og:site_name" content="へちまラボ" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/keymap-engine/keymap-engine.js"></script>
+    <script src="/vendor/hechima/hechima.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>🧽 へちまラボ <span class="formal">luffa lang labo</span></h1>
+      <p class="tagline">設定不要で、新配列と本気の日本語変換が動くオンライン日本語入力ラボ — powered by hechima</p>
+      <nav class="labnav">実験室:
+        <a href="/">ローマ字入力</a> ・
+        <span class="here">薙刀式</span> ・
+        <a href="/flick/">フリック入力</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>薙刀式 v18</h2>
+        <p>薙刀式（大岡俊彦さん設計）は、文章を書くための同時打鍵かな配列です。核にあるのは
+          「相互シフト」— キーを<b>押している間だけ</b>、他のキーの意味が変わる状態ベースの仕組みで、
+          文節伸縮や確定などの編集操作まで同時打鍵に含まれます。</p>
+        <p>OS 側でこれを使うには専用の常駐ソフトが必要で（しかも OS ごとに別物）、
+          iPad の物理キーボードに至っては手段がありません。このページでは配列エンジンごと
+          ブラウザの中にあるので、<b>URL を開くだけ</b>。iPad + 物理キーボードでも動きます —
+          それがこのページの実験です。</p>
+      </section>
+
+      <div id="app"></div>
+
+      <section class="hints">
+        <p>OS 側の日本語 IME はオフ（英数直接入力）にして、お使いのキーボード種別（JIS / US）を
+          選んでから打鍵してください。変換・学習・ユーザー辞書・文書は
+          <a href="/">トップページ</a>と共有です。</p>
+        <ul>
+          <li>単打はかな、キーを<b>押しながら</b>別キーを打つと裏面のかな（相互シフト）。押しっぱなしで連続シフト</li>
+          <li><b>Space</b> = 変換 / 次候補、<b>Enter</b> = 確定、<b>Esc</b> = 戻す、<b>数字 1-9</b> = 直接選択</li>
+          <li>薙刀式の編集同時打鍵も効きます: <b>space+T / space+Y</b>（文節伸縮）、<b>M+V</b>（確定）など</li>
+          <li>配列定義は v18。配列そのものの解説は作者・大岡俊彦さんの
+            <a href="https://oookaworks.seesaa.net/" rel="noopener">ブログ</a>へ</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちまラボ（正式名 <i>luffa lang labo</i> — 頭文字 L.L.L.）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/naginata.ts"></script>
+  </body>
+</html>
