@@ -61,6 +61,17 @@ export interface LabPageConfig {
    *   "off"  = なし（物理キーボード専用ページ）
    */
   flick?: "auto" | "on" | "off";
+  /**
+   * 書字方向。"vertical" でエディタが縦書き（writing-mode: vertical-rl）になり、
+   * 候補ポップアップも縦組で注目文節の左隣に出る（/tategaki/ 検証ページ用）
+   */
+  writingMode?: "horizontal" | "vertical";
+  /**
+   * 縦書き時の候補段の並び（検証用の切替。横書きでは無視）:
+   *   "rl" = 右から左（縦組の読み順。番号表示なし）— 既定
+   *   "lr" = 左から右（番号 1-9 付き = 数字キーの物理的な並びと一致）
+   */
+  verticalCandOrder?: "rl" | "lr";
 }
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -123,6 +134,10 @@ function renderScaffold(config: LabPageConfig): void {
 
 export function initLabPage(config: LabPageConfig = {}): void {
   const flickMode = config.flick ?? "auto";
+  const vertical = config.writingMode === "vertical";
+  // 縦書き時の候補段の並び。横書きは null = 従来の横組ポップアップ（番号付き縦積み）
+  const candOrder = vertical ? (config.verticalCandOrder ?? "rl") : null;
+  if (vertical) document.body.classList.add("vertical");
   renderScaffold(config);
 
   const statusEl = $<HTMLSpanElement>("status");
@@ -387,10 +402,34 @@ export function initLabPage(config: LabPageConfig = {}): void {
     applyState(redoStack.pop()!);
   }
 
-  /** 編集後の共通処理（保存 + カウント） */
+  /** 編集後の共通処理（保存 + カウント + 縦書きのキャレット追従） */
   function afterEdit(): void {
     scheduleSave();
     updateCounts();
+    scrollCaretIntoView();
+  }
+
+  /**
+   * 縦書きでキャレット（未確定表示を含む）がエディタの横スクロール範囲に入るよう追従する。
+   * programmatic な Range 操作は contenteditable の自動追従が効かないことがあるため自前で行う。
+   * 相対量で調整するので vertical-rl の scrollLeft 符号方言（0 = 右端、左へ負）に依存しない
+   */
+  function scrollCaretIntoView(): void {
+    if (!vertical) return;
+    const target =
+      compositionActive() && compEl
+        ? compEl.getBoundingClientRect()
+        : caretRange().getBoundingClientRect();
+    if (target.width === 0 && target.height === 0 && target.left === 0 && target.top === 0) {
+      return; // collapsed range の rect が取れない環境
+    }
+    const MARGIN = 24;
+    const box = editorEl.getBoundingClientRect();
+    if (target.left < box.left) {
+      editorEl.scrollLeft -= box.left - target.left + MARGIN;
+    } else if (target.right > box.right) {
+      editorEl.scrollLeft += target.right - box.right + MARGIN;
+    }
   }
 
   // ---- 未確定表示（インライン）と候補ポップアップ ----
@@ -409,6 +448,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
         editorEl.normalize();
       }
       compEl = null;
+      scrollCaretIntoView();
       renderCandidatePopup(segments);
       return;
     }
@@ -435,6 +475,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
       }),
     );
     setCaretAfter(compEl!);
+    scrollCaretIntoView(); // ポップアップのアンカー計算より先にスクロールを確定させる
     renderCandidatePopup(segments);
   }
 
@@ -443,6 +484,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
   // 9 件ごとのページング + 数字キー 1-9 / クリックで直接選択。
 
   const popupEl = $<HTMLDivElement>("candidates");
+  if (vertical) popupEl.classList.add("cand-v", candOrder === "lr" ? "cand-v-lr" : "cand-v-rl");
   const WINDOW_SIZE = 9;
   let winStart = 0; // 現在ページの先頭（候補一覧の絶対 index。選択位置から導出）
 
@@ -498,19 +540,30 @@ export function initLabPage(config: LabPageConfig = {}): void {
       const abs = winStart + i;
       const row = document.createElement("div");
       row.className = "cand-row" + (!inAdditional && abs === idx ? " selected" : "");
-      const num = document.createElement("span");
-      num.className = "cand-num";
-      num.textContent = String(i + 1);
       const label = document.createElement("span");
       label.textContent = text;
-      row.append(num, label);
+      if (candOrder === "rl") {
+        // 縦組・右→左では番号を振らない（段の並びが数字キーの物理配置と鏡像になるため。
+        // 1-9 キーでの選択自体は候補順のまま生きている = 1 が右端の段）
+        row.append(label);
+      } else {
+        const num = document.createElement("span");
+        num.className = "cand-num";
+        num.textContent = String(i + 1);
+        row.append(num, label);
+      }
       row.addEventListener("mousedown", (ev) => {
         ev.preventDefault(); // フォーカス移動を防ぐ
         fep.selectCandidate(abs);
       });
       rows.push(row);
     });
-    popupEl.replaceChildren(...rows);
+    // 段組コンテナ。縦書きでは writing-mode をここに持たせ、ページ表示フッタ
+    // （cand-more）はポップアップ直下で横書きのまま残す
+    const cols = document.createElement("div");
+    cols.className = "cand-cols";
+    cols.append(...rows);
+    popupEl.replaceChildren(cols);
     if (cands.length > WINDOW_SIZE) {
       const page = Math.floor(idx / WINDOW_SIZE) + 1;
       const pages = Math.ceil(cands.length / WINDOW_SIZE);
@@ -521,19 +574,33 @@ export function initLabPage(config: LabPageConfig = {}): void {
     }
     popupEl.hidden = false;
 
-    // 配置: 注目文節スパンの直下（gap 4px）。下端はみ出しで上にフリップ、右端でクランプ
+    // 配置: 横書き = 注目文節の直下（下端はみ出しで上にフリップ、右端でクランプ）。
+    // 縦書き = 次の行方向 = 注目文節の左隣（左端はみ出しで右にフリップ、下端でクランプ）
     const GAP = 4;
     const anchorSpan = compEl?.children[focusIdx] as HTMLElement | undefined;
     const anchor = (anchorSpan ?? editorEl).getBoundingClientRect();
     const popupW = popupEl.offsetWidth;
     const popupH = popupEl.offsetHeight;
-    let x = anchor.left + window.scrollX;
-    let y = anchor.bottom + GAP + window.scrollY;
-    if (anchor.bottom + GAP + popupH > window.innerHeight) {
-      y = anchor.top - popupH - GAP + window.scrollY;
-    }
-    if (anchor.left + popupW > window.innerWidth) {
-      x = window.innerWidth - popupW + window.scrollX;
+    let x: number;
+    let y: number;
+    if (vertical) {
+      x = anchor.left - GAP - popupW + window.scrollX;
+      y = anchor.top + window.scrollY;
+      if (anchor.left - GAP - popupW < 0) {
+        x = anchor.right + GAP + window.scrollX;
+      }
+      if (anchor.top + popupH > window.innerHeight) {
+        y = window.innerHeight - popupH + window.scrollY;
+      }
+    } else {
+      x = anchor.left + window.scrollX;
+      y = anchor.bottom + GAP + window.scrollY;
+      if (anchor.bottom + GAP + popupH > window.innerHeight) {
+        y = anchor.top - popupH - GAP + window.scrollY;
+      }
+      if (anchor.left + popupW > window.innerWidth) {
+        x = window.innerWidth - popupW + window.scrollX;
+      }
     }
     popupEl.style.left = `${Math.max(0, x)}px`;
     popupEl.style.top = `${Math.max(0, y)}px`;
@@ -941,6 +1008,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     if (text) {
       editorEl.textContent = text;
       setCaretByOffset(text.length);
+      scrollCaretIntoView(); // 縦書きは復元文書の末尾（左端）が見える位置まで送る
     }
     updateCounts();
     refreshStatus();

@@ -21,6 +21,7 @@ export default defineConfig({
         home: fileURLToPath(new URL("./index.html", import.meta.url)),
         naginata: fileURLToPath(new URL("./naginata/index.html", import.meta.url)),
         flick: fileURLToPath(new URL("./flick/index.html", import.meta.url)),
+        tategaki: fileURLToPath(new URL("./tategaki/index.html", import.meta.url)),
       },
     },
   },

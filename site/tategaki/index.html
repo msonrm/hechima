@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>縦書きで書く — へちまラボ</title>
+    <!-- 検証中の隠しページ（TOP からのリンクなし）。正式公開時に noindex を外して OGP を足すこと -->
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="ブラウザで動く縦書きの日本語エディタ（検証中）。未確定文字も変換候補も縦書きのまま。IME ごとページの中にある hechima だから成立する実験です。" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/hechima/hechima.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちまラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; 縦書き</nav>
+    </header>
+
+    <main>
+      <!-- 紹介文は Claude 起草の叩き台。公開前に msonrm さんの声に調整する -->
+      <section class="intro">
+        <h2>縦書きで書く（検証中）</h2>
+        <p>web に「縦書きで<b>書ける</b>エディタ」はほぼ存在しません。表示だけなら CSS が
+          縦書きに対応して久しいのに、書く方が成立しなかった最大の理由は OS の IME です —
+          未確定文字の表示も変換候補の窓も横書きの世界の住人で、縦の文章に割り込んできます。</p>
+        <p>このページでは IME がまるごとブラウザの中にあるので、未確定文字は本文と一緒に
+          縦に組まれ、候補窓も縦組で行の左隣に出ます — それがこのページの実験です。
+          入力はローマ字、物理キーボード向けです。</p>
+      </section>
+
+      <div id="app"></div>
+
+      <section class="hints">
+        <p>OS 側の日本語 IME はオフ（英数直接入力）にしてから打鍵してください。変換・学習・
+          ユーザー辞書・文書は<a href="/">トップページ</a>と共有です — 横書きで書いた文書が、
+          そのまま縦になって開きます。</p>
+        <ul>
+          <li>ローマ字で入力、<b>Space</b> = 変換 / 次候補、<b>Enter</b> = 確定、<b>Esc</b> = 戻す</li>
+          <li>候補窓は縦組・右から左（縦書きの読み順）。<a href="?cand=lr">?cand=lr</a> を付けると
+            番号 1-9 付き・左から右の並びに切り替わります（検証用の比較）</li>
+          <li>このページは検証中です。表示や挙動は予告なく変わります</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちまラボ（正式名 <i>luffa lang labo</i> — 頭文字 L.L.L.）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/tategaki.ts"></script>
+  </body>
+</html>

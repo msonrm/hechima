@@ -144,8 +144,42 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
   color: var(--muted);
 }
 .cand-divider {
-  margin: 2px 4px;
-  border-top: 0.5px solid var(--line);
+  /* 論理プロパティ: 横組では従来どおり上辺の横線、縦組（.cand-v）では自動的に段間の縦線になる */
+  margin-block: 2px;
+  margin-inline: 4px;
+  border-block-start: 0.5px solid var(--line);
+}
+
+/* ---- 縦書き（/tategaki/ 検証ページ。body.vertical で有効化） ---- */
+
+.vertical .editor {
+  writing-mode: vertical-rl;
+  height: min(60vh, 34rem); /* 高さ = 行長。列は左へ増え、横スクロール */
+  min-height: 0;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* 候補ポップアップの縦組。ルート（.candidates）は横書きのまま = cand-more フッタ用。
+   段組コンテナだけに writing-mode を与える。段の並びは検証用に 2 種:
+   .cand-v-rl = 右から左（縦組の読み順・番号なし）/ .cand-v-lr = 左から右（番号付き） */
+.cand-v { max-width: none; }
+.cand-v .cand-cols { max-height: 70vh; }
+.cand-v-rl .cand-cols { writing-mode: vertical-rl; }
+.cand-v-lr .cand-cols { writing-mode: vertical-lr; }
+.cand-v .cand-row {
+  padding: 8px 5px;
+  align-items: center;
+}
+.cand-v .cand-num {
+  min-width: 0;
+  text-align: start;
+  text-combine-upright: all; /* 数字を横倒しにせず正立させる */
+}
+.cand-v .cand-ann {
+  min-width: 0;
+  text-align: start;
 }
 
 /* ユーザー辞書（ページ内直置きの折りたたみ） */
