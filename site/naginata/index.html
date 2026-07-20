@@ -11,6 +11,30 @@
     <meta property="og:url" content="https://luffa-lang-labo.dev/naginata/" />
     <meta property="og:site_name" content="へちまラボ" />
     <meta name="twitter:card" content="summary" />
+    <script>
+      /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
+         app.js 自体が読めないケースがあるため、外部取得に依存しないインラインに置く */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
     <link rel="stylesheet" href="/src/style.css" />
     <script src="/vendor/keymap-engine/keymap-engine.js"></script>
     <script src="/vendor/hechima/hechima.js"></script>

@@ -7,6 +7,30 @@
     <!-- 検証中の隠しページ（TOP からのリンクなし）。正式公開時に noindex を外して OGP を足すこと -->
     <meta name="robots" content="noindex" />
     <meta name="description" content="ブラウザで動く縦書きの日本語エディタ（検証中）。未確定文字も変換候補も縦書きのまま。IME ごとページの中にある hechima だから成立する実験です。" />
+    <script>
+      /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
+         app.js 自体が読めないケースがあるため、外部取得に依存しないインラインに置く */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
     <link rel="stylesheet" href="/src/style.css" />
     <script src="/vendor/hechima/hechima.js"></script>
   </head>

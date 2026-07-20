@@ -8,8 +8,15 @@
   Cross-Origin-Embedder-Policy: require-corp
   Cross-Origin-Resource-Policy: same-origin
 
-# hechima 本体と worker は非ハッシュ URL かつ小さい（合計 ~40KB）。
-# Safari の COI × キャッシュ再利用ブロック（上記）を避けるため常にネットワークから取る。
-# wasm/辞書（2.7MB/18MB）は対象外 = キャッシュ維持
+# Safari の COI × キャッシュ再利用ブロック（上記）対策: 小さいアセットは
+# すべて no-store にして「汚染されうるキャッシュエントリ」自体を無くす。
+# 対象はページ JS/CSS + エンジン各種（合計 ~100KB 弱）。
+# wasm/辞書（2.7MB/18MB = /vendor/hechima-wasm/）は対象外 = キャッシュ維持
+/assets/*
+  Cache-Control: no-store
 /vendor/hechima/*
+  Cache-Control: no-store
+/vendor/keymap-engine/*
+  Cache-Control: no-store
+/vendor/flick/*
   Cache-Control: no-store

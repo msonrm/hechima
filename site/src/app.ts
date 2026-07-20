@@ -478,6 +478,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
   // ゼロ幅スペースのプローブを一瞬挿して実測した位置に自前で描く。
   // 折返し行・空行・空文書も同一経路で正しく出る
   let vcaretEl: HTMLDivElement | null = null;
+  let vcaretRetry = 0; // レイアウト未確定でプローブ矩形が取れないときの再測回数
 
   function updateVCaret(): void {
     if (!vertical) return;
@@ -511,11 +512,28 @@ export function initLabPage(config: LabPageConfig = {}): void {
     probe.remove();
     editorEl.normalize();
     setCaretByOffset(o); // プローブ挿入で乱れた選択を戻す
+    if (rect.width === 0 && rect.height === 0 && rect.top === 0 && rect.left === 0) {
+      // 起動直後などレイアウト未確定でプローブ矩形が取れない → 次フレームで再測
+      vcaretEl.style.display = "none";
+      if (vcaretRetry < 3) {
+        vcaretRetry++;
+        requestAnimationFrame(() => updateVCaret());
+      }
+      return;
+    }
+    vcaretRetry = 0;
+    const box = editorEl.getBoundingClientRect();
     const fs = parseFloat(getComputedStyle(editorEl).fontSize) || 18;
     const w = Math.min(rect.width || fs, fs);
+    // 測定値が枠外に出た場合（起動直後のフォント/レイアウト確定前の保険）は枠内へクランプ
+    const left = Math.min(
+      Math.max(rect.left + (rect.width > w ? (rect.width - w) / 2 : 0), box.left),
+      box.right - w,
+    );
+    const top = Math.min(Math.max(rect.top, box.top + 2), box.bottom - 4);
     vcaretEl.style.display = "";
-    vcaretEl.style.left = `${rect.left + (rect.width > w ? (rect.width - w) / 2 : 0) + window.scrollX}px`;
-    vcaretEl.style.top = `${rect.top + window.scrollY}px`;
+    vcaretEl.style.left = `${left + window.scrollX}px`;
+    vcaretEl.style.top = `${top + window.scrollY}px`;
     vcaretEl.style.width = `${w}px`;
     // 点滅は移動のたびに先頭から（実 IME キャレットの作法）
     vcaretEl.style.animation = "none";
@@ -1148,5 +1166,10 @@ export function initLabPage(config: LabPageConfig = {}): void {
     updateCounts();
     refreshStatus();
     editorEl.focus();
+    if (vertical) {
+      // 起動直後はフォント/レイアウト確定前でキャレット測定がずれることがある → 確定後に再測
+      requestAnimationFrame(() => updateVCaret());
+      void document.fonts.ready.then(() => updateVCaret());
+    }
   });
 }
