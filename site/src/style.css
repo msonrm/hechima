@@ -159,6 +159,23 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
   max-height: none;
   overflow-x: auto;
   overflow-y: hidden;
+  /* native キャレットは Safari が縦書きで誤描画する（短い形状・改行で下へドリフト）ため
+     隠して .vcaret を自前で描く */
+  caret-color: transparent;
+}
+
+/* 自前キャレット（縦書き用の横棒。位置は app.ts の updateVCaret がプローブ実測で置く） */
+.vcaret {
+  position: absolute;
+  z-index: 5;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+  animation: vcaret-blink 1.06s steps(2, start) infinite;
+}
+@keyframes vcaret-blink {
+  to { visibility: hidden; }
 }
 
 /* 候補ポップアップの縦組。ルート（.candidates）は横書きのまま = cand-more フッタ用。

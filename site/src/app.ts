@@ -147,11 +147,24 @@ export function initLabPage(config: LabPageConfig = {}): void {
 
   let engineStatus = "変換エンジンを準備中…";
   let storageLabel = "";
+  let diagLabel = ""; // 実機調査用: リソース読込失敗の常設表示（後続の status 更新で消えないように）
   const refreshStatus = () => {
-    statusEl.textContent = storageLabel ? `${engineStatus} ・ ${storageLabel}` : engineStatus;
+    const coi = typeof crossOriginIsolated !== "undefined" && !crossOriginIsolated
+      ? "⚠ COI 無効（COOP/COEP ヘッダ欠落）" : "";
+    statusEl.textContent = [coi, engineStatus, storageLabel, diagLabel].filter(Boolean).join(" ・ ");
   };
   const setStatus = (text: string) => { engineStatus = text; refreshStatus(); };
   const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
+
+  // 実機リモート調査用: サブリソース（CSS/script 等）の読込失敗を表面化する。
+  // resource error はバブルしないため capture で拾う（window 自身のエラーは tagName 無しで除外）
+  window.addEventListener("error", (e) => {
+    const t = e.target as (Element & { src?: string; href?: string }) | null;
+    if (t && t.tagName) {
+      diagLabel = `⚠ 読込失敗: ${t.tagName.toLowerCase()} ${t.src ?? t.href ?? ""}`;
+      refreshStatus();
+    }
+  }, true);
 
   if (vertical) {
     // 検証ページ: iPad ではコンソールが見えないので、実行時エラーをステータス欄に表面化する
@@ -420,6 +433,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     scheduleSave();
     updateCounts();
     scrollCaretIntoView();
+    updateVCaret();
   }
 
   /**
@@ -445,6 +459,68 @@ export function initLabPage(config: LabPageConfig = {}): void {
     }
   }
 
+  // ---- 自前キャレット（縦書きのみ） ----
+  // Safari は縦書き contenteditable の native キャレットを横書きメトリクスで描画する
+  // （形状が短い・改行を跨ぐたびに描画位置が下へ累積ドリフト。挿入位置自体は正しい）。
+  // DOM 側の是正では直らないため、native は caret-color: transparent で隠し、
+  // ゼロ幅スペースのプローブを一瞬挿して実測した位置に自前で描く。
+  // 折返し行・空行・空文書も同一経路で正しく出る
+  let vcaretEl: HTMLDivElement | null = null;
+
+  function updateVCaret(): void {
+    if (!vertical) return;
+    if (!vcaretEl) {
+      vcaretEl = document.createElement("div");
+      vcaretEl.className = "vcaret";
+      document.body.appendChild(vcaretEl);
+    }
+    const sel = window.getSelection();
+    if (
+      compositionActive() ||
+      document.activeElement !== editorEl ||
+      !sel || sel.rangeCount === 0 || !sel.isCollapsed ||
+      !editorEl.contains(sel.getRangeAt(0).startContainer)
+    ) {
+      vcaretEl.style.display = "none";
+      return;
+    }
+    const o = caretOffset();
+    const r = rangeAt(o, o);
+    if (!r) {
+      vcaretEl.style.display = "none";
+      return;
+    }
+    r.collapse(true);
+    const probe = document.createTextNode("\u200b");
+    r.insertNode(probe);
+    const pr = document.createRange();
+    pr.selectNode(probe);
+    const rect = pr.getBoundingClientRect();
+    probe.remove();
+    editorEl.normalize();
+    setCaretByOffset(o); // プローブ挿入で乱れた選択を戻す
+    const fs = parseFloat(getComputedStyle(editorEl).fontSize) || 18;
+    const w = Math.min(rect.width || fs, fs);
+    vcaretEl.style.display = "";
+    vcaretEl.style.left = `${rect.left + (rect.width > w ? (rect.width - w) / 2 : 0) + window.scrollX}px`;
+    vcaretEl.style.top = `${rect.top + window.scrollY}px`;
+    vcaretEl.style.width = `${w}px`;
+    // 点滅は移動のたびに先頭から（実 IME キャレットの作法）
+    vcaretEl.style.animation = "none";
+    void vcaretEl.offsetWidth;
+    vcaretEl.style.animation = "";
+  }
+
+  if (vertical) {
+    editorEl.addEventListener("scroll", () => updateVCaret());
+    window.addEventListener("resize", () => updateVCaret());
+    editorEl.addEventListener("focus", () => updateVCaret());
+    editorEl.addEventListener("blur", () => updateVCaret());
+    // クリック/タップは選択確定後に反映（dblclick の単語選択は非 collapsed → 非表示になる）
+    editorEl.addEventListener("mouseup", () => setTimeout(updateVCaret, 0));
+    editorEl.addEventListener("touchend", () => setTimeout(updateVCaret, 0));
+  }
+
   // ---- 未確定表示（インライン）と候補ポップアップ ----
 
   function renderComposition(segments: Hechima.SegmentView[]): void {
@@ -462,6 +538,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
       }
       compEl = null;
       scrollCaretIntoView();
+      updateVCaret();
       renderCandidatePopup(segments);
       return;
     }
@@ -489,6 +566,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     );
     setCaretAfter(compEl!);
     scrollCaretIntoView(); // ポップアップのアンカー計算より先にスクロールを確定させる
+    updateVCaret(); // composing 中は非表示になる
     renderCandidatePopup(segments);
   }
 
@@ -839,6 +917,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
         else sel.modify(alter, "backward", "line");
         e.preventDefault();
         scrollCaretIntoView();
+        updateVCaret();
         return;
       }
     }
