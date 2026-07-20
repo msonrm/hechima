@@ -153,9 +153,19 @@ export function initLabPage(config: LabPageConfig = {}): void {
   const setStatus = (text: string) => { engineStatus = text; refreshStatus(); };
   const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
 
+  if (vertical) {
+    // 検証ページ: iPad ではコンソールが見えないので、実行時エラーをステータス欄に表面化する
+    window.addEventListener("error", (e) => setStatus(`⚠ JS エラー: ${e.message}`));
+    window.addEventListener("unhandledrejection", (e) => setStatus(`⚠ 非同期エラー: ${String(e.reason)}`));
+  }
+
   // ---- 変換エンジン（hechima-worker、電文 v0） ----
 
   const worker = new Worker("/vendor/hechima/hechima-worker.js");
+  // worker スクリプト自体のロード失敗（404 等）は message が一切来ず init が沈黙ハングする
+  // （connectWorker は error イベントを見ない）ため、ホスト側でここに表面化する
+  worker.addEventListener("error", (e) =>
+    setStatus(`エンジン worker の読み込みに失敗: ${e.message || "スクリプトを取得できません"}`));
   const conn = Hechima.connectWorker(worker, {
     // 既定は 9（= ポップアップの 1 ウィンドウ分）だが、それだと 10 件目以降が
     // 存在せずページングが起きない。ウィンドウ複数ページ分を取得する
@@ -792,6 +802,19 @@ export function initLabPage(config: LabPageConfig = {}): void {
         void doReconvert();
         return;
       }
+    }
+    // 縦書き: 矢印キーを見た目の向きに一致させる（90° 回転して論理キーへ写像）。
+    // 論理 ←→（文節移動 / Shift = 伸縮）は行に沿う方向 → 物理 ↑↓、
+    // 論理 ↑↓（前候補 / 次候補）は段の進む方向 → 物理 ←→（rl は ← が次候補、lr は →）
+    if (vertical && compositionActive() && e.key.startsWith("Arrow")) {
+      const map: Record<string, string> = candOrder === "lr"
+        ? { ArrowDown: "ArrowRight", ArrowUp: "ArrowLeft", ArrowRight: "ArrowDown", ArrowLeft: "ArrowUp" }
+        : { ArrowDown: "ArrowRight", ArrowUp: "ArrowLeft", ArrowLeft: "ArrowDown", ArrowRight: "ArrowUp" };
+      const key = map[e.key];
+      if (key && fep.feed({ key, code: key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey })) {
+        e.preventDefault();
+      }
+      return; // 未消費でも素の矢印は二重に流さない（composing 中の native キャレット移動は不可）
     }
     if (fep.feed(e)) {
       e.preventDefault();

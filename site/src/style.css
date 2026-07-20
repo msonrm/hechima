@@ -162,14 +162,19 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
 }
 
 /* 候補ポップアップの縦組。ルート（.candidates）は横書きのまま = cand-more フッタ用。
-   段組コンテナだけに writing-mode を与える。段の並びは検証用に 2 種:
-   .cand-v-rl = 右から左（縦組の読み順・番号なし）/ .cand-v-lr = 左から右（番号付き） */
+   段組は「横 flex の各段に writing-mode」方式 — コンテナ自体を縦 writing-mode にすると
+   直交フロー（横親の中の縦ブロック）の自動サイズ計算になり、iPad Safari で
+   レイアウトが崩れた（2026-07-21 実機）。段の並びは検証用に 2 種:
+   .cand-v-rl = 右から左（縦組の読み順・番号なし。flex 逆順）/ .cand-v-lr = 左から右（番号付き） */
 .cand-v { max-width: none; }
-.cand-v .cand-cols { max-height: 70vh; }
-.cand-v-rl .cand-cols { writing-mode: vertical-rl; }
-.cand-v-lr .cand-cols { writing-mode: vertical-lr; }
+.cand-v .cand-cols {
+  display: flex;
+  align-items: flex-start;
+}
+.cand-v-rl .cand-cols { flex-direction: row-reverse; }
 .cand-v .cand-row {
-  padding: 8px 5px;
+  writing-mode: vertical-rl;
+  padding: 8px 4px;
   align-items: center;
 }
 .cand-v .cand-num {
@@ -180,6 +185,12 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
 .cand-v .cand-ann {
   min-width: 0;
   text-align: start;
+}
+.cand-v .cand-divider {
+  align-self: stretch;
+  margin: 4px 2px;
+  border-block-start: none;
+  border-inline-start: 0.5px solid var(--line);
 }
 
 /* ユーザー辞書（ページ内直置きの折りたたみ） */
