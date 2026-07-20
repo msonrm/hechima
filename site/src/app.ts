@@ -295,6 +295,9 @@ export function initLabPage(config: LabPageConfig = {}): void {
     r.insertNode(tn);
     setCaretAfter(tn);
     editorEl.normalize();
+    // Safari: normalize 後に要素境界アンカーで残るキャレットは縦書きで描画位置がずれる
+    // （改行のたびに下方向へ累積ドリフト）ため、テキストノード内オフセットへ再アンカーする
+    setCaretByOffset(caretOffset());
   }
 
   /** キャレット直前の n 文字（コードポイント）を削除。成功で true */
@@ -821,6 +824,24 @@ export function initLabPage(config: LabPageConfig = {}): void {
       return;
     }
     // ---- セッションが飲まなかったキー = エディタの文書操作 ----
+    // 縦書き: 変換中でない矢印も見た目の向きへ写像する。Safari は vertical-rl の
+    // contenteditable で矢印を論理方向のまま動かす（Chrome は視覚方向に再写像する）ため、
+    // native に任せず自前の sel.modify で全ブラウザ統一する。
+    // 視覚 ↓↑ = 字送り（forward/backward character）、視覚 ←→ = 行移動（forward/backward line）
+    if (vertical && !e.ctrlKey && !e.altKey && e.key.startsWith("Arrow")) {
+      const sel = window.getSelection();
+      if (sel && typeof sel.modify === "function" && sel.rangeCount > 0 &&
+          editorEl.contains(sel.getRangeAt(0).startContainer)) {
+        const alter = e.shiftKey ? "extend" : "move";
+        if (e.key === "ArrowDown") sel.modify(alter, "forward", "character");
+        else if (e.key === "ArrowUp") sel.modify(alter, "backward", "character");
+        else if (e.key === "ArrowLeft") sel.modify(alter, "forward", "line");
+        else sel.modify(alter, "backward", "line");
+        e.preventDefault();
+        scrollCaretIntoView();
+        return;
+      }
+    }
     if (e.ctrlKey && !e.altKey && (e.key === "z" || e.key === "Z")) {
       e.preventDefault();
       if (e.shiftKey) redo();

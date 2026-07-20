@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const coopCoep = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "require-corp",
+  "Cross-Origin-Resource-Policy": "same-origin",
 };
 
 export default defineConfig({

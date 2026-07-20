@@ -1,5 +1,9 @@
 # hechima-wasm は -pthread ビルド = SharedArrayBuffer 必須。
 # サイト全体を cross-origin isolated にする（外部リソースは埋め込まない = 自己完結）。
+# CORP: 仕様上は same-origin 応答に不要だが、iPad Safari がプロセススワップ
+# （URL 欄からの同一サイト再訪等）後にキャッシュ済み応答を CORP 無しとして誤ブロックし、
+# CSS/worker が全滅する実機事象（2026-07-21）への対処として全応答に明示する。
 /*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Resource-Policy: same-origin
