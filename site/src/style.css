@@ -158,6 +158,9 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
 
 .vertical .editor {
   writing-mode: vertical-rl;
+  /* 縦書きブロックの auto 幅は内容に縮んで左に寄るため、コンテンツ幅いっぱいに広げる。
+     行はボックスの右端から始まる（= 書き出し・プレースメント・キャレットは右上） */
+  width: 100%;
   height: min(60vh, 34rem); /* 高さ = 行長。列は左へ増え、横スクロール */
   min-height: 0;
   max-height: none;

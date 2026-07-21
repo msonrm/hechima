@@ -345,6 +345,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
 
   const DOC_FILE = "document.txt";
   const DOC_LS_KEY = "hechima-doc";
+  const CARET_LS_KEY = "hechima-doc-caret"; // キャレット位置も文書と同じく自動保存（サイト共有）
   let opfsDoc: { getFileHandle(name: string, o?: { create?: boolean }): Promise<FileSystemFileHandle> } | null = null;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -377,6 +378,11 @@ export function initLabPage(config: LabPageConfig = {}): void {
 
   async function saveDocNow(): Promise<void> {
     const text = docText();
+    // キャレット位置の保存。選択がエディタ外（辞書フォーム等）のときは前回値を保持する
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorEl.contains(sel.getRangeAt(0).startContainer)) {
+      try { localStorage.setItem(CARET_LS_KEY, String(caretOffset())); } catch { /* 保存不可環境 */ }
+    }
     if (opfsDoc) {
       try {
         const fh = await opfsDoc.getFileHandle(DOC_FILE, { create: true });
@@ -1182,8 +1188,14 @@ export function initLabPage(config: LabPageConfig = {}): void {
   void initStorage().then((text) => {
     if (text) {
       editorEl.textContent = text;
-      setCaretByOffset(text.length);
-      scrollCaretIntoView(); // 縦書きは復元文書の末尾（左端）が見える位置まで送る
+      // 保存済みキャレット位置へ復帰（無ければ末尾）。書きかけの場所から再開できる
+      let caret = text.length;
+      try {
+        const saved = Number(localStorage.getItem(CARET_LS_KEY));
+        if (Number.isFinite(saved) && saved >= 0) caret = Math.min(saved, text.length);
+      } catch { /* 保存不可環境 */ }
+      setCaretByOffset(caret);
+      scrollCaretIntoView(); // 縦書きはキャレット行が見える位置まで送る
     }
     updateCounts();
     refreshStatus();
