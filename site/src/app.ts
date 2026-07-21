@@ -455,19 +455,46 @@ export function initLabPage(config: LabPageConfig = {}): void {
   }
 
   /**
+   * キャレット位置の実測矩形（ZWSP プローブ方式）。Safari は縦書きだと collapsed Range の
+   * getBoundingClientRect も誤る（native キャレット誤描画と同根）ため、キャレット関連の
+   * 測定はすべてこれを使う。折返し行・空行・空文書も同一経路で正しく出る。
+   * 非 collapsed 選択・エディタ外・レイアウト未確定のときは null
+   */
+  function measureCaretRect(): DOMRect | null {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed ||
+        !editorEl.contains(sel.getRangeAt(0).startContainer)) {
+      return null;
+    }
+    const o = caretOffset();
+    const r = rangeAt(o, o);
+    if (!r) return null;
+    r.collapse(true);
+    const probe = document.createTextNode("\u200b");
+    r.insertNode(probe);
+    const pr = document.createRange();
+    pr.selectNode(probe);
+    const rect = pr.getBoundingClientRect();
+    probe.remove();
+    editorEl.normalize();
+    setCaretByOffset(o); // プローブ挿入で乱れた選択を戻す
+    if (rect.width === 0 && rect.height === 0 && rect.top === 0 && rect.left === 0) {
+      return null; // レイアウト未確定でプローブ矩形が取れない（起動直後など）
+    }
+    return rect;
+  }
+
+  /**
    * 縦書きでキャレット（未確定表示を含む）がエディタの横スクロール範囲に入るよう追従する。
-   * programmatic な Range 操作は contenteditable の自動追従が効かないことがあるため自前で行う。
+   * programmatic な Range 操作は contenteditable の自動追従が効かないため自前で行う。
    * 相対量で調整するので vertical-rl の scrollLeft 符号方言（0 = 右端、左へ負）に依存しない
    */
   function scrollCaretIntoView(): void {
     if (!vertical) return;
-    const target =
-      compositionActive() && compEl
-        ? compEl.getBoundingClientRect()
-        : caretRange().getBoundingClientRect();
-    if (target.width === 0 && target.height === 0 && target.left === 0 && target.top === 0) {
-      return; // collapsed range の rect が取れない環境
-    }
+    const target = compositionActive() && compEl
+      ? compEl.getBoundingClientRect()
+      : measureCaretRect();
+    if (!target) return;
     const MARGIN = 24;
     const box = editorEl.getBoundingClientRect();
     if (target.left < box.left) {
@@ -495,33 +522,13 @@ export function initLabPage(config: LabPageConfig = {}): void {
       // 上流のレイアウトが動いても枠ごと一緒に動くので、描画済みキャレットが陳腐化しない
       (editorEl.parentElement ?? document.body).appendChild(vcaretEl);
     }
-    const sel = window.getSelection();
-    if (
-      compositionActive() ||
-      document.activeElement !== editorEl ||
-      !sel || sel.rangeCount === 0 || !sel.isCollapsed ||
-      !editorEl.contains(sel.getRangeAt(0).startContainer)
-    ) {
+    if (compositionActive() || document.activeElement !== editorEl) {
       vcaretEl.style.display = "none";
       return;
     }
-    const o = caretOffset();
-    const r = rangeAt(o, o);
-    if (!r) {
-      vcaretEl.style.display = "none";
-      return;
-    }
-    r.collapse(true);
-    const probe = document.createTextNode("\u200b");
-    r.insertNode(probe);
-    const pr = document.createRange();
-    pr.selectNode(probe);
-    const rect = pr.getBoundingClientRect();
-    probe.remove();
-    editorEl.normalize();
-    setCaretByOffset(o); // プローブ挿入で乱れた選択を戻す
-    if (rect.width === 0 && rect.height === 0 && rect.top === 0 && rect.left === 0) {
-      // 起動直後などレイアウト未確定でプローブ矩形が取れない → 次フレームで再測
+    const rect = measureCaretRect();
+    if (!rect) {
+      // 起動直後のレイアウト未確定など → 隠して次フレームで再測（最大 3 回）
       vcaretEl.style.display = "none";
       if (vcaretRetry < 3) {
         vcaretRetry++;
