@@ -808,7 +808,12 @@ export function initLabPage(config: LabPageConfig = {}): void {
     let x: number;
     let y: number;
     if (vertical) {
-      const flipRight = anchor.left - GAP - popupW < 0;
+      // 側の選択: 左優先（次の行方向）。左に入らないときは「右に入る」か「右の方が広い」
+      // 場合のみ右へ。両側とも狭いときは広い方に出し、下の画面内クランプで必ず見せる
+      // （本文と重なっても見えないよりマシ）
+      const spaceLeft = anchor.left - GAP;
+      const spaceRight = window.innerWidth - anchor.right - GAP;
+      const flipRight = popupW > spaceLeft && (popupW <= spaceRight || spaceRight > spaceLeft);
       x = flipRight
         ? anchor.right + GAP + window.scrollX
         : anchor.left - GAP - popupW + window.scrollX;
@@ -816,6 +821,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
       if (anchor.top + popupH > window.innerHeight) {
         y = window.innerHeight - popupH + window.scrollY;
       }
+      x = Math.min(x, window.innerWidth - popupW + window.scrollX); // 右端クランプ
       // 既定（近接アンカー）モード: 第一候補が注目文節のすぐ隣に来る向きに段を流す —
       // 左に出るときは右→左、右にフリップしたときは左→右。Space は常に文節から離れる方向、
       // 矢印は candFlowLtr 経由で常に押した向きに動く。?cand=lr（番号付き比較）は左→右固定。
