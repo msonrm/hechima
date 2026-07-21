@@ -341,6 +341,19 @@ export function initLabPage(config: LabPageConfig = {}): void {
     }
   }
 
+  /**
+   * Safari は縦書きの文字削除でペイント無効化（再描画矩形）を漏らし、削除済みの文字が
+   * 残像として見え続けることがある（スクロールすると消える）。文字レイアウトを不可視の
+   * 量だけ揺らして戻し、テキスト全体の再描画を強制する
+   */
+  function forceTextRepaint(): void {
+    if (!vertical) return;
+    editorEl.style.letterSpacing = "0.001px";
+    requestAnimationFrame(() => {
+      editorEl.style.letterSpacing = "";
+    });
+  }
+
   /** Safari がスクロールクランプ等で選択を落としていたら、直近のキャレット位置へ復帰させる */
   function ensureEditorSelection(): void {
     const sel = window.getSelection();
@@ -869,6 +882,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
       editorEl.normalize();
       setCaretByOffset(off - text.length);
       afterEdit();
+      forceTextRepaint(); // 確定アンドゥも削除 = 残像対策
       return true;
     },
     ...conn.callbacks(),
@@ -993,6 +1007,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     const ok = await fep.reconvert(surface);
     if (!ok) insertTextAtCaret(surface); // 逆変換不能 → 元に戻す
     afterEdit();
+    forceTextRepaint(); // 再変換も選択削除を伴う = 残像対策
   }
 
   // ---- キー捕捉 ----
@@ -1079,6 +1094,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
           deleteAfterCaret(1);
         }
         afterEdit();
+        forceTextRepaint(); // 削除は残像（ペイント無効化漏れ）が出やすい
         return;
       }
     }
