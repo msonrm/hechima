@@ -609,6 +609,9 @@ export function initLabPage(config: LabPageConfig = {}): void {
 
   const popupEl = $<HTMLDivElement>("candidates");
   if (vertical) popupEl.classList.add("cand-v", candOrder === "lr" ? "cand-v-lr" : "cand-v-rl");
+  // 縦書き候補段の現在の流れ（左→右か）。既定（近接アンカー）モードではポップアップの
+  // 出た側で毎回決まり、矢印キーの視覚写像はこれに追従する
+  let candFlowLtr = candOrder === "lr";
   const WINDOW_SIZE = 9;
   let winStart = 0; // 現在ページの先頭（候補一覧の絶対 index。選択位置から導出）
 
@@ -708,13 +711,22 @@ export function initLabPage(config: LabPageConfig = {}): void {
     let x: number;
     let y: number;
     if (vertical) {
-      x = anchor.left - GAP - popupW + window.scrollX;
+      const flipRight = anchor.left - GAP - popupW < 0;
+      x = flipRight
+        ? anchor.right + GAP + window.scrollX
+        : anchor.left - GAP - popupW + window.scrollX;
       y = anchor.top + window.scrollY;
-      if (anchor.left - GAP - popupW < 0) {
-        x = anchor.right + GAP + window.scrollX;
-      }
       if (anchor.top + popupH > window.innerHeight) {
         y = window.innerHeight - popupH + window.scrollY;
+      }
+      // 既定（近接アンカー）モード: 第一候補が注目文節のすぐ隣に来る向きに段を流す —
+      // 左に出るときは右→左、右にフリップしたときは左→右。Space は常に文節から離れる方向、
+      // 矢印は candFlowLtr 経由で常に押した向きに動く。?cand=lr（番号付き比較）は左→右固定。
+      // 向きの反転で幅は変わらない（同じ段の鏡像）ので、測定済み popupW はそのまま使える
+      if (candOrder !== "lr") {
+        candFlowLtr = flipRight;
+        popupEl.classList.toggle("cand-v-lr", flipRight);
+        popupEl.classList.toggle("cand-v-rl", !flipRight);
       }
     } else {
       x = anchor.left + window.scrollX;
@@ -921,7 +933,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     // 論理 ←→（文節移動 / Shift = 伸縮）は行に沿う方向 → 物理 ↑↓、
     // 論理 ↑↓（前候補 / 次候補）は段の進む方向 → 物理 ←→（rl は ← が次候補、lr は →）
     if (vertical && compositionActive() && e.key.startsWith("Arrow")) {
-      const map: Record<string, string> = candOrder === "lr"
+      const map: Record<string, string> = candFlowLtr
         ? { ArrowDown: "ArrowRight", ArrowUp: "ArrowLeft", ArrowRight: "ArrowDown", ArrowLeft: "ArrowUp" }
         : { ArrowDown: "ArrowRight", ArrowUp: "ArrowLeft", ArrowLeft: "ArrowDown", ArrowRight: "ArrowUp" };
       const key = map[e.key];
