@@ -90,6 +90,9 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
   content: attr(data-placeholder);
   color: var(--muted);
   pointer-events: none;
+  /* 通常フローから外す: インラインのままだと縦書きのキャレット測定プローブが
+     プレースホルダ文言の後ろに置かれ、キャレットが文言末尾に描かれてしまう */
+  position: absolute;
 }
 .statusline {
   padding: 0.25rem 1rem;
