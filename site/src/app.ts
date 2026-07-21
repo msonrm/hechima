@@ -325,6 +325,22 @@ export function initLabPage(config: LabPageConfig = {}): void {
     setCaretByOffset(caretOffset());
   }
 
+  /** キャレット直後の n 文字（コードポイント）を削除（Delete キー用）。成功で true */
+  function deleteAfterCaret(nChars: number): boolean {
+    const off = caretOffset();
+    const after = docText().slice(off);
+    if (!after) return false;
+    const chars = Array.from(after);
+    const take = Math.min(nChars, chars.length);
+    const units = chars.slice(0, take).join("").length;
+    const r = rangeAt(off, off + units);
+    if (!r) return false;
+    r.deleteContents();
+    editorEl.normalize();
+    setCaretByOffset(off);
+    return true;
+  }
+
   /** キャレット直前の n 文字（コードポイント）を削除。成功で true */
   function deleteBeforeCaret(nChars: number): boolean {
     const off = caretOffset();
@@ -983,6 +999,39 @@ export function initLabPage(config: LabPageConfig = {}): void {
         e.preventDefault();
         scrollCaretIntoView();
         updateVCaret();
+        return;
+      }
+    }
+    // 縦書き: BS/Delete と直接文字も native に任せない。Safari は native 編集の後、
+    // 壊れた縦書きキャレット矩形（改行数に比例して下へずれる）へ向けて「見せるための」
+    // スクロールをページ側にも行うため、文末近くの編集でページが最下部まで飛ぶ
+    if (vertical && !e.ctrlKey && !e.altKey &&
+        (e.key === "Backspace" || e.key === "Delete")) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && editorEl.contains(sel.getRangeAt(0).startContainer)) {
+        e.preventDefault();
+        snapshot();
+        if (!sel.isCollapsed) {
+          sel.getRangeAt(0).deleteContents();
+          editorEl.normalize();
+          setCaretByOffset(caretOffset()); // テキストノード内オフセットへ再アンカー
+        } else if (e.key === "Backspace") {
+          deleteBeforeCaret(1);
+        } else {
+          deleteAfterCaret(1);
+        }
+        afterEdit();
+        return;
+      }
+    }
+    if (vertical && !e.ctrlKey && !e.altKey && e.key.length === 1) {
+      // セッションが飲まなかった 1 文字キー（数字・記号・空白等）の直接挿入も自前で
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && editorEl.contains(sel.getRangeAt(0).startContainer)) {
+        e.preventDefault();
+        snapshot();
+        insertTextAtCaret(e.key);
+        afterEdit();
         return;
       }
     }
