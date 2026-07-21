@@ -305,12 +305,22 @@ export function initLabPage(config: LabPageConfig = {}): void {
     return null;
   }
 
+  let lastCaretOffset = 0; // 直近のキャレット位置（Safari が選択を落としたときの復帰用）
+
   function setCaretByOffset(offset: number): void {
     const r = rangeAt(offset, offset);
     if (r) {
       r.collapse(true);
       selectRange(r);
+      lastCaretOffset = offset;
     }
+  }
+
+  /** Safari がスクロールクランプ等で選択を落としていたら、直近のキャレット位置へ復帰させる */
+  function ensureEditorSelection(): void {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorEl.contains(sel.getRangeAt(0).startContainer)) return;
+    setCaretByOffset(Math.min(lastCaretOffset, docText().length));
   }
 
   function insertTextAtCaret(text: string): void {
@@ -468,6 +478,14 @@ export function initLabPage(config: LabPageConfig = {}): void {
     updateCounts();
     scrollCaretIntoView();
     updateVCaret();
+    if (vertical) {
+      // Safari はコンテンツ縮小時のスクロールクランプを次フレームで非同期に行うため、
+      // クランプ後のレイアウトでもう一度追従・描画し直す
+      requestAnimationFrame(() => {
+        scrollCaretIntoView();
+        updateVCaret();
+      });
+    }
   }
 
   /**
@@ -574,7 +592,16 @@ export function initLabPage(config: LabPageConfig = {}): void {
   }
 
   if (vertical) {
-    editorEl.addEventListener("scroll", () => updateVCaret());
+    // scroll イベントのディスパッチ中にプローブ（DOM 変異 + 選択の張り直し）を走らせると
+    // Safari のスクロールクランプと衝突して選択が落ちることがある → 次フレームに集約
+    let scrollRaf = 0;
+    editorEl.addEventListener("scroll", () => {
+      if (scrollRaf) return;
+      scrollRaf = requestAnimationFrame(() => {
+        scrollRaf = 0;
+        updateVCaret();
+      });
+    });
     window.addEventListener("resize", () => updateVCaret());
     editorEl.addEventListener("focus", () => updateVCaret());
     editorEl.addEventListener("blur", () => updateVCaret());
@@ -1006,7 +1033,8 @@ export function initLabPage(config: LabPageConfig = {}): void {
     // 壊れた縦書きキャレット矩形（改行数に比例して下へずれる）へ向けて「見せるための」
     // スクロールをページ側にも行うため、文末近くの編集でページが最下部まで飛ぶ
     if (vertical && !e.ctrlKey && !e.altKey &&
-        (e.key === "Backspace" || e.key === "Delete")) {
+        (e.key === "Backspace" || e.key === "Delete") && document.activeElement === editorEl) {
+      ensureEditorSelection();
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0 && editorEl.contains(sel.getRangeAt(0).startContainer)) {
         e.preventDefault();
@@ -1024,8 +1052,10 @@ export function initLabPage(config: LabPageConfig = {}): void {
         return;
       }
     }
-    if (vertical && !e.ctrlKey && !e.altKey && e.key.length === 1) {
+    if (vertical && !e.ctrlKey && !e.altKey && e.key.length === 1 &&
+        document.activeElement === editorEl) {
       // セッションが飲まなかった 1 文字キー（数字・記号・空白等）の直接挿入も自前で
+      ensureEditorSelection();
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0 && editorEl.contains(sel.getRangeAt(0).startContainer)) {
         e.preventDefault();
