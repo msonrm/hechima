@@ -214,6 +214,35 @@ export function initLabPage(config: LabPageConfig = {}): void {
 
   const compositionActive = (): boolean => !!(compEl && compEl.isConnected);
 
+  // 末尾センチネル（EOF 相当のパーツ）。contenteditable は末尾に <br> が無いと最終空行の
+  // 行ボックスを作れず、末尾境界の選択が「editing host の端」という曖昧な位置になって
+  // WebKit の非同期処理（スクロールクランプ後の選択正規化）で末尾へ吸われる。
+  // native 編集ならブラウザが自動維持するが、編集を全自前化したのでホストが維持する。
+  // テキストノードだけを歩く offset 系（docText/caretOffset/rangeAt）には影響しない
+  let eofBr: HTMLBRElement | null = null;
+
+  function ensureEofBr(): void {
+    if (!vertical) return;
+    if (!eofBr || !eofBr.isConnected) {
+      eofBr = document.createElement("br");
+      eofBr.className = "eof-br";
+    }
+    if (editorEl.lastChild !== eofBr) editorEl.appendChild(eofBr);
+  }
+
+  /** テキスト末尾（センチネルの直前）に collapse した Range */
+  function endOfTextRange(): Range {
+    const r = document.createRange();
+    if (eofBr && eofBr.isConnected) {
+      r.setStartBefore(eofBr);
+      r.collapse(true);
+    } else {
+      r.selectNodeContents(editorEl);
+      r.collapse(false);
+    }
+    return r;
+  }
+
   /** 本文（未確定 span を除いたテキスト） */
   function docText(): string {
     let out = "";
@@ -233,10 +262,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
       r.collapse(false);
       return r;
     }
-    const r = document.createRange();
-    r.selectNodeContents(editorEl);
-    r.collapse(false);
-    return r;
+    return endOfTextRange();
   }
 
   function selectRange(r: Range): void {
@@ -294,12 +320,11 @@ export function initLabPage(config: LabPageConfig = {}): void {
       acc += len;
     }
     if (!started && start === acc) {
-      r.selectNodeContents(editorEl);
-      r.collapse(false);
-      return r;
+      return endOfTextRange(); // 空文書・末尾位置はセンチネルの直前に置く
     }
     if (started) {
-      r.setEnd(editorEl, editorEl.childNodes.length);
+      if (eofBr && eofBr.isConnected) r.setEndBefore(eofBr);
+      else r.setEnd(editorEl, editorEl.childNodes.length);
       return r;
     }
     return null;
@@ -433,6 +458,8 @@ export function initLabPage(config: LabPageConfig = {}): void {
     const chars = Array.from(t.replace(/\n/g, "")).length;
     const lines = t.length ? t.split("\n").length : 0;
     countsEl.textContent = `${chars} 字 ・ ${lines} 行`;
+    // センチネル <br> があると :empty が効かないため、プレースホルダはクラスで出す
+    editorEl.classList.toggle("is-empty", t.length === 0 && !compositionActive());
   }
 
   interface DocState { text: string; caret: number }
@@ -456,6 +483,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
   function applyState(s: DocState): void {
     compEl = null;
     editorEl.textContent = s.text;
+    ensureEofBr();
     setCaretByOffset(Math.min(s.caret, s.text.length));
     afterEdit();
   }
@@ -474,6 +502,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
 
   /** 編集後の共通処理（保存 + カウント + 縦書きのキャレット追従） */
   function afterEdit(): void {
+    ensureEofBr();
     scheduleSave();
     updateCounts();
     scrollCaretIntoView();
@@ -618,6 +647,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     // ラベルと postModify 用テキストが取り残される
     flickComposingText = segments.map((s) => s.text).join("");
     flickKbd?.setComposing(segments.length > 0);
+    if (segments.length) editorEl.classList.remove("is-empty"); // 合成中はプレースホルダを出さない
     if (!segments.length) {
       if (compositionActive() && compEl) {
         const marker = document.createTextNode("");
@@ -1274,6 +1304,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
   void initStorage().then((text) => {
     if (text) {
       editorEl.textContent = text;
+      ensureEofBr();
       // 保存済みキャレット位置へ復帰（無ければ末尾）。書きかけの場所から再開できる
       let caret = text.length;
       try {
@@ -1283,6 +1314,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
       setCaretByOffset(caret);
       scrollCaretIntoView(); // 縦書きはキャレット行が見える位置まで送る
     }
+    ensureEofBr(); // 空文書でもセンチネルを立てる
     updateCounts();
     refreshStatus();
     editorEl.focus();

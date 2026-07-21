@@ -85,7 +85,8 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
   outline: none;
 }
 .editor:focus { border-color: var(--accent); }
-.editor:empty::before {
+.editor:empty::before,
+.editor.is-empty::before {
   content: attr(data-placeholder);
   color: var(--muted);
   pointer-events: none;
