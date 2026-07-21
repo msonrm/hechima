@@ -612,6 +612,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
   // 縦書き候補段の現在の流れ（左→右か）。既定（近接アンカー）モードではポップアップの
   // 出た側で毎回決まり、矢印キーの視覚写像はこれに追従する
   let candFlowLtr = candOrder === "lr";
+  let candWindowCount = 0; // 現在ページの表示候補数（位置ベース番号の振り直しと数字選択に使う）
   const WINDOW_SIZE = 9;
   let winStart = 0; // 現在ページの先頭（候補一覧の絶対 index。選択位置から導出）
 
@@ -663,22 +664,19 @@ export function initLabPage(config: LabPageConfig = {}): void {
     }
 
     const visible = cands.slice(winStart, winStart + WINDOW_SIZE);
+    candWindowCount = visible.length;
     visible.forEach((text, i) => {
       const abs = winStart + i;
       const row = document.createElement("div");
       row.className = "cand-row" + (!inAdditional && abs === idx ? " selected" : "");
       const label = document.createElement("span");
       label.textContent = text;
-      if (candOrder === "rl") {
-        // 縦組・右→左では番号を振らない（段の並びが数字キーの物理配置と鏡像になるため。
-        // 1-9 キーでの選択自体は候補順のまま生きている = 1 が右端の段）
-        row.append(label);
-      } else {
-        const num = document.createElement("span");
-        num.className = "cand-num";
-        num.textContent = String(i + 1);
-        row.append(num, label);
-      }
+      const num = document.createElement("span");
+      num.className = "cand-num";
+      // 番号は「位置ハンドル」— 常に画面の左から 1,2,… で物理数字キーの並びと一致させる。
+      // ここでは仮に候補順で振り、縦書きの右→左流はアンカー確定後に振り直す
+      num.textContent = String(i + 1);
+      row.append(num, label);
       row.addEventListener("mousedown", (ev) => {
         ev.preventDefault(); // フォーカス移動を防ぐ
         fep.selectCandidate(abs);
@@ -727,6 +725,12 @@ export function initLabPage(config: LabPageConfig = {}): void {
         candFlowLtr = flipRight;
         popupEl.classList.toggle("cand-v-lr", flipRight);
         popupEl.classList.toggle("cand-v-rl", !flipRight);
+        // 番号は位置ハンドル = 常に画面の左から 1,2,…。右→左流では DOM 順（優先順）と
+        // 逆になるため振り直す（1 桁どうしの差し替えなので測定済みの幅は変わらない）
+        if (!flipRight) {
+          const nums = popupEl.querySelectorAll<HTMLSpanElement>(".cand-num");
+          nums.forEach((n, j) => { n.textContent = String(nums.length - j); });
+        }
       }
     } else {
       x = anchor.left + window.scrollX;
@@ -914,7 +918,10 @@ export function initLabPage(config: LabPageConfig = {}): void {
     // 候補ポップアップ表示中の数字 1-9 = ウィンドウ内の直接選択（標準 IME の作法）。
     // セッションのキー routing には触れず、ホスト側の方針としてここで先取りする
     if (popupVisible() && !e.ctrlKey && !e.altKey && /^[1-9]$/.test(e.key)) {
-      if (fep.selectCandidate(winStart + Number(e.key) - 1)) {
+      // 番号は画面の左からの位置。縦書きの右→左流ではウィンドウ内の優先順と逆転する
+      const d = Number(e.key);
+      const sel = vertical && !candFlowLtr ? candWindowCount - d : d - 1;
+      if (sel >= 0 && fep.selectCandidate(winStart + sel)) {
         e.preventDefault();
         return;
       }
