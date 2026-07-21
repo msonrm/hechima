@@ -1137,8 +1137,22 @@ export function initLabPage(config: LabPageConfig = {}): void {
     fep.feedUp(e);
   });
 
-  // native 編集（BS・Delete・数字等の透過入力）の undo スナップショットと保存
-  editorEl.addEventListener("beforeinput", () => snapshot());
+  // native 編集（BS・Delete・数字等の透過入力）の undo スナップショットと保存。
+  // 縦書きは native 編集経路ゼロ（全編集を自前処理）なので、ここに届く beforeinput は
+  // すべて OS 側の割り込み（Android 物理キーボードのオートコレクト = 入力のローマ字を
+  // 単語として挿入してくる等）。防げるものは防ぎ、検出したら設定案内を一度だけ出す
+  let autocorrectWarned = false;
+  editorEl.addEventListener("beforeinput", (e) => {
+    if (!vertical) {
+      snapshot();
+      return;
+    }
+    if (e.cancelable) e.preventDefault();
+    if (!autocorrectWarned) {
+      autocorrectWarned = true;
+      setStatus("⚠ OS の自動修正（オートコレクト）が編集に割り込んだためブロックしました。物理キーボードの設定で自動修正をオフにすると確実です");
+    }
+  });
   editorEl.addEventListener("input", () => afterEdit());
 
   // 貼り付けはプレーンテキストに剥がす
