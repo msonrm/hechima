@@ -290,6 +290,18 @@ footer a { color: var(--accent); }
 /* キーボード表示中は下端のコンテンツが隠れないよう余白を足す（候補バー分込み） */
 body.flick-on main { padding-bottom: min(82vw, 400px); }
 
+/* ゲームパッド操作ビジュアライザ（gamepad-engine の mount 先。エディタの下に置く）。
+   内部スタイルはエンジンが注入する ge-* クラス。ここでは配置と配色変数だけ与える */
+.gamepad-area {
+  margin: 1rem 0;
+  overflow-x: auto;
+  --ge-accent: var(--accent);
+  --ge-panel-bg: color-mix(in srgb, var(--line) 30%, transparent);
+  --ge-key-bg: var(--bg);
+  --ge-key-fg: var(--fg);
+  --ge-muted: var(--muted);
+}
+
 /* 候補バー（フリック時のポップアップ代替） */
 .flick-cands {
   max-width: 30rem;

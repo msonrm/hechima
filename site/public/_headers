@@ -20,3 +20,5 @@
   Cache-Control: no-store
 /vendor/flick/*
   Cache-Control: no-store
+/vendor/gamepad/*
+  Cache-Control: no-store

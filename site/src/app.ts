@@ -27,6 +27,11 @@ type FlickOp =
   | { type: "text"; text: string }
   | { type: "layer"; layer: string };
 
+// gamepad-engine の操作（フリックの kana/key 二語彙のサブセット）
+type GamepadOp =
+  | { type: "kana"; text: string; replace: number }
+  | { type: "key"; tap: Hechima.KeyTap };
+
 declare const FlickEngine: {
   version: string;
   decodeFlickmap(json: unknown): unknown;
@@ -41,6 +46,17 @@ declare const FlickEngine: {
     setComposing(on: boolean): void;
     destroy(): void;
   };
+};
+
+declare const GamepadEngine: {
+  version: string;
+  start(opts: {
+    onOp(op: GamepadOp): void;
+    getComposingTail(): string;
+    onState?(state: unknown): void;
+    enabled?: boolean;
+  }): { setEnabled(on: boolean): void; stop(): void; connected: boolean };
+  mount(container: HTMLElement): { update(state: unknown): void; destroy(): void };
 };
 
 export interface KeymapChoice {
@@ -61,6 +77,13 @@ export interface LabPageConfig {
    *   "off"  = なし（物理キーボード専用ページ）
    */
   flick?: "auto" | "on" | "off";
+  /**
+   * ゲームパッド日本語入力（gamepad-engine 駆動。日本語のみ）:
+   *   "on"  = ページを開いたらビジュアライザ + polling を起動（ゲームパッド実験ページ）
+   *   "off" = なし（既定）
+   * フリックと違い OS キーボードは封じない（gamepad は keyboard イベントを介さない = 物理併用可）。
+   */
+  gamepad?: "on" | "off";
   /**
    * 書字方向。"vertical" でエディタが縦書き（writing-mode: vertical-rl）になり、
    * 候補ポップアップも縦組で注目文節の左隣に出る（/tategaki/ 検証ページ用）
@@ -1329,6 +1352,35 @@ export function initLabPage(config: LabPageConfig = {}): void {
   ) {
     flickToggle.hidden = false;
   }
+
+  // ---- ゲームパッド入力（gamepad-engine 駆動。日本語のみ。物理キーボードと併用可） ----
+  // フリックと違い OS キーボードは封じない（gamepad は keyboard イベントを介さない）。
+  // エディタの下にビジュアライザを出し、onOp を fep へ配線する（配線はフリックと同型 =
+  // kana→insertKana / key→feed→未消費は applyFlickHostKey）。候補は通常ポップアップのまま。
+  let gamepadCtl: { setEnabled(on: boolean): void; stop(): void } | null = null;
+  let gamepadViz: { update(s: unknown): void; destroy(): void } | null = null;
+
+  function enableGamepad(): void {
+    if (gamepadCtl) return;
+    const area = document.createElement("div");
+    area.className = "gamepad-area";
+    $<HTMLElement>("app").appendChild(area);
+    gamepadViz = GamepadEngine.mount(area);
+    gamepadCtl = GamepadEngine.start({
+      getComposingTail: () => flickComposingText, // 合成表示テキスト（renderComposition が更新）
+      onState: (s) => gamepadViz?.update(s),
+      enabled: document.activeElement === editorEl,
+      onOp(op) {
+        if (op.type === "kana") fep.insertKana(op.text, op.replace);
+        else if (op.type === "key") { if (!fep.feed(op.tap)) applyFlickHostKey(op.tap); }
+      },
+    });
+    // 入力はエディタにフォーカスがあるときだけ有効（物理キーボードと同じ前提）
+    editorEl.addEventListener("focus", () => gamepadCtl?.setEnabled(true));
+    editorEl.addEventListener("blur", () => gamepadCtl?.setEnabled(false));
+  }
+
+  if ((config.gamepad ?? "off") === "on") enableGamepad();
 
   // ページを離れるときに保存を確実に
   document.addEventListener("visibilitychange", () => {

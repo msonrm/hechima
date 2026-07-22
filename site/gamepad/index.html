@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 検証中の隠しページ（TOP からのリンクなし）。正式公開時に noindex を外して OGP を足すこと -->
+    <meta name="robots" content="noindex" />
+    <title>ゲームパッド入力（日本語）— へちま言語ラボ</title>
+    <meta name="description" content="ゲームパッドで日本語を入力する実験。左手＝子音行・右手＝母音の同時押しでかなを組み、Mozc 実変換まで OS の IME なしでページ内で動きます。" />
+    <script>
+      /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
+         app.js 自体が読めないケースがあるため、外部取得に依存しないインラインに置く */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/hechima/hechima.js"></script>
+    <script src="/vendor/gamepad/gamepad-engine.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; ゲームパッド入力</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>ゲームパッド入力（日本語）</h2>
+        <p>VR/AR でのテキスト入力はまだ未解決の課題です。ゲームパッドならボタンの触覚
+          フィードバックがあり、フリック配列を応用した同時押しで日本語を組めます。
+          <b>左手（D-pad ±LB）で子音行、右手（RB/X/Y/B/A）で母音</b>を選び、同時押しで 1 文字。
+          変換・学習・辞書は OS の IME なしでページ側で動きます。</p>
+        <p>ゲームパッドを接続してボタンを押すと、下に操作ガイドが出ます。物理キーボードとも
+          併用できます（下のエディタにフォーカスがあるときだけゲームパッド入力が有効）。</p>
+      </section>
+
+      <div id="app"></div>
+
+      <section class="hints">
+        <p>ゲームパッド必須。変換・学習・ユーザー辞書・文書はラボ内の実験ページ間で共有です。</p>
+        <ul>
+          <li><b>かな</b> = 左手で子音行（D-pad、LB で は〜わ行）＋ 右手で母音（RB=あ, X=い, Y=う, B=え, A=お）の同時押し</li>
+          <li><b>LT</b> = 拗音（か→きゃ）/ 小書き、<b>LT+RT</b> = っ、<b>RT</b> = ん</li>
+          <li><b>右スティック</b>: ↑ 濁点/半濁点、→ 長音ー、← 削除、↓ 、→。→空白</li>
+          <li><b>左スティック</b>: ↓ 変換/次候補、↑ 前候補、←→ 文節移動、<b>RT+←→</b> 文節伸縮</li>
+          <li><b>LS 押込み</b> 確定・改行、<b>RS 押込み</b> 取消、<b>Start</b> 戻す（確定の取り消し。もう一度で文書 undo）</li>
+        </ul>
+        <p class="hint-note">マッピングの詳細は
+          <a href="https://github.com/msonrm/logical-layout-labo/blob/main/docs/gamepad-mapping.md" rel="noopener">仕様書</a>。</p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちま言語ラボ（正式名 <i>luffa lang labo</i> — 頭文字 L.L.L.）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/gamepad.ts"></script>
+  </body>
+</html>
