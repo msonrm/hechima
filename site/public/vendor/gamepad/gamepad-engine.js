@@ -449,8 +449,9 @@
 			}
 		};
 	}
-	/** 句読点ダブルタップ窓（右スティック下: 1回=、 2回=。 3回=空白+確定）。 */
-	const PUNCTUATION_DOUBLE_TAP_MS = 400;
+	/** 句読点ダブルタップ窓（右スティック下: 1回=、 2回=。 3回=空白+確定）。スティック連打は
+	*  ボタン連打より遅いため、ボタン系（400ms）より緩め。 */
+	const PUNCTUATION_DOUBLE_TAP_MS = 600;
 	/** 左スティック軸インデックス（W3C Standard Gamepad）。右スティックは gamepad-kana-table 側。 */
 	const AXIS_LSTICK_X = 0;
 	const AXIS_LSTICK_Y = 1;
@@ -646,10 +647,13 @@
 			const lStickLeft = lDominant === "x" && lsX < 0;
 			const lStickUp = lDominant === "y" && lsY < 0;
 			const lStickDown = lDominant === "y" && lsY > 0;
-			if (lStickDown && !prevLStickDown) emit({
-				type: "navKey",
-				key: "Space"
-			});
+			if (lStickDown && !prevLStickDown) {
+				const idle = opts.getComposingTail() === "";
+				emit({
+					type: "navKey",
+					key: idle ? "ArrowDown" : "Space"
+				});
+			}
 			if (lStickUp && !prevLStickUp) emit({
 				type: "navKey",
 				key: "ArrowUp"
@@ -885,7 +889,7 @@
 	}
 	//#endregion
 	//#region src/gamepad/version.ts
-	const GAMEPAD_ENGINE_VERSION = "1.2.0";
+	const GAMEPAD_ENGINE_VERSION = "1.3.0";
 	//#endregion
 	exports.CHORD_WINDOW_MS = CHORD_WINDOW_MS;
 	exports.createMachineState = createMachineState;
