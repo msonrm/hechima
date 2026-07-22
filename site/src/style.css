@@ -48,8 +48,9 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
 .intro { margin: 0 0 1.2rem; font-size: 0.95rem; }
 .intro h2 { margin: 0 0 0.3rem; font-size: 1.15rem; }
 .intro p { margin: 0.4rem 0; }
-.labs { margin: 0.5rem 0; padding-left: 1.4rem; }
-.labs li { margin: 0.2rem 0; }
+/* トップの実験一覧: 紹介文・フッターに紛れないよう上下に間を取る */
+.labs { margin: 1.8rem 0; padding-left: 1.4rem; }
+.labs li { margin: 0.55rem 0; }
 
 .controls {
   display: flex;
