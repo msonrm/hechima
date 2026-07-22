@@ -40,36 +40,34 @@
   <body>
     <header>
       <h1>🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></h1>
-      <p class="tagline">設定不要で、新配列と本気の日本語変換が動くオンライン日本語入力ラボ — powered by hechima</p>
+      <p class="tagline">ちゃんとした日本語変換が動くオンライン日本語入力ラボ — powered by hechima</p>
     </header>
 
     <main>
       <section class="intro">
-        <p><b>hechima</b>（へちま）は、日本語入力の一式 — 配列・かな漢字変換・学習・辞書 — を
-          OS から引き取って、ブラウザのページの中に置くためのソフトウェア群です。
-          ここ「へちま言語ラボ」はその実験場。各ページが、OS の IME ではできない
-          （あるいは、しにくい）入力のデモになっています。</p>
+        <p><b>hechima</b>は、日本語入力に必要なパーツ（論理配列・かな漢字変換・学習・ユーザー辞書）を
+          ブラウザのページの中に置くためのソフトウェア群です。</p>
+        <p>そして、ここ「へちま言語ラボ」はその実験場という位置づけです。各ページが、OS組み込みのIMEではできない
+          （あるいはなかなかやりにくい）日本語入力のデモになっています。</p>
         <ul class="labs">
-          <li><a href="/romaji/">標準IME（ローマ字入力）</a> — ふだんどおりローマ字で打って
-            Space で変換。<b>ふだんどおりに動くのに、OS の IME を使っていない</b>。
-            まずはここから</li>
-          <li><a href="/flick/">フリック入力</a> — OS のキーボードを出さずに、スマホ標準の
-            12 キーフリックを再現</li>
-          <li><a href="/naginata/">薙刀式</a> — 同時打鍵かな配列・薙刀式 v18 をブラウザだけで。
-            iPad の物理キーボードでも動きます</li>
-          <li><a href="/tategaki/">縦書きIME</a> — 縦書きのまま書ける日本語エディタ。
-            未確定文字も候補窓も縦のまま（検証中）</li>
+          <li><a href="/romaji/">標準IME（ローマ字入力）</a> ： キーボードでふつうにローマ字で打って、
+        スペースキーで変換。OSのIMEを経由せずに違和感なく日本語入力できる、をまず体験してみてください</li>
+          <li><a href="/flick/">フリック入力</a> ： スマホ標準のフリック入力キーボードをブラウザ上に再現しました</li>
+          <li><a href="/naginata/">新配列サンプル（薙刀式）</a> ： 新配列対応のデモとして、薙刀式を設定なしに体験できます。
+            制限だらけの「iPad+物理キーボード」という環境でも動きます</li>
+          <li><a href="/tategaki/">縦書きエディタ＆縦書きIME</a> ： 縦書きで書けるテキストエディタと縦書きなIME。
+            変換候補ポップアップが縦書きの横並びという、理想的なUIです</li>
         </ul>
-        <p>変換・学習・文書の保存はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。
-          文書・学習・ユーザー辞書は実験ページ間で共有されます。</p>
+        <p>かな漢字変換・学習・テキスト・ユーザー辞書はすべてブラウザ内で完結し、一切外部へ送信されません。
+          また、学習・テキスト・ユーザー辞書は各実験ページ間で共有されます。</p>
       </section>
     </main>
 
     <footer>
       <p>
-        へちま言語ラボ（正式名 <i>luffa lang labo</i> — 頭文字 L.L.L.）。
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
         変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
-        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        WebAssemblyビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
         配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
       </p>
     </footer>

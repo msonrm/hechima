@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- 検証中の隠しページ（TOP からのリンクなし）。正式公開時に noindex を外して OGP を足すこと -->
     <meta name="robots" content="noindex" />
-    <title>ゲームパッド入力（日本語）— へちま言語ラボ</title>
+    <title>ゲームパッド日本語入力— へちま言語ラボ</title>
     <meta name="description" content="ゲームパッドで日本語を入力する実験。左手＝子音行・右手＝母音の同時押しでかなを組み、Mozc 実変換まで OS の IME なしでページ内で動きます。" />
     <script>
       /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
@@ -38,37 +38,35 @@
   <body>
     <header>
       <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
-      <nav class="breadcrumb"><a href="/">TOP</a> &gt; ゲームパッド入力</nav>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; ゲームパッド日本語入力</nav>
     </header>
 
     <main>
       <section class="intro">
-        <h2>ゲームパッド入力（日本語）</h2>
-        <p>VR/AR でのテキスト入力はまだ未解決の課題です。ゲームパッドならボタンの触覚
-          フィードバックがあり、フリック配列を応用した同時押しで日本語を組めます。
-          <b>左手（D-pad ±LB）で子音行、右手（RB/X/Y/B/A）で母音</b>を選び、同時押しで 1 文字。
-          変換・学習・辞書は OS の IME なしでページ側で動きます。</p>
-        <p>ゲームパッドを接続してボタンを押すと、下に操作ガイドが出ます。物理キーボードとも
-          併用できます（下のエディタにフォーカスがあるときだけゲームパッド入力が有効）。</p>
+        <h2>ゲームパッド日本語入力</h2>
+        <p>VR/AR内での快適なテキスト入力、特に日本語の入力はまだ未解決の課題です。ゲームパッドならボタンという触覚
+        フィードバックを活用した「真のタッチタイピング」が可能です。さらに、スマホのフリック入力の思想を導入して直感的にしました。
+          <b>左手で子音、右手で母音</b>を選び、同時押しで1文字が確定します。濁点や拗音化はさらに1動作。</p>
       </section>
 
       <div id="app"></div>
 
       <section class="hints">
-        <p>ゲームパッド必須。変換・学習・ユーザー辞書・文書はラボ内の実験ページ間で共有です。</p>
+        <p>ゲームパッドが必須です。有線あるいは無線で接続してください。操作は入力欄下のビジュアライザ参照。
+            なお、変換・学習・ユーザー辞書・テキストは各実験ページ間で共有されます。</p>
         <ul>
-          <li><b>かな</b> = 左手で子音行（D-pad、LB で は〜わ行）＋ 右手で母音（RB=あ, X=い, Y=う, B=え, A=お）の同時押し</li>
-          <li><b>LT</b> = 拗音（か→きゃ）/ 小書き、<b>LT+RT</b> = っ、<b>RT</b> = ん</li>
-          <li><b>右スティック</b>: ↑ 濁点/半濁点、→ 長音ー、← 削除、↓ 、→。→空白</li>
-          <li><b>左スティック</b>: ↓ 変換/次候補、↑ 前候補、←→ 文節移動、<b>RT+←→</b> 文節伸縮</li>
-          <li><b>LS 押込み</b> 確定・改行、<b>RS 押込み</b> 取消、<b>Start</b> 戻す（確定の取り消し。もう一度で文書 undo）</li>
+          <li><b>かな</b> = 左手で子音（十字キー。+LBで「は〜わ行」）＋ 右手で母音（RB=あ、左ボタン=い、上ボタン=う、右ボタン=え、下ボタン=お）の同時押し</li>
+          <li><b>LT</b> = 拗音化（例:か→きゃ）/ 小書き。<b>LT+RT</b> = っ、<b>RT</b> = ん</li>
+          <li><b>右スティック</b>: ↑ 濁点/半濁点の付与、→ 長音「ー」、← 削除、↓ 「、」→「。」→空白</li>
+          <li><b>左スティック</b>: ↓ 変換/次候補、↑ 前候補、←→ 文節の移動、<b>RT+←→</b> 文節の伸縮</li>
+          <li><b>LS押込み</b> 確定・改行、<b>RS押込み</b> 入力取消、<b>Start</b> アンドゥ（確定の取り消し。もう一度でテキストのアンドゥ）</li>
         </ul>
       </section>
     </main>
 
     <footer>
       <p>
-        へちま言語ラボ（正式名 <i>luffa lang labo</i> — 頭文字 L.L.L.）。
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
         変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
         WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
         配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
