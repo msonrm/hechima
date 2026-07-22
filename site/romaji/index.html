@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>標準IME（ローマ字入力）— へちまラボ</title>
+    <meta name="description" content="ふだんどおりのローマ字入力と Space 変換 — なのに OS の IME を使っていない。Mozc 実変換・学習・確定アンドゥ・再変換・ユーザー辞書まで、すべてブラウザのページ内で動きます。打鍵は一切外部に送信されません。" />
+    <meta property="og:title" content="標準IME（ローマ字入力）— へちまラボ" />
+    <meta property="og:description" content="ふだんどおりに動くのに、OS の IME を使っていない。Mozc 実変換・学習・ユーザー辞書までページ内で。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://luffa-lang-labo.dev/romaji/" />
+    <meta property="og:site_name" content="へちまラボ" />
+    <meta name="twitter:card" content="summary" />
+    <script>
+      /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
+         app.js 自体が読めないケースがあるため、外部取得に依存しないインラインに置く */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/hechima/hechima.js"></script>
+    <script src="/vendor/flick/flick-engine.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちまラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; 標準IME（ローマ字入力）</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>標準IME（ローマ字入力）</h2>
+        <p>下のエディタで、ふだんどおりローマ字で打って Space で変換してみてください。
+          <b>ふだんどおりに動くのに、OS の IME を使っていない</b> — それがこのページの実験です。
+          未確定の下線も、候補窓も、学習も、ぜんぶこのページが自前で描いています。</p>
+      </section>
+
+      <div id="app"></div>
+
+      <section class="hints">
+        <p>このページを開いたまま打鍵してください（OS 側の日本語 IME はオフ = 英数直接入力で）。
+          変換・学習・文書の保存はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。
+          文書はこの端末に自動保存され、確定した変換は学習されて候補順に反映されます
+          （「学習リセット」で学習を消去、「クリア」で文書を消去）。
+          学習・ユーザー辞書・文書は、ラボ内の実験ページ間で共有されます。</p>
+        <ul>
+          <li><b>Space</b> = 変換 / 次候補、<b>↑↓</b> = 前候補/次候補、<b>数字 1-9</b> = 直接選択（クリックでも可）</li>
+          <li>先頭候補でさらに <b>↑</b>（または <b>Shift+Space</b>）= 追加候補（ひらがな/カタカナ）を展開</li>
+          <li><b>Shift+英字</b> = 英単語をそのまま入力（Space で 大文字/小文字/全角 の綴り変換）</li>
+          <li><b>Enter</b> = 確定、<b>Esc</b> = 戻す、<b>←→</b> = 文節移動、<b>Shift+←→</b> = 文節伸縮、<b>Ctrl+BS</b> = 確定取り消し（学習も巻き戻し）</li>
+          <li>エディタ: クリック / 矢印キーでカーソル移動、<b>Ctrl+Z</b> / <b>Ctrl+Y</b> = 文書の undo / redo、貼り付けはプレーンテキスト化</li>
+          <li>確定済みテキストを<b>選択して 変換キー / Ctrl+/</b> = 再変換（よみに開き直して選び直す）</li>
+          <li>タッチ端末では<b>「フリック」ボタン</b>で 12 キーフリック入力（詳しくは<a href="/flick/">フリック入力のページ</a>へ）</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちまラボ（正式名 <i>luffa lang labo</i> — 頭文字 L.L.L.）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/romaji.ts"></script>
+  </body>
+</html>
