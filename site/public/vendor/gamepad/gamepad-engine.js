@@ -813,7 +813,7 @@
 		const fLeft = track(2, el("div", "ge-face", "い"));
 		const fRight = track(1, el("div", "ge-face", "え"));
 		const fDown = track(0, el("div", "ge-face", "お"));
-		face.append(el("div", "ge-empty"), fUp, el("div", "ge-empty"), fLeft, el("div", "ge-face ge-center", "母音"), fRight, el("div", "ge-empty"), fDown, el("div", "ge-empty"));
+		face.append(el("div", "ge-empty"), fUp, el("div", "ge-empty"), fLeft, el("div", "ge-face ge-center", ""), fRight, el("div", "ge-empty"), fDown, el("div", "ge-empty"));
 		right.append(rightShoulders, face);
 		const stickCol = el("div", "ge-col");
 		const stick = el("div", "ge-grid");
@@ -821,7 +821,7 @@
 		const sLeft = el("div", "ge-stick", "BS");
 		const sCenter = track(11, el("div", "ge-stick", "取消"));
 		const sRight = el("div", "ge-stick", "ー");
-		const sDown = el("div", "ge-stick", "、。");
+		const sDown = el("div", "ge-stick", "、。␣");
 		stick.append(el("div", "ge-empty"), sUp, el("div", "ge-empty"), sLeft, sCenter, sRight, el("div", "ge-empty"), sDown, el("div", "ge-empty"));
 		stickCol.append(stick);
 		figure.append(left, center, right, stickCol);
@@ -889,7 +889,7 @@
 	}
 	//#endregion
 	//#region src/gamepad/version.ts
-	const GAMEPAD_ENGINE_VERSION = "1.3.0";
+	const GAMEPAD_ENGINE_VERSION = "1.3.1";
 	//#endregion
 	exports.CHORD_WINDOW_MS = CHORD_WINDOW_MS;
 	exports.createMachineState = createMachineState;
