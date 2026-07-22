@@ -105,7 +105,7 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
   color: var(--muted);
 }
 
-/* 未確定表示（電文の SegmentView.kind に対応） */
+/* 未確定表示（へちま蔓の SegmentView.kind に対応） */
 .composition { caret-color: transparent; }
 .seg-yomi { text-decoration: underline dotted; }
 .seg-focus { background: var(--focus-bg); text-decoration: underline; }

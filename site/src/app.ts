@@ -182,7 +182,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     window.addEventListener("unhandledrejection", (e) => setStatus(`⚠ 非同期エラー: ${String(e.reason)}`));
   }
 
-  // ---- 変換エンジン（hechima-worker、電文 v0） ----
+  // ---- 変換エンジン（hechima-worker、へちま蔓 v0） ----
 
   // worker スクリプトは毎回キャッシュキーをずらして必ずネットワークから取る（14KB）。
   // 上記の Safari キャッシュ再利用ブロックの回避 — 汚染済みエントリに当たらない
@@ -204,7 +204,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
       const learn = info.features.learn
         ? info.features.persist ? " / 学習オン" : " / 学習オン（この環境では保存されません）"
         : "";
-      setStatus(`準備完了 — Mozc 実変換（hechima v${info.version} / 電文 v${info.protocol}${learn}）`);
+      setStatus(`準備完了 — Mozc 実変換（hechima v${info.version} / へちま蔓 v${info.protocol}${learn}）`);
     })
     .catch((e: Error) => setStatus(`エンジン初期化失敗: ${e.message} — フォールバック変換（カナ/かな巡回）で動作中`));
 

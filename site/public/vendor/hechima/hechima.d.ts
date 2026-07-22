@@ -1,7 +1,7 @@
 // Hechima v0.11.1 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 1.2.0（onHostAction の convert/confirm/insertAndConfirm 転送）。
 // 対応バンドル: hechima.js / hechima.min.js（UMD、グローバル名 `Hechima`）
-//             + hechima-worker.js（Worker 本体、電文 v0。connectWorker で接続する）
+//             + hechima-worker.js（Worker 本体、へちま蔓 v0。connectWorker で接続する）
 // リファレンス: docs/hechima-session-embedding.md / docs/hechima-protocol.md
 // （logical-layout-labo リポジトリ）
 
@@ -177,12 +177,12 @@ export function fallbackConvert(yomi: string): ConvertSegment[];
 /** このバンドルのバージョン（取り込み側が記録する用） */
 export const version: string;
 
-// ---- hechima-worker（電文 v0）。仕様の正典: docs/hechima-protocol.md ----
+// ---- hechima-worker（へちま蔓 v0）。仕様の正典: docs/hechima-protocol.md ----
 
-/** 電文プロトコル版数（ready.protocol と一致する） */
+/** へちま蔓プロトコル版数（ready.protocol と一致する） */
 export const HECHIMA_PROTOCOL_VERSION: number;
 
-/** 変換結果の 1 文節（電文ペイロード）。key = よみ、candidates = 候補（先頭が第一候補） */
+/** 変換結果の 1 文節（へちま蔓ペイロード）。key = よみ、candidates = 候補（先頭が第一候補） */
 export interface WireSegment {
   key: string;
   candidates: string[];
@@ -246,7 +246,7 @@ export interface WorkerInitPaths {
   scope?: string;
 }
 
-/** init 完了時の情報（ready 電文の中身） */
+/** init 完了時の情報（ready メッセージの中身） */
 export interface ReadyInfo {
   protocol: number;
   version: string;

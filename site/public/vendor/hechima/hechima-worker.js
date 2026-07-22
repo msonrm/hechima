@@ -67,7 +67,7 @@
 			lastYomi = lastKeys.join("");
 		}
 	}
-	/** 辞書を fetch（進捗を電文で流す）。SPA フォールバックの HTML 混入も検出する */
+	/** 辞書を fetch（進捗をへちま蔓で流す）。SPA フォールバックの HTML 混入も検出する */
 	async function fetchDictionary(dataUrl) {
 		const res = await fetch(new URL(dataUrl, self.location.href).href);
 		if (!res.ok) throw new Error(`辞書の取得に失敗 (HTTP ${res.status}: ${dataUrl})`);

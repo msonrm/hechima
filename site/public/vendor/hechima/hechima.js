@@ -1077,7 +1077,7 @@
 	}
 	//#endregion
 	//#region src/hechima/protocol.ts
-	/** 電文プロトコル版数。ready 応答の `protocol` で通知される */
+	/** へちま蔓プロトコル版数。ready 応答の `protocol` で通知される */
 	const HECHIMA_PROTOCOL_VERSION = 0;
 	//#endregion
 	//#region src/hechima/index.ts
