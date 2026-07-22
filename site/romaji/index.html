@@ -37,7 +37,6 @@
     </script>
     <link rel="stylesheet" href="/src/style.css" />
     <script src="/vendor/hechima/hechima.js"></script>
-    <script src="/vendor/flick/flick-engine.js"></script>
   </head>
   <body>
     <header>
@@ -48,19 +47,17 @@
     <main>
       <section class="intro">
         <h2>標準IME（ローマ字入力）</h2>
-        <p>下のエディタで、ふだんどおりローマ字で打って Space で変換してみてください。
-          <b>ふだんどおりに動くのに、OS の IME を使っていない</b> — それがこのページの実験です。
-          未確定の下線も、候補窓も、学習も、ぜんぶこのページが自前で描いています。</p>
+        <p>ふつうにキーボードでローマ字で打って、スペースキーで変換。OSのIMEを経由せずに違和感なく日本語が入力できます。</p>
       </section>
 
       <div id="app"></div>
 
       <section class="hints">
-        <p>このページを開いたまま打鍵してください（OS 側の日本語 IME はオフ = 英数直接入力で）。
-          変換・学習・文書の保存はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。
+        <p>PCあるいはキーボードを繋いだタブレット等で、ふつうにローマ字で打鍵してください（OS 側の日本語 IME はオフ = 英数直接入力で）。
+          変換・学習・テキストの保存はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。
           文書はこの端末に自動保存され、確定した変換は学習されて候補順に反映されます
           （「学習リセット」で学習を消去、「クリア」で文書を消去）。
-          学習・ユーザー辞書・文書は、ラボ内の実験ページ間で共有されます。</p>
+          学習・ユーザー辞書・テキストは、ラボ内の各実験ページ間で共有されます。</p>
         <ul>
           <li><b>Space</b> = 変換 / 次候補、<b>↑↓</b> = 前候補/次候補、<b>数字 1-9</b> = 直接選択（クリックでも可）</li>
           <li>先頭候補でさらに <b>↑</b>（または <b>Shift+Space</b>）= 追加候補（ひらがな/カタカナ）を展開</li>
@@ -68,14 +65,13 @@
           <li><b>Enter</b> = 確定、<b>Esc</b> = 戻す、<b>←→</b> = 文節移動、<b>Shift+←→</b> = 文節伸縮、<b>Ctrl+BS</b> = 確定取り消し（学習も巻き戻し）</li>
           <li>エディタ: クリック / 矢印キーでカーソル移動、<b>Ctrl+Z</b> / <b>Ctrl+Y</b> = 文書の undo / redo、貼り付けはプレーンテキスト化</li>
           <li>確定済みテキストを<b>選択して 変換キー / Ctrl+/</b> = 再変換（よみに開き直して選び直す）</li>
-          <li>タッチ端末では<b>「フリック」ボタン</b>で 12 キーフリック入力（詳しくは<a href="/flick/">フリック入力のページ</a>へ）</li>
         </ul>
       </section>
     </main>
 
     <footer>
       <p>
-        へちま言語ラボ（正式名 <i>luffa lang labo</i> — 頭文字 L.L.L.）。
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
         変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
         WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
         配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。

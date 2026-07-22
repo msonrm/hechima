@@ -72,11 +72,10 @@ export interface LabPageConfig {
   keymapLabel?: string;
   /**
    * フリックキーボード:
-   *   "auto" = タッチ端末（または ?flick=1）でボタン出現（トップページ）
-   *   "on"   = ページを開いたら即表示（フリック実験ページ）
-   *   "off"  = なし（物理キーボード専用ページ）
+   *   "on"  = ページを開いたら即表示（/flick/ 実験ページ）
+   *   "off" = なし（既定。物理キーボード / ゲームパッド専用ページ）
    */
-  flick?: "auto" | "on" | "off";
+  flick?: "on" | "off";
   /**
    * ゲームパッド日本語入力（gamepad-engine 駆動。日本語のみ）:
    *   "on"  = ページを開いたらビジュアライザ + polling を起動（ゲームパッド実験ページ）
@@ -156,7 +155,7 @@ function renderScaffold(config: LabPageConfig): void {
 }
 
 export function initLabPage(config: LabPageConfig = {}): void {
-  const flickMode = config.flick ?? "auto";
+  const flickMode = config.flick ?? "off";
   const vertical = config.writingMode === "vertical";
   // 縦書き時の候補段の並び。横書きは null = 従来の横組ポップアップ（番号付き縦積み）
   const candOrder = vertical ? (config.verticalCandOrder ?? "rl") : null;
@@ -1336,25 +1335,23 @@ export function initLabPage(config: LabPageConfig = {}): void {
     flickCandPress = null;
     if (moved < 8) fep.selectCandidate(idx);
   });
-  // デスクトップ（?flick=1）でエディタのフォーカスを奪わない（タッチは panel の touchend 抑止が担う）
+  // 候補バーをマウスで押してもエディタのフォーカスを奪わない（PC でフリックを試すとき用。
+  // タッチは panel の touchend 抑止が担う）
   flickCandsEl.addEventListener("mousedown", (e) => e.preventDefault());
 
   // フリックの出し方はページ config 次第:
-  //   "on"   = 即マウント（フリック実験ページ。PC でもマウスで試せる）
-  //   "auto" = タッチ主体の端末（または ?flick=1 — デスクトップでの検証用）でボタンを出す
-  //   "off"  = ボタンを出さない（物理キーボード専用ページ）
+  //   "on"  = 即マウント（/flick/ 実験ページ。PC でもマウスで試せる）
+  //   "off" = ボタンを出さない（既定。物理キーボード / ゲームパッド専用ページ）
   if (flickMode === "on") {
     flickToggle.hidden = false;
     void enableFlick();
-  } else if (
-    flickMode === "auto" &&
-    (matchMedia("(pointer: coarse)").matches || new URLSearchParams(location.search).has("flick"))
-  ) {
-    flickToggle.hidden = false;
   }
 
   // ---- ゲームパッド入力（gamepad-engine 駆動。日本語のみ。物理キーボードと併用可） ----
-  // フリックと違い OS キーボードは封じない（gamepad は keyboard イベントを介さない）。
+  // gamepad は keyboard イベントを介さないので物理キーボードと併用できる。一方 iPad では
+  // エディタをタップしてフォーカスする必要があり、素の contenteditable だと OS ソフトウェア
+  // キーボードが出てしまう。よって有効化時に inputmode="none" を立て、画面キーボードだけ
+  // 抑止する（物理キーボード入力は inputmode の影響を受けない）。
   // エディタの下にビジュアライザを出し、onOp を fep へ配線する（配線はフリックと同型 =
   // kana→insertKana / key→feed→未消費は applyFlickHostKey）。候補は通常ポップアップのまま。
   let gamepadCtl: { setEnabled(on: boolean): void; stop(): void } | null = null;
@@ -1362,6 +1359,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
 
   function enableGamepad(): void {
     if (gamepadCtl) return;
+    editorEl.setAttribute("inputmode", "none"); // iPad: タップフォーカス時に OS ソフトキーボードを出さない
     const area = document.createElement("div");
     area.className = "gamepad-area";
     $<HTMLElement>("app").appendChild(area);

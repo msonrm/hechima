@@ -3,4 +3,6 @@
 // 物理キーボードとも併用できる（OS キーボードは封じない）。
 import { initLabPage } from "../app";
 
-initLabPage({ gamepad: "on" });
+// フリックは出さない（ゲームパッド自体がタッチ代替の入力手段なのでトグルは不要）。
+// ソフトキーボード抑止は enableGamepad 側で inputmode="none" を立てて行う。
+initLabPage({ gamepad: "on", flick: "off" });
