@@ -236,6 +236,17 @@
 	//#region src/gamepad/machine.ts
 	/** eager output を巻き戻せる同時打鍵の窓（ms） */
 	const CHORD_WINDOW_MS = 300;
+	/**
+	* RT 連打サイクル: 1打=ん, 2打=を, 3打=んを, 4打で ん へ戻る（循環）。
+	* 各打で前段を replace で差し替える。日本語の性質（「ん」は連続しない・「んを」はあるが
+	* 「をん」は無い）に合致させたもの。RT タップ間に他の出力が挟まると `rtCycleStep` が 0 に
+	* リセットされ、次の RT は 1打目（ん）から始まる。
+	*/
+	const RT_CYCLE = [
+		"ん",
+		"を",
+		"んを"
+	];
 	/** 初期状態を生成する。 */
 	function createMachineState() {
 		return {
@@ -249,7 +260,8 @@
 			eagerCharLen: 0,
 			eagerTime: 0,
 			rtUsed: false,
-			rtDuringLT: false
+			rtDuringLT: false,
+			rtCycleStep: 0
 		};
 	}
 	/** フレーム末尾の prev 更新（試打サイトのフックと同じ順序）。 */
@@ -279,6 +291,7 @@
 					s.eagerChar = char;
 					s.eagerCharLen = charLen;
 					s.eagerTime = f.now;
+					s.rtCycleStep = 0;
 				} else if (rowChanged || vowelChanged) {
 					if (!(rowChanged && f.consonantCount < s.prevConsonantCount)) {
 						if (s.eagerChar && f.now - s.eagerTime < 300) actions.push({
@@ -293,6 +306,7 @@
 						s.eagerChar = char;
 						s.eagerCharLen = charLen;
 						s.eagerTime = f.now;
+						s.rtCycleStep = 0;
 					}
 				}
 			}
@@ -310,13 +324,22 @@
 			});
 			else actions.push({ type: "youon" });
 			s.rtDuringLT = false;
+			s.rtCycleStep = 0;
 		}
 		if (f.rtNow && !s.prevRT) s.rtUsed = false;
 		if (!f.rtNow && s.prevRT) {
-			if (!s.rtUsed && !f.ltNow && !s.prevLT) actions.push({
-				type: "kana",
-				char: "ん"
-			});
+			if (!s.rtUsed && !f.ltNow && !s.prevLT) {
+				const prevStep = s.rtCycleStep;
+				const nextStep = prevStep >= 3 ? 1 : prevStep + 1;
+				const char = RT_CYCLE[nextStep - 1];
+				const replace = prevStep === 0 ? 0 : RT_CYCLE[prevStep - 1].length;
+				actions.push({
+					type: "kana",
+					char,
+					replace
+				});
+				s.rtCycleStep = nextStep;
+			} else s.rtCycleStep = 0;
 			s.rtUsed = false;
 		}
 		return actions;
@@ -363,33 +386,43 @@
 			replace: 0
 		};
 	}
+	/** 拗音後置シフトが基字の後ろに付ける小書き（濁点は直前の基字へ適用する）。 */
+	const SMALL_YOUON = /* @__PURE__ */ new Set([
+		"ゃ",
+		"ゅ",
+		"ょ"
+	]);
+	/** 1 字を 清音→濁音→半濁音→清音 のサイクルで次へ進める。非対象は null。 */
+	function cycleDakutenChar(c) {
+		const seionFromHandakuten = HANDAKUTEN_REVERSE.get(c);
+		if (seionFromHandakuten) return seionFromHandakuten;
+		const seionFromDakuten = DAKUTEN_REVERSE.get(c);
+		if (seionFromDakuten) return HANDAKUTEN_MAP.get(seionFromDakuten) ?? seionFromDakuten;
+		return DAKUTEN_MAP.get(c) ?? null;
+	}
 	/**
 	* 合成末尾の濁点/半濁点/清音をトグルした置換 op を返す。
 	* か→が→か、は→ば→ぱ→は。空・非対象 → null。試打サイト InputEngine.applyToggleDakuten と同一。
+	* 末尾が拗音の小書き（ゃゅょ）のときは直前の基字へ適用する（きゃ→ぎゃ、ひゃ→びゃ→ぴゃ→ひゃ）。
 	*/
 	function resolveDakutenOp(tail) {
 		const chars = [...tail];
 		if (chars.length === 0) return null;
 		const last = chars[chars.length - 1];
-		const seionFromHandakuten = HANDAKUTEN_REVERSE.get(last);
-		if (seionFromHandakuten) return {
+		if (SMALL_YOUON.has(last) && chars.length >= 2) {
+			const cycled = cycleDakutenChar(chars[chars.length - 2]);
+			return cycled ? {
+				type: "kana",
+				text: cycled + last,
+				replace: 2
+			} : null;
+		}
+		const cycled = cycleDakutenChar(last);
+		return cycled ? {
 			type: "kana",
-			text: seionFromHandakuten,
+			text: cycled,
 			replace: 1
-		};
-		const seionFromDakuten = DAKUTEN_REVERSE.get(last);
-		if (seionFromDakuten) return {
-			type: "kana",
-			text: HANDAKUTEN_MAP.get(seionFromDakuten) ?? seionFromDakuten,
-			replace: 1
-		};
-		const dakuten = DAKUTEN_MAP.get(last);
-		if (dakuten) return {
-			type: "kana",
-			text: dakuten,
-			replace: 1
-		};
-		return null;
+		} : null;
 	}
 	/** 抽象アクション 1 個を GamepadOp 列へ写像する（無反応は空配列）。 */
 	function translateAction(action, host) {
@@ -436,6 +469,7 @@
 				return ops;
 			},
 			action(a) {
+				state.rtCycleStep = 0;
 				return translateAction(a, host);
 			},
 			syncPrev(f) {
@@ -889,7 +923,7 @@
 	}
 	//#endregion
 	//#region src/gamepad/version.ts
-	const GAMEPAD_ENGINE_VERSION = "1.3.1";
+	const GAMEPAD_ENGINE_VERSION = "1.4.0";
 	//#endregion
 	exports.CHORD_WINDOW_MS = CHORD_WINDOW_MS;
 	exports.createMachineState = createMachineState;
