@@ -486,6 +486,9 @@
 	/** 句読点ダブルタップ窓（右スティック下: 1回=、 2回=。 3回=空白+確定）。スティック連打は
 	*  ボタン連打より遅いため、ボタン系（400ms）より緩め。 */
 	const PUNCTUATION_DOUBLE_TAP_MS = 600;
+	/** 左スティックのキーリピート（非合成のカーソル移動・範囲選択のみ）: 初回発火からの遅延と間隔。 */
+	const LS_REPEAT_DELAY_MS = 400;
+	const LS_REPEAT_INTERVAL_MS = 85;
 	/** 左スティック軸インデックス（W3C Standard Gamepad）。右スティックは gamepad-kana-table 側。 */
 	const AXIS_LSTICK_X = 0;
 	const AXIS_LSTICK_Y = 1;
@@ -510,6 +513,12 @@
 		let prevLStickUp = false;
 		let prevLStickLeft = false;
 		let prevLStickDown = false;
+		const lsRepeatAt = {
+			down: 0,
+			up: 0,
+			left: 0,
+			right: 0
+		};
 		let lastPunctTime = 0;
 		let punctTapCount = 0;
 		let punctTimerId = null;
@@ -681,35 +690,45 @@
 			const lStickLeft = lDominant === "x" && lsX < 0;
 			const lStickUp = lDominant === "y" && lsY < 0;
 			const lStickDown = lDominant === "y" && lsY > 0;
-			if (lStickDown && !prevLStickDown) {
-				const idle = opts.getComposingTail() === "";
-				if (rtNow && idle) {
-					emit({
-						type: "navKey",
-						key: "ArrowDown",
-						shift: true
-					});
-					resolver.consumeRt();
-				} else emit({
+			const lsIdle = opts.getComposingTail() === "";
+			const lsFire = (active, prev, dir) => {
+				if (!active) {
+					lsRepeatAt[dir] = 0;
+					return false;
+				}
+				if (!prev) {
+					lsRepeatAt[dir] = now + LS_REPEAT_DELAY_MS;
+					return true;
+				}
+				if (lsIdle && lsRepeatAt[dir] !== 0 && now >= lsRepeatAt[dir]) {
+					lsRepeatAt[dir] = now + LS_REPEAT_INTERVAL_MS;
+					return true;
+				}
+				return false;
+			};
+			if (lsFire(lStickDown, prevLStickDown, "down")) if (rtNow && lsIdle) {
+				emit({
 					type: "navKey",
-					key: idle ? "ArrowDown" : "Space"
+					key: "ArrowDown",
+					shift: true
 				});
-			}
-			if (lStickUp && !prevLStickUp) {
-				const idle = opts.getComposingTail() === "";
-				if (rtNow && idle) {
-					emit({
-						type: "navKey",
-						key: "ArrowUp",
-						shift: true
-					});
-					resolver.consumeRt();
-				} else emit({
+				resolver.consumeRt();
+			} else emit({
+				type: "navKey",
+				key: lsIdle ? "ArrowDown" : "Space"
+			});
+			if (lsFire(lStickUp, prevLStickUp, "up")) if (rtNow && lsIdle) {
+				emit({
 					type: "navKey",
-					key: "ArrowUp"
+					key: "ArrowUp",
+					shift: true
 				});
-			}
-			if (lStickLeft && !prevLStickLeft) if (rtNow) {
+				resolver.consumeRt();
+			} else emit({
+				type: "navKey",
+				key: "ArrowUp"
+			});
+			if (lsFire(lStickLeft, prevLStickLeft, "left")) if (rtNow) {
 				emit({
 					type: "navKey",
 					key: "ArrowLeft",
@@ -720,7 +739,7 @@
 				type: "navKey",
 				key: "ArrowLeft"
 			});
-			if (lStickRight && !prevLStickRight) if (rtNow) {
+			if (lsFire(lStickRight, prevLStickRight, "right")) if (rtNow) {
 				emit({
 					type: "navKey",
 					key: "ArrowRight",
@@ -940,7 +959,7 @@
 	}
 	//#endregion
 	//#region src/gamepad/version.ts
-	const GAMEPAD_ENGINE_VERSION = "1.5.0";
+	const GAMEPAD_ENGINE_VERSION = "1.6.0";
 	//#endregion
 	exports.CHORD_WINDOW_MS = CHORD_WINDOW_MS;
 	exports.createMachineState = createMachineState;
