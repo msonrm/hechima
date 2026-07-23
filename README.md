@@ -29,6 +29,14 @@ L.L.L. は生まれ故郷の logical-layout-labo と同じ）: **[https://luffa-
 `site/`（ラボサイト）のローカル開発・本番デプロイ・vendored 成果物の差し替え・実験ページ追加の
 手順は **[DEPLOY.md](DEPLOY.md)** を参照。
 
+## 自分のページに組み込む
+
+同梱のビルド済みエンジン（`site/public/vendor/`）は、そのまま他のページへ組み込めます。
+最小構成・cb 契約・COOP/COEP 制約・版の組み合わせは **[EMBEDDING.md](EMBEDDING.md)** に
+まとめてあります（各 API の詳細は同梱の型定義
+[`hechima.d.ts`](site/public/vendor/hechima/hechima.d.ts)）。まだ実験段階のため
+API は動きます。詳しいガイドが必要になったら Issue でお知らせください。
+
 ## ライセンス
 
 自作部分は MIT（[LICENSE](LICENSE)）。Mozc は BSD-3-Clause (Google)、fcitx5-mozc は

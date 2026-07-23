@@ -1,9 +1,11 @@
-// Hechima v0.11.1 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
-// 要 KeymapEngine >= 1.2.0（onHostAction の convert/confirm/insertAndConfirm 転送）。
+// Hechima v0.13.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// 要 KeymapEngine >= 1.4.0（英数モードの chord 解釈 + mutual 再入修正。
+// onHostAction の convert/confirm/insertAndConfirm 転送自体は >= 1.2.0）。
 // 対応バンドル: hechima.js / hechima.min.js（UMD、グローバル名 `Hechima`）
 //             + hechima-worker.js（Worker 本体、へちま蔓 v0。connectWorker で接続する）
 // リファレンス: docs/hechima-session-embedding.md / docs/hechima-protocol.md
-// （logical-layout-labo リポジトリ）
+// （logical-layout-labo リポジトリ）。公開向けの最小ガイドは hechima リポジトリの
+// EMBEDDING.md（https://github.com/msonrm/hechima）。
 
 /** cb.show へ渡す表示文節。kind: yomi=未確定よみ / focus=注目文節 / other=非注目文節 */
 export interface SegmentView {
@@ -35,7 +37,10 @@ export interface ConvertSegment {
 }
 
 /**
- * ホストが実装するコールバック契約（5 点）。ホストごとの差し替え点はここに閉じる。
+ * ホストが実装するコールバック契約（必須 3 + 省略可 7 の計 10 点）。
+ * ホストごとの差し替え点はここに閉じる。必須は show / hide / commit の 3 点で、
+ * 残り（hostKey / convert / resize / learn / reconvert / retract / unlearn）は省略可
+ * ＝ 省略時は各項の記載どおり degrade する。
  *
  * - show(segments): 未確定表示を描画する（文節配列）。
  * - hide(): 表示消去（バッファが空になった）。
