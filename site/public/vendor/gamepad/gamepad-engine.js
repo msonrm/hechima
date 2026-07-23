@@ -683,15 +683,32 @@
 			const lStickDown = lDominant === "y" && lsY > 0;
 			if (lStickDown && !prevLStickDown) {
 				const idle = opts.getComposingTail() === "";
-				emit({
+				if (rtNow && idle) {
+					emit({
+						type: "navKey",
+						key: "ArrowDown",
+						shift: true
+					});
+					resolver.consumeRt();
+				} else emit({
 					type: "navKey",
 					key: idle ? "ArrowDown" : "Space"
 				});
 			}
-			if (lStickUp && !prevLStickUp) emit({
-				type: "navKey",
-				key: "ArrowUp"
-			});
+			if (lStickUp && !prevLStickUp) {
+				const idle = opts.getComposingTail() === "";
+				if (rtNow && idle) {
+					emit({
+						type: "navKey",
+						key: "ArrowUp",
+						shift: true
+					});
+					resolver.consumeRt();
+				} else emit({
+					type: "navKey",
+					key: "ArrowUp"
+				});
+			}
 			if (lStickLeft && !prevLStickLeft) if (rtNow) {
 				emit({
 					type: "navKey",
@@ -923,7 +940,7 @@
 	}
 	//#endregion
 	//#region src/gamepad/version.ts
-	const GAMEPAD_ENGINE_VERSION = "1.4.0";
+	const GAMEPAD_ENGINE_VERSION = "1.5.0";
 	//#endregion
 	exports.CHORD_WINDOW_MS = CHORD_WINDOW_MS;
 	exports.createMachineState = createMachineState;

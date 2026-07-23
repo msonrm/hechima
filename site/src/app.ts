@@ -1229,15 +1229,31 @@ export function initLabPage(config: LabPageConfig = {}): void {
   function applyFlickHostKey(tap: Hechima.KeyTap): void {
     const sel = window.getSelection();
     const canModify = !!sel && typeof sel.modify === "function";
+    // 範囲選択中か（ゲームパッドの RT+LS で作った選択等）
+    const selected = !!sel && sel.rangeCount > 0 && !sel.isCollapsed &&
+      editorEl.contains(sel.getRangeAt(0).startContainer);
+    // 矢印の Shift 併用（RT+LS 由来）は選択拡張 extend、単独は移動 move
+    const alter = tap.shiftKey ? "extend" : "move";
     // 戻す（undo アクション = Ctrl+BS）: 確定アンドゥ不成立で透過されたら文書 undo に落とす
     if (tap.ctrlKey && tap.key === "Backspace") { undo(); return; }
     if (tap.key === "Enter") { snapshot(); insertTextAtCaret("\n"); afterEdit(); }
     else if (tap.key === " ") { snapshot(); insertTextAtCaret(" "); afterEdit(); }
-    else if (tap.key === "Backspace") { snapshot(); if (deleteBeforeCaret(1)) afterEdit(); }
-    else if (tap.key === "ArrowLeft") { if (canModify) sel.modify("move", "backward", "character"); }
-    else if (tap.key === "ArrowRight") { if (canModify) sel.modify("move", "forward", "character"); }
-    else if (tap.key === "ArrowUp") { if (canModify) sel.modify("move", "backward", "line"); }
-    else if (tap.key === "ArrowDown") { if (canModify) sel.modify("move", "forward", "line"); }
+    else if (tap.key === "Backspace") {
+      snapshot();
+      if (selected) {
+        // 選択があれば範囲ごと削除（縦書きの BS ハンドラと同じ手順）
+        sel.getRangeAt(0).deleteContents();
+        editorEl.normalize();
+        setCaretByOffset(caretOffset());
+        afterEdit();
+      } else if (deleteBeforeCaret(1)) {
+        afterEdit();
+      }
+    }
+    else if (tap.key === "ArrowLeft") { if (canModify) sel.modify(alter, "backward", "character"); }
+    else if (tap.key === "ArrowRight") { if (canModify) sel.modify(alter, "forward", "character"); }
+    else if (tap.key === "ArrowUp") { if (canModify) sel.modify(alter, "backward", "line"); }
+    else if (tap.key === "ArrowDown") { if (canModify) sel.modify(alter, "forward", "line"); }
   }
 
   async function enableFlick(): Promise<void> {
@@ -1370,7 +1386,19 @@ export function initLabPage(config: LabPageConfig = {}): void {
       enabled: document.activeElement === editorEl,
       onOp(op) {
         if (op.type === "kana") fep.insertKana(op.text, op.replace);
-        else if (op.type === "key") { if (!fep.feed(op.tap)) applyFlickHostKey(op.tap); }
+        else if (op.type === "key") {
+          // Start（Ctrl+BS）: 非合成で範囲選択があれば「戻す」ではなく再変換に振る
+          // （確定直後は選択が無いので確定アンドゥと衝突しない）。
+          if (op.tap.ctrlKey && op.tap.key === "Backspace" && !compositionActive()) {
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount > 0 && !sel.isCollapsed &&
+                editorEl.contains(sel.getRangeAt(0).startContainer)) {
+              void doReconvert();
+              return;
+            }
+          }
+          if (!fep.feed(op.tap)) applyFlickHostKey(op.tap);
+        }
       },
     });
     // 入力はエディタにフォーカスがあるときだけ有効（物理キーボードと同じ前提）
