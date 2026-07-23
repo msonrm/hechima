@@ -346,6 +346,8 @@
 	}
 	//#endregion
 	//#region src/gamepad/ops.ts
+	/** key 名と `KeyboardEvent.code` が一致しないキーの対応（Space は key 自体も異なるので別扱い）。 */
+	const CODE_OF = { y: "KeyY" };
 	/** キー名から feed 用の KeyTap を作る（Space だけ key と code が異なる）。 */
 	function keyTap(name, mods) {
 		const base = name === "Space" ? {
@@ -353,7 +355,7 @@
 			code: "Space"
 		} : {
 			key: name,
-			code: name
+			code: CODE_OF[name] ?? name
 		};
 		if (mods?.shift) base.shiftKey = true;
 		if (mods?.ctrl) base.ctrlKey = true;
@@ -455,6 +457,10 @@
 			case "undoCommit": return [{
 				type: "key",
 				tap: keyTap("Backspace", { ctrl: true })
+			}];
+			case "redo": return [{
+				type: "key",
+				tap: keyTap("y", { ctrl: true })
 			}];
 		}
 	}
@@ -756,7 +762,10 @@
 			prevLStickDown = lStickDown;
 			if (prevLS && !lsNow) emit({ type: "confirmOrNewline" });
 			if (prevRS && !rsNow) emit({ type: "cancel" });
-			if (prevStart && !startNow) emit({ type: "undoCommit" });
+			if (prevStart && !startNow) if (rtNow) {
+				resolver.consumeRt();
+				emit({ type: "redo" });
+			} else emit({ type: "undoCommit" });
 			prevLS = lsNow;
 			prevRS = rsNow;
 			prevStart = startNow;
@@ -908,7 +917,8 @@
 			"L🕹↑ 前候補",
 			"L🕹←→ 文節移動",
 			"RT+L🕹←→ 伸縮",
-			"Start 戻す"
+			"Start 戻す",
+			"RT+Start やり直し"
 		]) guide.appendChild(el("span", void 0, g));
 		root.appendChild(guide);
 		container.appendChild(root);
@@ -959,7 +969,7 @@
 	}
 	//#endregion
 	//#region src/gamepad/version.ts
-	const GAMEPAD_ENGINE_VERSION = "1.6.0";
+	const GAMEPAD_ENGINE_VERSION = "1.7.0";
 	//#endregion
 	exports.CHORD_WINDOW_MS = CHORD_WINDOW_MS;
 	exports.createMachineState = createMachineState;

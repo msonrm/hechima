@@ -1236,6 +1236,8 @@ export function initLabPage(config: LabPageConfig = {}): void {
     const alter = tap.shiftKey ? "extend" : "move";
     // 戻す（undo アクション = Ctrl+BS）: 確定アンドゥ不成立で透過されたら文書 undo に落とす
     if (tap.ctrlKey && tap.key === "Backspace") { undo(); return; }
+    // やり直し（redo アクション = Ctrl+y。ゲームパッドの RT+Start。物理キーボードの Ctrl+Y と同経路）
+    if (tap.ctrlKey && (tap.key === "y" || tap.key === "Y")) { redo(); return; }
     if (tap.key === "Enter") { snapshot(); insertTextAtCaret("\n"); afterEdit(); }
     else if (tap.key === " ") { snapshot(); insertTextAtCaret(" "); afterEdit(); }
     else if (tap.key === "Backspace") {
