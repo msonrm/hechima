@@ -53,6 +53,20 @@
             このページでは配列解釈エンジンごとブラウザの中にあるので、ページを開くだけで新配列が体験できます。かな漢字変換もちゃんと動きますよ。</p>
       </section>
 
+      <section class="layers">
+        <div class="stack" role="img" aria-label="入力 から キーマップ、変換、表示 へ。キーマップだけ差し替え">
+          <span class="blk">入力</span><span class="arw">→</span>
+          <span class="blk swap">キーマップ</span><span class="arw">→</span>
+          <span class="blk">変換</span><span class="arw">→</span>
+          <span class="blk">表示</span>
+        </div>
+        <p><b>差し替えた層：キーマップだけ</b> ／ <span class="kept">据え置き：入力・変換・表示</span></p>
+        <p>薙刀式の同時押しは <code>naginata_jis.json</code> / <code>naginata_us.json</code> に書いてあるだけで、
+          このページのためにコードは一行も変えていません。上のJIS / USの切り替えも、読み込むJSONを差し替えているだけです。
+          <b>別の配列を載せたければ、触るのはJSON一枚です。</b></p>
+        <p class="src">このページ固有のソース：<a href="https://github.com/msonrm/hechima/blob/main/site/src/pages/naginata.ts" rel="noopener"><code>site/src/pages/naginata.ts</code></a></p>
+      </section>
+
       <div id="app"></div>
 
       <section class="hints">

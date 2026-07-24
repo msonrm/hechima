@@ -53,6 +53,20 @@
             スマホでいつもやってるようにフリック入力してみてください。（PCでもマウスのドラッグでフリックを試せます）</p>
       </section>
 
+      <section class="layers">
+        <div class="stack" role="img" aria-label="入力 から キーマップ、変換、表示 へ。入力・キーマップ・表示を差し替え">
+          <span class="blk swap">入力</span><span class="arw">→</span>
+          <span class="blk swap">キーマップ</span><span class="arw">→</span>
+          <span class="blk">変換</span><span class="arw">→</span>
+          <span class="blk swap">表示</span>
+        </div>
+        <p><b>差し替えた層：入力・キーマップ・表示</b> ／ <span class="kept">据え置き：変換</span></p>
+        <p>指で触った位置とフリックの向きをかなに変えているのは <code>flick_standard.json</code> 一枚です。
+          候補はポップアップではなくキーボード上部の帯に出しています（指で隠れないので）。
+          <b>別のフリック配置を作りたければ、触るのはその JSON だけです。</b></p>
+        <p class="src">このページ固有のソース：<a href="https://github.com/msonrm/hechima/blob/main/site/src/pages/flick.ts" rel="noopener"><code>site/src/pages/flick.ts</code></a></p>
+      </section>
+
       <div id="app"></div>
 
       <section class="hints">

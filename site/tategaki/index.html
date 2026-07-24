@@ -50,6 +50,21 @@
         <p>このページにはIMEがまるごとページ中に組み込まれているので、変換候補が縦書き横並びで入力行のすぐ隣に出ます。ほら、自然でしょ？</p>
       </section>
 
+      <section class="layers">
+        <div class="stack" role="img" aria-label="入力 から キーマップ、変換、表示 へ。表示だけ差し替え">
+          <span class="blk">入力</span><span class="arw">→</span>
+          <span class="blk">キーマップ</span><span class="arw">→</span>
+          <span class="blk">変換</span><span class="arw">→</span>
+          <span class="blk swap">表示</span>
+        </div>
+        <p><b>差し替えた層：表示だけ</b>（ただし候補窓の並びは本文の向きに追随します） ／
+          <span class="kept">据え置き：入力・キーマップ・変換</span></p>
+        <p>本文を縦組にしているのはCSSです。候補窓のほうは、縦書きに合わせて横並びに描き直しています。
+          変換も配列も、ほかのページとまったく同じものが動いています。
+          <b>候補窓が本文の向きについてくるのは、それがOSのものではなく、このページの中身だからです。</b></p>
+        <p class="src">このページ固有のソース：<a href="https://github.com/msonrm/hechima/blob/main/site/src/pages/tategaki.ts" rel="noopener"><code>site/src/pages/tategaki.ts</code></a></p>
+      </section>
+
       <div id="app"></div>
 
       <section class="hints">

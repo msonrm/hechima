@@ -50,7 +50,82 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
 .intro p { margin: 0.4rem 0; }
 /* トップの実験一覧: 紹介文・フッターに紛れないよう上下に間を取る */
 .labs { margin: 1.8rem 0; padding-left: 1.4rem; }
-.labs li { margin: 0.55rem 0; }
+.labs li { margin: 0.8rem 0; }
+/* 一覧の各項目に添える差分（そのページが差し替えた層） */
+.diff-inline { display: block; margin-top: 0.1rem; font-size: 0.8rem; color: var(--muted); }
+.diff-inline b { color: var(--accent); font-weight: 600; }
+
+/* ---- パイプライン図と差分バッジ（トップ + 各実験ページ共通） ----
+   入力→キーマップ→変換→表示 の 4 箱のうち、そのページが差し替えた箱だけ塗る。
+   各ページの解説を「説明」ではなく「差分」で書くための共通部品。位置と書式は全ページ共通 */
+.layers {
+  margin: 0 0 1.2rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+.stack {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 0.5rem;
+}
+.blk {
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.blk.swap {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+.arw { color: var(--muted); font-size: 0.75rem; }
+/* 矢印にラベルを添えた版（トップの基準図のみ。箱の間を流れるデータの形を見せる） */
+.flow {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.25;
+}
+.flow-label { font-size: 0.65rem; color: var(--muted); white-space: nowrap; }
+.layers p { margin: 0.35rem 0 0; }
+.layers .kept { color: var(--muted); }
+.layers code, .compare code {
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--line) 35%, transparent);
+  font-size: 0.9em;
+}
+.layers .src { color: var(--muted); font-size: 0.8rem; }
+
+/* ---- 三値の対比表（トップ）。横長なのでスマホでは表だけ横スクロールさせる ---- */
+.compare { margin: 2rem 0 0; font-size: 0.95rem; }
+.compare h2 { margin: 0 0 0.3rem; font-size: 1.15rem; }
+.matrix-wrap { overflow-x: auto; margin: 1rem 0 0.6rem; }
+.matrix {
+  border-collapse: collapse;
+  min-width: 38rem;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+.matrix th, .matrix td {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.matrix thead th { background: color-mix(in srgb, var(--line) 30%, transparent); }
+.matrix tbody th { font-weight: 600; white-space: nowrap; }
+.matrix .can { color: var(--accent); font-weight: 600; }
+.matrix .cant { color: var(--muted); font-weight: 600; }
+.matrix small { display: block; margin-top: 0.15rem; color: var(--muted); }
+.compare .note { color: var(--muted); font-size: 0.82rem; }
 
 .controls {
   display: flex;

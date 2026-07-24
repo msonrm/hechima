@@ -49,19 +49,122 @@
           ブラウザのページの中に置くためのソフトウェア群です。</p>
         <p>そして、ここ「へちま言語ラボ」はその実験場という位置づけです。各ページが、OS組み込みのIMEではできない
           （あるいはなかなかやりにくい）日本語入力のデモになっています。</p>
+
+        <div class="layers">
+          <div class="stack" role="img" aria-label="入力 から 打鍵を渡して キーマップ、かなを渡して 変換、文節と候補を渡して 表示 へ">
+            <span class="blk">入力</span>
+            <span class="flow"><span class="arw">→</span><span class="flow-label">打鍵</span></span>
+            <span class="blk">キーマップ</span>
+            <span class="flow"><span class="arw">→</span><span class="flow-label">かな</span></span>
+            <span class="blk">変換</span>
+            <span class="flow"><span class="arw">→</span><span class="flow-label">文節と候補</span></span>
+            <span class="blk">表示</span>
+          </div>
+          <p>日本語入力は、だいたいこの4つの箱でできています。ふだんこれはOSの中にあって、アプリからは触れません。
+            hechima はこれをページの中に持ってきているので、どの箱でも差し替えられます。</p>
+          <p><b>箱を差し替えられるのは、あいだを流れるものの形が決まっているからです。</b>
+            入力からキーマップへ渡るのは「どのキーをいつ押して、いつ離したか」だけ（フリックなら触った位置と向き、
+            ゲームパッドならボタンとスティック）。キーマップから変換へ渡るのは<b>かな</b>。
+            変換から表示へ返ってくるのは<b>文節に区切られた候補の並び</b>。
+            つまり入力をゲームパッドに取り替えても、出てくるものが同じ「かな」であるかぎり、
+            その先の箱は何が起きたのか知らないまま動きます。</p>
+          <p>各実験ページの同じ場所に、<b>そのページがどの箱を差し替えたか</b>を同じ書式で置いてあります。
+            塗ってある箱が差し替えたところです。</p>
+        </div>
+
         <ul class="labs">
           <li><a href="/romaji/">標準IME（ローマ字入力）</a> ： キーボードでふつうにローマ字で打って、
-        スペースキーで変換。OSのIMEを経由せずに違和感なく日本語入力できる、をまず体験してみてください</li>
-          <li><a href="/flick/">フリック入力</a> ： スマホ標準のフリック入力キーボードをブラウザ上に再現しました</li>
+        スペースキーで変換。OSのIMEを経由せずに違和感なく日本語入力できる、をまず体験してみてください
+            <span class="diff-inline">差し替えた層：<b>なし</b> — 素の hechima。以下はどれも、この状態からどこかを差し替えたものです</span></li>
+          <li><a href="/flick/">フリック入力</a> ： スマホ標準のフリック入力キーボードをブラウザ上に再現しました
+            <span class="diff-inline">差し替えた層：<b>入力・キーマップ・表示</b>（キー配置はJSON一枚、候補はキーボード上の帯に）</span></li>
           <li><a href="/naginata/">新配列サンプル（薙刀式）</a> ： 新配列対応のデモとして、薙刀式を設定なしに体験できます。
-            制限だらけの「iPad+物理キーボード」という環境でも動きます</li>
+            制限だらけの「iPad+物理キーボード」という環境でも動きます
+            <span class="diff-inline">差し替えた層：<b>キーマップだけ</b> — JSON一枚。コードは一行も変えていません</span></li>
           <li><a href="/tategaki/">縦書きエディタ＆縦書きIME</a> ： 縦書きで書けるテキストエディタと縦書きなIME。
-            変換候補ポップアップが縦書きの横並びという、理想的なUIです</li>
+            変換候補ポップアップが縦書きの横並びという、理想的なUIです
+            <span class="diff-inline">差し替えた層：<b>表示だけ</b>（ただし候補窓の並びは本文の向きに追随します）</span></li>
           <li><a href="/gamepad/">ゲームパッド日本語入力</a> ： ゲームパッド（コントローラー）で日本語を入力します。
-            左手で子音、右手で母音。フリック入力の文法を応用して直感的に文字が打てます</li>
+            左手で子音、右手で母音。フリック入力の文法を応用して直感的に文字が打てます
+            <span class="diff-inline">差し替えた層：<b>入力・キーマップ</b> — その先の変換・候補・学習は他ページと同じものです</span></li>
         </ul>
+        <p>5つ並べて眺めると、<b>「変換」の箱だけは一度も差し替わっていない</b>ことがわかります。
+          そこが細くて動かない部分で、その上下（入力の手段と、見せ方）はいくらでも増やせる、という形です。</p>
         <p>かな漢字変換・学習・テキスト・ユーザー辞書はすべてブラウザ内で完結し、一切外部へ送信されません。
           また、学習・テキスト・ユーザー辞書は各実験ページ間で共有されます。</p>
+      </section>
+
+      <section class="compare">
+        <h2>OSの日本語入力と、どこが違うのか</h2>
+        <p>部品そのものは、どれも前からあったものです。新しいのは<b>継ぎ目</b>のほうで、
+          全部が同じ土俵に、同じ形の継ぎ目で並んでいます。なので違いは「できる／できない」よりも、
+          <b>試したり差し替えたりするのがどれだけ容易か</b>に出ます。</p>
+
+        <div class="matrix-wrap">
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th scope="col">日本語入力の部品</th>
+                <th scope="col">OSの日本語入力</th>
+                <th scope="col">hechima（へちま言語ラボ）</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">入力デバイス</th>
+                <td><span class="cant">できない</span>
+                  <small>キーボードと画面キーボードから。ゲームパッドやカメラを入力源にはできない</small></td>
+                <td><span class="can">コードで</span>
+                  <small>ブラウザが受け取れるものなら入力源にできる（<a href="/gamepad/">ゲームパッド</a>）</small></td>
+              </tr>
+              <tr>
+                <th scope="row">キーマップ（配列）</th>
+                <td><span class="cant">一部できる</span>
+                  <small>ローマ字の綴りを変えたり、かな入力に切り替えたりはできる。ただし同時押しの新配列は
+                    IMEの外（専用ハードや常駐ツール）が要る</small></td>
+                <td><span class="can">データ一枚</span>
+                  <small>JSONの差し替えだけ（<a href="/naginata/">薙刀式</a>・<a href="/flick/">フリック</a>）</small></td>
+              </tr>
+              <tr>
+                <th scope="row">変換エンジン</th>
+                <td><span class="cant">環境による</span>
+                  <small>Windows・Mac・LinuxではIMEごと入れ替えられる。ChromeOS（Chromebook）はアプリ形式のIMEを
+                    入れられず拡張機能の範囲まで、しかも学校や職場の貸与機ではそれも管理者次第。
+                    iPad / iPhone に外付けキーボードを繋いだ場合は標準のもの一択</small></td>
+                <td><span class="can">コードで</span>
+                  <small>WebAssemblyを差し替える。いまは Mozc</small></td>
+              </tr>
+              <tr>
+                <th scope="row">候補の見た目・並べ方</th>
+                <td><span class="cant">ほぼできない</span>
+                  <small>フォントや配色を選べるIMEはある。ただしアプリ側からは触れず、
+                    並べ方（何段で、どういう順に出すか）は変えられない</small></td>
+                <td><span class="can">コードで</span>
+                  <small>候補窓もただのDOM。縦書きなら横並び、フリックならキーボードの上、と作り分けられる</small></td>
+              </tr>
+              <tr>
+                <th scope="row">表示・レイアウト</th>
+                <td><span class="cant">アプリ次第</span>
+                  <small>縦書きに対応したアプリなら縦書きで書ける。macOSの標準IMEは、そうしたアプリでは
+                    変換候補の窓も縦組で出す。ただしブラウザの中の縦書きに対しては、横書きの候補窓が出てくる</small></td>
+                <td><span class="can">コードで</span>
+                  <small>CSSで組む。候補窓も本文の向きについてくる（<a href="/tategaki/">縦書き</a>）</small></td>
+              </tr>
+              <tr>
+                <th scope="row">学習・ユーザー辞書</th>
+                <td><span class="cant">できる（分けられない）</span>
+                  <small>単語登録も学習もできる。ただし記憶はひとつで、文書やジャンルごとに分ける手段はない
+                    （汚したくなければ学習を止めるしかない）</small></td>
+                <td><span class="can">コードで</span>
+                  <small>辞書も学習もこのページの持ち物。将来は文書やジャンルごとに分けられる</small></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="note">OSのIMEを不当に低く描かないように、できることは「できる」と書いています。
+          そのうえで残る「できない」が、ここで実験している場所です。
+          各ページのソースは <a href="https://github.com/msonrm/hechima" rel="noopener">GitHub</a> にあります。</p>
       </section>
     </main>
 
