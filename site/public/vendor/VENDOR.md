@@ -5,7 +5,7 @@
 
 | ディレクトリ | 版 | 取得元 |
 |---|---|---|
-| `hechima/`（hechima.js / hechima-worker.js / hechima.d.ts） | **v0.13.0** | labo Release `hechima-v0.13.0`（`insertKana` = かな直接注入。フリック入力の配線先。additive） |
+| `hechima/`（hechima.js / hechima-worker.js / hechima.d.ts） | **v0.13.1** | labo Release `hechima-v0.13.1`（v0.13.0 = `insertKana` = かな直接注入・フリック入力の配線先。**v0.13.1 = BS で素通しローマ字まで戻ったときの pending 復帰** — `knji` → 「kんじ」の `k` まで BS で戻して `a` を打つと「kあ」になっていたのを実 IME と同じ「か」に。公開 API 変更なし = 差し替えは hechima 単体で完結） |
 | `flick/`（flick-engine.js / flick_standard.json） | **v1.1.1** | labo main `98cd721` の `web/public/flick/` + `web/public/flickmaps/`（v1.1.0 = 配置改訂・戻す/カーソルフリック・composingLabel・ペタル抑制、v1.1.1 = root touchend preventDefault のズーム対策。hechima v0.13.0+ とセット） |
 | `gamepad/`（gamepad-engine.js） | **v1.7.0** | labo main の `web/public/gamepad/`（ゲームパッド日本語入力フロント。日本語のみ。GamepadOp = flick と同じ kana/key 二語彙。v1.1.0 左スティック nav、v1.2.0 文節伸縮 RT+←→ / 確定アンドゥ Start、v1.3.0 未入力時 L🕹↓=カーソル下 + 句読点連打窓 600ms、v1.3.1 ビジュアライザ調整、v1.4.0 RT 連打サイクル ん→を→んを + 拗音後の濁点 きゃ→ぎゃ、v1.5.0 非合成時 RT+LS 上下左右=範囲選択（Shift+矢印）、v1.6.0 非合成の LS カーソル移動/範囲選択にキーリピート（400ms→85ms）、**v1.7.0 RT+Start=やり直し（Ctrl+y を emit）**。hechima v0.13.0+（insertKana）必須。範囲削除=BS で選択削除・再変換=Start・**文書 redo=Ctrl+y** は hechima ホスト側 app.ts で対応） |
 | `keymap-engine/`（keymap-engine.js） | **v1.4.0** | labo main `84199d5` の `web/public/engine/`（英数モードの chord 解釈 = H+J 日本語復帰 / space+X 大文字 + mutual 再入バグ修正） |
