@@ -473,18 +473,38 @@ body.theme-letterpress {
        iPad Safari で編集ごとにフィルタ計算が走って重い。→ 文字の描画には触らず、
        滲みと紙の質感で寄せる方針にした */
   --press-shadow: 0 0 0.35px currentColor, 0.02em 0.025em 0.015em rgba(58, 47, 40, 0.28);
+  /* 紙の漉き目。feTurbulence を背景に一度焼くだけなので静的 = 文字にフィルタを掛けるより軽い。
+     data URI なので外部依存ゼロ（憲法の自己完結を守る）。
+     ★「濃さ」より「粒が粒に見えること」が先。薄い版で見えなかったのは opacity のせいだけではなく、
+       ノイズが平均化されてグレーの霞になっていたから。効かせるには 3 つ揃える必要がある:
+         1. baseFrequency を下げて粒を大きく（0.9 → 0.32。細かいと Retina でサブピクセルに潰れる）
+         2. numOctaves を減らす（3 → 2。高周波を重ねるほど均されて「ただの色ムラ」になる）
+         3. feFuncA でアルファのコントラストを立てる（これが無いと濃くしても紙が濁るだけ）
+       stitchTiles は 140px タイルの継ぎ目を消すため。
+     濃さの調整はいちばん最後の opacity 一箇所で行う（0.10 = ほぼ無地 / 0.25 以上 = うるさい）。
+     0.2 は実機で決めた値: 粒は粒として見えるが、打鍵中に文字の邪魔をしない上限あたり */
+  --paper-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='2.6' intercept='-0.55'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.2'/%3E%3C/svg%3E");
 }
 body.theme-letterpress .editor,
 body.theme-letterpress .candidates {
   text-shadow: var(--press-shadow);
   letter-spacing: 0.015em; /* 活版は字間が均一でない。ほんの少し空ける */
 }
-/* 紙の漉き目。feTurbulence を背景に一度焼くだけなので静的 = 文字にフィルタを掛けるより軽い。
-   data URI なので外部依存ゼロ（憲法の自己完結を守る） */
-body.theme-letterpress .editor {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+/* 紙はエディタ枠の中で完結させる。ページ地（body）は無地のまま、枠の内側だけに漉き目を敷いて
+   「原稿が一枚の紙として置いてある」形にする。
+   ★敷く先が .editor ではなく .editor-wrap なのは、本文とステータス行が親子ではなく兄弟だから
+     （.editor に敷くと statusline だけ紙から外れる。旧 background-image: inherit は
+      親 = .editor-wrap の none を継承していて、そもそも効いていなかった） */
+body.theme-letterpress .editor-wrap {
+  background-color: var(--bg);
+  background-image: var(--paper-noise);
+  border-radius: 10px; /* .editor と .statusline の角丸に紙の縁を合わせる */
 }
-body.theme-letterpress .statusline { background-image: inherit; }
+/* 候補ウィンドウも同じ紙に載せる = このページの主題そのもの。
+   色は本文と同じ var(--bg) のまま（ここで紙の色を変えると「同じ服を着る」が崩れる） */
+body.theme-letterpress .candidates {
+  background-image: var(--paper-noise);
+}
 
 /* ターミナル: テキスト VRAM の時代は字面が一致していた（FEP 時代の既視感を体験にする） */
 body.theme-terminal {
