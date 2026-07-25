@@ -151,7 +151,7 @@ fep.setEngine(null);                                // null で内蔵ローマ�
 
 層をまたいで最低版の要求があります。**セットで差し替えてください**。
 
-- `hechima` v0.13.0 → **KeymapEngine >= 1.4.0** 必須
+- `hechima` v0.13.1 → **KeymapEngine >= 1.4.0** 必須
 - `flick-engine` / `gamepad-engine` → **hechima >= 0.13.0**（`insertKana`）必須
 - `hechima-worker` → `hechima-wasm` v0.7.1 とセット推奨（学習は v0.4.0+。旧 wasm では
   文節伸縮・学習が機能検出で段階的に無効化される）
