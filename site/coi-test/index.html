@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 検証ページ: TOP からリンクせず、直リンク限定 -->
+    <meta name="robots" content="noindex" />
+    <title>環境診断（COOP/COEP なしで動くこと）— へちま言語ラボ</title>
+    <meta name="description" content="crossOriginIsolated / SharedArrayBuffer の状態と、変換エンジンの準備時間を確認する診断ページ。" />
+    <script>
+      /* 他ページと同じ: サブリソース読込失敗時の自動復旧（1 回だけリロード）。
+         このページは COI ではないので Safari のキャッシュ誤ブロック事象は起きないが、
+         404 等の切り分けのために診断は同じものを載せておく */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/hechima/hechima.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; 環境診断</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>環境診断（COOP/COEP なしで動くこと）</h2>
+        <p>以前この変換エンジン（Mozc の WebAssembly ビルド）はスレッドを使っていて、
+          <code>SharedArrayBuffer</code> のために <code>COOP</code> / <code>COEP</code> というヘッダを
+          サーバから配る必要がありました。ホスト側の権限が要るので、ヘッダを設定できない場所には
+          置けないという制約でした。</p>
+        <p><b>2026 年 7 月に、スレッドを使わないビルドへ移行してこの制約をなくしました。</b>
+          いまラボ全体がヘッダなしで動いています。このページは、その状態を実機で確認するための
+          診断と、ほかのサイトへ組み込むときの参照用に残してあります。</p>
+      </section>
+
+      <section class="layers">
+        <h3 class="diag-title">環境の診断</h3>
+        <dl class="diag">
+          <dt>crossOriginIsolated</dt>
+          <dd id="d-coi">測定中…</dd>
+          <dt>SharedArrayBuffer</dt>
+          <dd id="d-sab">測定中…</dd>
+          <dt>使用中の wasm</dt>
+          <dd id="d-wasm">—</dd>
+          <dt>準備完了までの時間</dt>
+          <dd id="d-init">計測中…</dd>
+        </dl>
+        <p class="src"><b>期待値</b>: crossOriginIsolated が <code>false</code>（＝ COOP/COEP が無い状態）で、
+          それでも下のエディタで変換ができる。<code>SharedArrayBuffer</code> の有無はブラウザや遷移の
+          タイミングで変わります（Safari は COI のページと往復すると定義が残ることがあります）が、
+          いまの変換エンジンはこれを使わないので影響はありません。</p>
+      </section>
+
+      <div id="app"></div>
+
+      <section class="hints">
+        <p>OS 側の日本語 IME はオフ（英数直接入力）にして、ふつうにローマ字で打鍵してください。
+          学習・ユーザー辞書・テキストはラボ内の各実験ページと共有です（ここで打った内容もほかのページに出ます）。</p>
+        <ul>
+          <li><b>Space</b> = 変換 / 次候補、<b>Enter</b> = 確定、<b>Esc</b> = 戻す、<b>数字 1-9</b> = 直接選択</li>
+          <li><b>←→</b> = 文節移動、<b>Shift+←→</b> = 文節伸縮、<b>Ctrl+BS</b> = 確定取り消し（学習も巻き戻し）</li>
+          <li>確定済みテキストを<b>選択して 変換キー / Ctrl+/</b> = 再変換</li>
+          <li>見るべきところ: <b>変換の精度と速さが、ほかのページと変わらないこと</b>。
+            起動（辞書ロード後の初期化）はむしろ速くなっているはずですが、辞書 18.9MB の
+            ダウンロードが支配的なので体感差はほとんどありません</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/coi-test.ts"></script>
+  </body>
+</html>

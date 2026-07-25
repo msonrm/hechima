@@ -1,10 +1,11 @@
 hechima-wasm build info
-built-at: 2026-07-18T04:40:38Z
-labo-commit: 6c3bc802f16bc7e22c8c15ef3720472c4d808a62
-fcitx5-mozc: fd530f624916726c461fe71fca62ac0edc2ef3e8
+built-at: 2026-07-24T23:56:11Z
+labo-commit: c0e13b9605d737cbfea97b292118a2eb95c84e2b
+fcitx5-mozc: 522a5f22673e03e32bcb290ba729bab42fbc5c18
 submodules:
    255c84dadd029fd8ad25c5efb5933e47beaa00c7 abseil-cpp (255c84d)
-   416af15bc4045567e7538c4692ba554ea74f7afe mozc (heads/master)
+   3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732 mozc (heads/master)
    4b0c3aacf0657fbf38253b38918d3358dd4319ec protobuf (4b0c3aa)
 emsdk: 3.1.69
-build-cache: hit
+single-thread: true (-pthread なし = COOP/COEP 不要)
+build-cache: miss

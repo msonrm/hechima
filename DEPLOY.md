@@ -11,7 +11,7 @@ vendored 成果物を差し替える・実験ページを足す、ための運�
 ```bash
 cd site
 npm ci
-npm run dev      # COOP/COEP ヘッダ付き dev サーバー（wasm の SharedArrayBuffer に必須）
+npm run dev      # dev サーバー（COOP/COEP は 2026-07-25 に撤去 = 単スレッド wasm へ移行）
 npm run build    # tsc --noEmit + vite build → site/dist/
 ```
 
@@ -31,8 +31,11 @@ npx wrangler deploy                   # site/dist を本番へ。数十秒で反
 - ブランチは問わない（`wrangler deploy` は作業ツリーの `site/dist` をそのまま上げる）。
   未マージの feature ブランチからでもデプロイできるが、後で main から再デプロイすると
   差分が消えるので、恒久化には main へマージ & push すること。
-- `site/public/_headers`（→ `site/dist/_headers`）が COOP/COEP/CORP を全ページに付与
-  （hechima-wasm は -pthread = SharedArrayBuffer 必須）。小型アセットは `no-store`（後述）。
+- `site/public/_headers`（→ `site/dist/_headers`）は **CORP のみ**を全ページに付与する。
+  **COOP/COEP は 2026-07-25 に撤去**（hechima-wasm を単スレッドビルドに切り替えて
+  SharedArrayBuffer 依存が消えたため）。同時に小型アセットの `no-store` も撤去し、
+  通常のキャッシュ（`max-age=0, must-revalidate` = ETag 再検証）に戻した。
+  戻す必要が出るのはマルチスレッド wasm に回帰する場合だけ。
 - 1 ファイル 25MiB 制限: 辞書 `mozc.data` は 18.9MB で現状クリア。
 - （任意）Cloudflare ダッシュボードの Workers Builds（Git 連携）にビルド
   `cd site && npm ci && npm run build` / デプロイ `npx wrangler deploy` を設定すると push=デプロイ。
@@ -47,13 +50,14 @@ npx wrangler deploy                   # site/dist を本番へ。数十秒で反
    （例 `build:gamepad` / `build:flick` / `build:engine` / `build:hechima`）
 2. **コピー**: `cp web/public/<engine>/<file>.js <hechima>/site/public/vendor/<engine>/<file>.js`
 3. **`site/public/vendor/VENDOR.md`** の版数・注記を更新（pin 記録。必須）
-4. **新規エンジンを足したとき**は `site/public/_headers` に
-   `/vendor/<engine>/*` → `Cache-Control: no-store` を 1 ブロック追加
-   （Safari の COI × キャッシュ再利用ブロック対策。既存エンジンの版上げでは不要）
+4. ~~新規エンジンに `no-store` を追加~~ → **不要になった**（2026-07-25。COOP/COEP 撤去で
+   Safari の COI × キャッシュ再利用ブロック事象の前提が消えたため、`no-store` 戦略ごと撤去）
 5. `cd site && npm run build` → リポジトリルートで `npx wrangler deploy`
 6. **検証**: `curl -s https://luffa-lang-labo.dev/vendor/<engine>/<file>.js | grep <版数>` /
    `curl -sD- https://luffa-lang-labo.dev/<page>/ -o /dev/null | grep -i "cross-origin\|cache-control"`。
-   vendor は `no-store` なので**リロードだけで即反映**（キャッシュバスター不要）。
+   キャッシュは `max-age=0, must-revalidate`（ETag 再検証）なので、内容が変われば必ず新しいものが
+   届く。ただし**デプロイ直後は CDN エッジが一部ファイルの古い応答を返す瞬間があるので、
+   確認は `?cb=<適当な値>` を付けて行う**こと。
 
 ## 実験ページを足す
 
