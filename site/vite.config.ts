@@ -1,9 +1,9 @@
 import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from "vite";
 import { fileURLToPath } from "node:url";
 
-// COOP/COEP: pthread 版 hechima-wasm（SharedArrayBuffer）に必須。
-// 本番は public/_headers（Cloudflare Workers 静的アセット）が付与する。
-// dev / preview では同じ状態をここで再現する。
+// COOP/COEP: hechima-wasm が単スレッドビルドになった（2026-07-25）ので本来もう不要だが、
+// 段階を踏むため当面は本番（public/_headers）と揃えて付けておく。
+// dev / preview で本番と同じ状態を再現するためのもの。
 //
 // ただし /coi-test/* だけは意図的に COOP/COEP を付けない = 単スレッド wasm の検証ページ。
 // _headers 側の `!`（ヘッダ削除）と等価にしておかないとローカルで検証にならないので、

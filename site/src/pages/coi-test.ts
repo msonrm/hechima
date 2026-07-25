@@ -1,11 +1,14 @@
 // 単スレッド wasm（-pthread なし）の検証ページ（隠しページ: TOP リンクなし・noindex）。
 // public/_headers と vite.config.ts の両方で /coi-test/* だけ COOP/COEP を外してある。
 // ここで変換が動けば「COOP/COEP なしで hechima が成立する」= COI 非依存化の実ブラウザ実証。
-// 本番の pthread 版（/vendor/hechima-wasm/）はそのまま残し、単スレッド版は
-// /vendor/hechima-wasm-st/ に併存させている（辞書 mozc.data は共有）。
+//
+// 2026-07-25 以降、vendor/hechima-wasm/ 自体が単スレッド版なので wasm の指定は不要
+// （= このページは他ページとまったく同じ成果物を、COOP/COEP なしの条件で動かす）。
+// COOP/COEP はまだ他ページに掛かっている（切り替えの段階 3 で外す）ので、
+// 「ヘッダなしでも動く」ことを確かめ続ける場所としてこのページを残す。
 import { initLabPage } from "../app";
 
-const WASM_JS = "/vendor/hechima-wasm-st/hechima-wasm.js";
+const WASM_JS = "/vendor/hechima-wasm/hechima-wasm.js";
 const t0 = performance.now();
 
 const put = (id: string, text: string): void => {
@@ -22,11 +25,10 @@ put(
     ? "undefined（この環境では使えない）"
     : "定義あり（ただし COI でないので共有はできない）",
 );
-put("d-wasm", `${WASM_JS}（単スレッド版）`);
+put("d-wasm", `${WASM_JS}（単スレッド版 = 全ページ共通）`);
 
 initLabPage({
   flick: "off",
-  wasmJs: WASM_JS,
   expectNoCoi: true,
 });
 

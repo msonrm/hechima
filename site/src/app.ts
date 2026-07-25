@@ -95,8 +95,9 @@ export interface LabPageConfig {
    */
   verticalCandOrder?: "rl" | "lr";
   /**
-   * wasm グルーコードの差し替え（既定 `/vendor/hechima-wasm/hechima-wasm.js` = pthread 版）。
-   * 単スレッド版（COOP/COEP 不要）の検証ページ用。辞書 `dataUrl` は同じものを共有できる
+   * wasm グルーコードの差し替え（既定 `/vendor/hechima-wasm/hechima-wasm.js`）。
+   * 2026-07-25 以降その既定は**単スレッド版**（-pthread なし = SharedArrayBuffer 不要）。
+   * 版を並べて比べたいときだけ指定する
    */
   wasmJs?: string;
   /** 辞書の URL（既定 `/vendor/hechima-wasm/mozc.data`） */

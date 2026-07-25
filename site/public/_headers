@@ -1,5 +1,8 @@
-# hechima-wasm は -pthread ビルド = SharedArrayBuffer 必須。
-# サイト全体を cross-origin isolated にする（外部リソースは埋め込まない = 自己完結）。
+# hechima-wasm は 2026-07-25 に単スレッドビルド（-pthread なし）へ移行したので
+# SharedArrayBuffer は不要 = COOP/COEP は本来もう要らない。ただし段階を踏むため当面は残す
+# （実運用で単スレッド版の様子を見る安全段。COI 下でも単スレッド版は問題なく動く）。
+# **外すときは同時に下の no-store もやめられる**（キャッシュ汚染事象の前提が消えるため）。
+# ヘッダなしで動くことの確認は /coi-test/（下記で COOP/COEP を外したページ）で継続中。
 # CORP: 仕様上は same-origin 応答に不要だが、iPad Safari がプロセススワップ
 # （URL 欄からの同一サイト再訪等）後にキャッシュ済み応答を CORP 無しとして誤ブロックし、
 # CSS/worker が全滅する実機事象（2026-07-21）への対処として全応答に明示する。
