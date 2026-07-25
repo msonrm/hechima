@@ -22,3 +22,14 @@
   Cache-Control: no-store
 /vendor/gamepad/*
   Cache-Control: no-store
+
+# 単スレッド wasm（-pthread なし）の検証ページ。
+# COOP/COEP を意図的に「外して」crossOriginIsolated = false の状態を作り、
+# それでも変換が動く（= SharedArrayBuffer に依存していない）ことを実ブラウザで確かめる。
+# `!` プレフィックスは上位ルール（/*）で付いたヘッダの削除。
+# CORP は COI の要件ではないので残す（同一オリジン応答には無害）。
+# 本番の pthread 版はこれまでどおり /* の COOP/COEP 下で動き続ける = 併存
+/coi-test/*
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy
+  Cache-Control: no-store

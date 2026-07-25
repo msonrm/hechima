@@ -104,6 +104,18 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
 }
 .layers .src { color: var(--muted); font-size: 0.8rem; }
 
+/* 環境診断（/coi-test/ の検証ページ。iPad でコンソールが見えないのでページに出す） */
+.diag-title { margin: 0 0 0.4rem; font-size: 0.9rem; }
+.diag {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.2rem 0.8rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+}
+.diag dt { color: var(--muted); font-family: ui-monospace, monospace; font-size: 0.8rem; }
+.diag dd { margin: 0; }
+
 /* ---- 三値の対比表（トップ）。横長なのでスマホでは表だけ横スクロールさせる ---- */
 .compare { margin: 2rem 0 0; font-size: 0.95rem; }
 .compare h2 { margin: 0 0 0.3rem; font-size: 1.15rem; }

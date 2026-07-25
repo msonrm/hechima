@@ -94,6 +94,18 @@ export interface LabPageConfig {
    *   "lr" = 左から右（番号 1-9 付き = 数字キーの物理的な並びと一致）
    */
   verticalCandOrder?: "rl" | "lr";
+  /**
+   * wasm グルーコードの差し替え（既定 `/vendor/hechima-wasm/hechima-wasm.js` = pthread 版）。
+   * 単スレッド版（COOP/COEP 不要）の検証ページ用。辞書 `dataUrl` は同じものを共有できる
+   */
+  wasmJs?: string;
+  /** 辞書の URL（既定 `/vendor/hechima-wasm/mozc.data`） */
+  dataUrl?: string;
+  /**
+   * true = COI 無効を「異常」ではなく「意図した状態」として表示する。
+   * 単スレッド wasm の検証ページ（COOP/COEP を意図的に外したパス）用
+   */
+  expectNoCoi?: boolean;
 }
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -171,8 +183,11 @@ export function initLabPage(config: LabPageConfig = {}): void {
   let storageLabel = "";
   let diagLabel = ""; // 実機調査用: リソース読込失敗の常設表示（後続の status 更新で消えないように）
   const refreshStatus = () => {
-    const coi = typeof crossOriginIsolated !== "undefined" && !crossOriginIsolated
-      ? "⚠ COI 無効（COOP/COEP ヘッダ欠落）" : "";
+    const noCoi = typeof crossOriginIsolated !== "undefined" && !crossOriginIsolated;
+    // 単スレッド版の検証ページでは COI 無効が期待値なので警告にしない
+    const coi = !noCoi ? "" : config.expectNoCoi
+      ? "COI 無効（このページは意図的に COOP/COEP なし）"
+      : "⚠ COI 無効（COOP/COEP ヘッダ欠落）";
     statusEl.textContent = [coi, engineStatus, storageLabel, diagLabel].filter(Boolean).join(" ・ ");
   };
   const setStatus = (text: string) => { engineStatus = text; refreshStatus(); };
@@ -221,7 +236,10 @@ export function initLabPage(config: LabPageConfig = {}): void {
       setStatus(total > 0 ? `辞書を取得中… ${mb(loaded)} / ${mb(total)} MB` : `辞書を取得中… ${mb(loaded)} MB`),
   });
   conn
-    .init({ wasmJs: "/vendor/hechima-wasm/hechima-wasm.js", dataUrl: "/vendor/hechima-wasm/mozc.data" })
+    .init({
+      wasmJs: config.wasmJs ?? "/vendor/hechima-wasm/hechima-wasm.js",
+      dataUrl: config.dataUrl ?? "/vendor/hechima-wasm/mozc.data",
+    })
     .then((info) => {
       const learn = info.features.learn
         ? info.features.persist ? " / 学習オン" : " / 学習オン（この環境では保存されません）"

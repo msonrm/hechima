@@ -1,18 +1,33 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from "vite";
 import { fileURLToPath } from "node:url";
 
-// COOP/COEP: hechima-wasm（-pthread = SharedArrayBuffer）に必須。
+// COOP/COEP: pthread 版 hechima-wasm（SharedArrayBuffer）に必須。
 // 本番は public/_headers（Cloudflare Workers 静的アセット）が付与する。
-// dev / preview はここで同じヘッダを付ける。
-const coopCoep = {
-  "Cross-Origin-Opener-Policy": "same-origin",
-  "Cross-Origin-Embedder-Policy": "require-corp",
-  "Cross-Origin-Resource-Policy": "same-origin",
+// dev / preview では同じ状態をここで再現する。
+//
+// ただし /coi-test/* だけは意図的に COOP/COEP を付けない = 単スレッド wasm の検証ページ。
+// _headers 側の `!`（ヘッダ削除）と等価にしておかないとローカルで検証にならないので、
+// server.headers（全パス一律）ではなく middleware で条件分岐する。
+const applyCoiHeaders = (server: ViteDevServer | PreviewServer): void => {
+  server.middlewares.use((req, res, next) => {
+    if (!req.url?.startsWith("/coi-test")) {
+      res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+      res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+    }
+    // CORP は COI の要件ではない（iPad Safari のキャッシュ誤ブロック対策）ので全パスに付ける
+    res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+    next();
+  });
+};
+
+const coiHeaders: Plugin = {
+  name: "lll-coi-headers",
+  configureServer: applyCoiHeaders,
+  configurePreviewServer: applyCoiHeaders,
 };
 
 export default defineConfig({
-  server: { headers: coopCoep },
-  preview: { headers: coopCoep },
+  plugins: [coiHeaders],
   build: {
     // vendor の wasm/辞書はハッシュ改名せずそのまま配る（public/ 配下なので対象外だが明示）
     assetsInlineLimit: 0,
@@ -25,6 +40,7 @@ export default defineConfig({
         flick: fileURLToPath(new URL("./flick/index.html", import.meta.url)),
         tategaki: fileURLToPath(new URL("./tategaki/index.html", import.meta.url)),
         gamepad: fileURLToPath(new URL("./gamepad/index.html", import.meta.url)),
+        coiTest: fileURLToPath(new URL("./coi-test/index.html", import.meta.url)),
       },
     },
   },
