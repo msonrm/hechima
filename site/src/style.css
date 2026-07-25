@@ -9,6 +9,11 @@
   --accent: #2d7a4f;
   --focus-bg: #d9ece1;
   --line: #d8d5cd;
+  /* テーマ連動デモ（/theme/）用。既定値は従来の見た目と同じなので他ページに影響しない */
+  --font-body: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --editor-font: var(--font-body);
+  --editor-size: 1.15rem;
+  --cand-size: 1.05rem;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -26,7 +31,7 @@ body {
   margin: 0 auto;
   padding: 1.5rem 1rem 3rem;
   max-width: 46rem;
-  font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  font-family: var(--font-body);
   color: var(--fg);
   background: var(--bg);
   line-height: 1.7;
@@ -165,11 +170,12 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
   padding: 1rem;
   border: 1px solid var(--line);
   border-radius: 10px 10px 0 0;
-  font-size: 1.15rem;
+  font-size: var(--editor-size);
   white-space: pre-wrap;
   word-break: break-word;
   cursor: text;
   caret-color: var(--accent);
+  font-family: var(--editor-font);
   outline: none;
 }
 .editor:focus { border-color: var(--accent); }
@@ -209,7 +215,8 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
   border: 0.5px solid var(--line);
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  font-size: 1.05rem;
+  font-size: var(--cand-size);
+  font-family: var(--editor-font);
   user-select: none;
 }
 .cand-row {
@@ -417,3 +424,92 @@ body.flick-on main { padding-bottom: min(82vw, 400px); }
 .fcand.selected { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 .fcand-addl { color: var(--muted); border-style: dashed; }
 .fcand-addl.selected { color: var(--bg); border-style: solid; }
+
+/* ---- テーマ連動デモ（/theme/）----
+   エディタ本文と変換候補ポップアップは同じ CSS 変数（--fg/--bg/--accent/--line/
+   --editor-font/--editor-size/--cand-size）を見ているので、body のクラスを差し替えるだけで
+   両方が同時に着替える。OS の IME では候補窓が別プロセスなので原理的に起こせない現象。
+   色は実機で調整可（変数を差し替えるだけ）。フォントは全部システムフォント = 外部依存ゼロ */
+
+/* ネオン: ダークモード調和の極端な例。「OS IME だと候補窓だけ白く光る」の対比が最も鮮明 */
+body.theme-neon {
+  --fg: #d8f4ff;
+  --bg: #0a0e17;
+  --muted: #6f8ba0;
+  --accent: #00e5ff;
+  --focus-bg: #123a4a;
+  --line: #1d3a4d;
+  --editor-font: ui-monospace, "SFMono-Regular", Menlo, "Hiragino Sans", monospace;
+}
+/* 発光の脈動。ゆっくり（打鍵の邪魔をしない速さ）にして、
+   動きを嫌う設定（prefers-reduced-motion）では止める */
+@keyframes neon-pulse-frame {
+  0%, 100% { box-shadow: 0 0 14px rgba(0, 229, 255, 0.22); border-color: rgba(0, 229, 255, 0.45); }
+  50%      { box-shadow: 0 0 30px rgba(0, 229, 255, 0.5);  border-color: rgba(0, 229, 255, 0.9); }
+}
+body.theme-neon .candidates {
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.28);
+  animation: neon-pulse-frame 2.6s ease-in-out infinite;
+}
+/* 選択行は光らせるが動かさない（脈動を重ねると打鍵中にうるさい） */
+body.theme-neon .cand-row.selected { box-shadow: inset 0 0 14px rgba(0, 229, 255, 0.55); }
+body.theme-neon .editor:focus { box-shadow: 0 0 16px rgba(0, 229, 255, 0.16); }
+@media (prefers-reduced-motion: reduce) {
+  body.theme-neon .candidates { animation: none; }
+}
+
+/* 活版印刷: 明朝で候補が並ぶ = 字面の判断（云う/言う/いう）がいちばん効く */
+body.theme-letterpress {
+  --fg: #3a2f28;
+  --bg: #efe4cc;
+  --muted: #8a7860;
+  --accent: #8b5a2b;
+  --focus-bg: #ddcba6;
+  --line: #cbb994;
+  --editor-font: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Noto Serif JP", serif;
+  /* 活版らしさ: 文字をわずかに太らせて影を落とす（印圧でインクが滲む感じ）。
+     ★「かすれ」= インクの不均一を文字ごとに出すには文字単位の DOM 分割か SVG フィルタが要り、
+       前者はプレーンテキスト憲法と編集（キャレット/選択/未確定下線）を壊し、後者は
+       iPad Safari で編集ごとにフィルタ計算が走って重い。→ 文字の描画には触らず、
+       滲みと紙の質感で寄せる方針にした */
+  --press-shadow: 0 0 0.35px currentColor, 0.02em 0.025em 0.015em rgba(58, 47, 40, 0.28);
+}
+body.theme-letterpress .editor,
+body.theme-letterpress .candidates {
+  text-shadow: var(--press-shadow);
+  letter-spacing: 0.015em; /* 活版は字間が均一でない。ほんの少し空ける */
+}
+/* 紙の漉き目。feTurbulence を背景に一度焼くだけなので静的 = 文字にフィルタを掛けるより軽い。
+   data URI なので外部依存ゼロ（憲法の自己完結を守る） */
+body.theme-letterpress .editor {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+}
+body.theme-letterpress .statusline { background-image: inherit; }
+
+/* ターミナル: テキスト VRAM の時代は字面が一致していた（FEP 時代の既視感を体験にする） */
+body.theme-terminal {
+  --fg: #33ff33;
+  --bg: #000000;
+  --muted: #1f8a1f;
+  --accent: #33ff33;
+  --focus-bg: #0d3b0d;
+  --line: #1b5e20;
+  --editor-font: ui-monospace, "SFMono-Regular", Menlo, "Hiragino Sans", monospace;
+}
+body.theme-terminal .cand-row.selected { background: #33ff33; color: #000; }
+body.theme-terminal .cand-num { color: #1f8a1f; }
+
+/* テーマ切替 UI（このページ限定） */
+.theme-bar { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center; margin: 0 0 0.8rem; font-size: 0.9rem; }
+.theme-bar .swatches { display: flex; gap: 0.4rem; }
+.theme-bar button.sw {
+  font: inherit;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+.theme-bar button.sw[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+.theme-bar input[type="range"] { accent-color: var(--accent); }
