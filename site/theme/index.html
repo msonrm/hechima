@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 検証中の隠しページ: TOP からリンクせず、直リンク限定（公開時に外す） -->
+    <meta name="robots" content="noindex" />
+    <title>テーマ連動（エディタとIMEが同じ服を着る）— へちま言語ラボ</title>
+    <meta name="description" content="テーマを切り替えると、本文と一緒に変換候補ウィンドウも着替えます。候補がページの中にあるからできること。" />
+    <script>
+      /* 他ページと同じ: サブリソース読込失敗時の自動復旧（1 回だけリロード） */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/hechima/hechima.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; テーマ連動</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>テーマ連動 — エディタとIMEが同じ服を着る</h2>
+        <p>OSのIMEでは、変換候補のウィンドウを描いているのはOSです。だからアプリのフォントも配色も知りません。
+          ダークモードのアプリで日本語を打つと<b>候補ウィンドウだけが白く光る</b>のは、そのためです。</p>
+        <p>このページの候補ウィンドウは、ページの中にあります。だから、テーマを切り替えると
+          <b>本文と一緒に候補も着替えます</b>。文字を大きくすれば候補も大きくなります。
+          確定する前に「その語が原稿の中でどう見えるか」がわかる、ということでもあります。</p>
+      </section>
+
+      <section class="layers">
+        <div class="stack" role="img" aria-label="入力 から キーマップ、変換、表示 へ。表示だけ差し替え">
+          <span class="blk">入力</span><span class="arw">→</span>
+          <span class="blk">キーマップ</span><span class="arw">→</span>
+          <span class="blk">変換</span><span class="arw">→</span>
+          <span class="blk swap">表示</span>
+        </div>
+        <p><b>差し替えた層：表示だけ</b>（候補ウィンドウを含む） ／
+          <span class="kept">据え置き：入力・キーマップ・変換</span></p>
+        <p>やっていることは <b>CSS 変数の差し替えだけ</b>です。本文と候補ウィンドウが同じ変数
+          （文字色・背景・アクセント・フォント・サイズ）を見ているので、片方だけ変わることが起きません。
+          <b>変換エンジンも配列も、ほかのページとまったく同じものが動いています。</b></p>
+      </section>
+
+      <section class="theme-bar">
+        <span>テーマ:</span>
+        <span class="swatches" id="themes"></span>
+        <label>文字の大きさ
+          <input type="range" id="size" min="14" max="34" step="1" value="18" />
+          <span id="sizeLabel" class="status">18px</span>
+        </label>
+      </section>
+
+      <div id="app"></div>
+
+      <section class="hints">
+        <p>OS側の日本語IMEはオフ（英数直接入力）にして、ローマ字で打鍵してください。
+          テーマと文字サイズはこの端末に記憶されます。文書・学習・ユーザー辞書はラボ内の各実験ページと共有です。</p>
+        <ul>
+          <li><b>Space</b> = 変換 / 次候補、<b>数字 1-9</b> = 直接選択、<b>Enter</b> = 確定、<b>Esc</b> = 戻す</li>
+          <li>見どころ: <b>候補ウィンドウの文字が本文と同じ書体・同じ大きさで並ぶこと</b>。
+            とくに<b>活版印刷</b>（明朝）だと、確定前に字面（云う / 言う / いう）を見分けられます</li>
+          <li><b>ターミナル</b>は懐かしさの実験です。DOSのFEPはテキスト画面に直接描いていたので、
+            そもそも本文と候補で書体が違いようがありませんでした。OSがIMEを持ったときに、その一致が失われました</li>
+          <li>将来の統合執筆環境では、これがテーマ機能の土台になります（原稿用紙・セピア・ダークなど）</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/theme.ts"></script>
+  </body>
+</html>

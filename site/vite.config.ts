@@ -22,6 +22,7 @@ export default defineConfig({
         tategaki: fileURLToPath(new URL("./tategaki/index.html", import.meta.url)),
         gamepad: fileURLToPath(new URL("./gamepad/index.html", import.meta.url)),
         coiTest: fileURLToPath(new URL("./coi-test/index.html", import.meta.url)),
+        theme: fileURLToPath(new URL("./theme/index.html", import.meta.url)),
       },
     },
   },
