@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.13.0";
+	const HECHIMA_VERSION = "0.13.1";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -334,6 +334,19 @@
 		const resetAddl = () => {
 			addlShown = 0;
 			addlSel = null;
+		};
+		const repend = () => {
+			if (eiji || pend) return;
+			const run = /[a-z]+$/.exec(kana)?.[0];
+			if (!run) return;
+			for (let i = 0; i < run.length; i++) {
+				const tail = run.slice(i);
+				if (PREFIXES.has(tail)) {
+					kana = kana.slice(0, kana.length - tail.length);
+					pend = tail;
+					return;
+				}
+			}
 		};
 		const clear = () => {
 			kana = "";
@@ -733,8 +746,11 @@
 			if (k === "Backspace") {
 				if (!composing()) return false;
 				if (segs) backToYomi();
-				else if (pend) pend = pend.slice(0, -1);
-				else kana = Array.from(kana).slice(0, -1).join("");
+				else {
+					if (pend) pend = pend.slice(0, -1);
+					else kana = Array.from(kana).slice(0, -1).join("");
+					repend();
+				}
 				if (!composing()) eiji = false;
 				render();
 				return true;
