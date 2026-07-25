@@ -289,7 +289,10 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
    直交フロー（横親の中の縦ブロック）の自動サイズ計算になり、iPad Safari で
    レイアウトが崩れた（2026-07-21 実機）。段の並びは検証用に 2 種:
    .cand-v-rl = 右から左（縦組の読み順・番号なし。flex 逆順）/ .cand-v-lr = 左から右（番号付き） */
-.cand-v { max-width: none; }
+/* 横組の min-width（短い候補でも細くならないための下限）は、縦組では「段が少ないときに
+   余る幅」に化ける。rl は右端から詰めるので余りは左（= 本文から離れる側）に、lr では右に
+   まとめて出る（候補 3 件で顕著）。縦組で下限が要るのは高さの方なので幅の下限は外す */
+.cand-v { max-width: none; min-width: 0; }
 .cand-v .cand-cols {
   display: flex;
   align-items: flex-start;
