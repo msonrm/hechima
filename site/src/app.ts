@@ -102,11 +102,6 @@ export interface LabPageConfig {
   wasmJs?: string;
   /** 辞書の URL（既定 `/vendor/hechima-wasm/mozc.data`） */
   dataUrl?: string;
-  /**
-   * true = COI 無効を「異常」ではなく「意図した状態」として表示する。
-   * 単スレッド wasm の検証ページ（COOP/COEP を意図的に外したパス）用
-   */
-  expectNoCoi?: boolean;
 }
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -183,13 +178,11 @@ export function initLabPage(config: LabPageConfig = {}): void {
   let engineStatus = "変換エンジンを準備中…";
   let storageLabel = "";
   let diagLabel = ""; // 実機調査用: リソース読込失敗の常設表示（後続の status 更新で消えないように）
+  // COI 診断は 2026-07-25 に廃止（単スレッド wasm 移行で COOP/COEP を撤去したため、
+  // crossOriginIsolated が false であることが正常な状態になった）。
+  // 環境の確認が必要なときは /coi-test/ の診断パネルを使う
   const refreshStatus = () => {
-    const noCoi = typeof crossOriginIsolated !== "undefined" && !crossOriginIsolated;
-    // 単スレッド版の検証ページでは COI 無効が期待値なので警告にしない
-    const coi = !noCoi ? "" : config.expectNoCoi
-      ? "COI 無効（このページは意図的に COOP/COEP なし）"
-      : "⚠ COI 無効（COOP/COEP ヘッダ欠落）";
-    statusEl.textContent = [coi, engineStatus, storageLabel, diagLabel].filter(Boolean).join(" ・ ");
+    statusEl.textContent = [engineStatus, storageLabel, diagLabel].filter(Boolean).join(" ・ ");
   };
   const setStatus = (text: string) => { engineStatus = text; refreshStatus(); };
   const mb = (n: number) => (n / 1024 / 1024).toFixed(1);

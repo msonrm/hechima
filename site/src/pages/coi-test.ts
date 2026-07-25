@@ -1,11 +1,10 @@
-// 単スレッド wasm（-pthread なし）の検証ページ（隠しページ: TOP リンクなし・noindex）。
-// public/_headers と vite.config.ts の両方で /coi-test/* だけ COOP/COEP を外してある。
-// ここで変換が動けば「COOP/COEP なしで hechima が成立する」= COI 非依存化の実ブラウザ実証。
+// 環境診断ページ（隠しページ: TOP リンクなし・noindex）。
 //
-// 2026-07-25 以降、vendor/hechima-wasm/ 自体が単スレッド版なので wasm の指定は不要
-// （= このページは他ページとまったく同じ成果物を、COOP/COEP なしの条件で動かす）。
-// COOP/COEP はまだ他ページに掛かっている（切り替えの段階 3 で外す）ので、
-// 「ヘッダなしでも動く」ことを確かめ続ける場所としてこのページを残す。
+// もとは「単スレッド wasm が COOP/COEP なしで動くか」の検証ページだった。
+// 2026-07-25 にサイト全体から COOP/COEP を撤去したので、いまはラボ全体が
+// この条件（crossOriginIsolated = false）で動いている。
+// このページは、外部ホストへ組み込むときの参照実装と、実機（iPad 等でコンソールが
+// 見えない環境）の状態確認のために残してある。
 import { initLabPage } from "../app";
 
 const WASM_JS = "/vendor/hechima-wasm/hechima-wasm.js";
@@ -18,19 +17,16 @@ const put = (id: string, text: string): void => {
 
 // iPad ではコンソールが見えないので、判定材料はすべてページに出す
 const coi = typeof crossOriginIsolated !== "undefined" ? crossOriginIsolated : null;
-put("d-coi", coi === null ? "不明（このブラウザは未対応）" : coi ? "true ← 外れていません" : "false ← 期待どおり");
+put("d-coi", coi === null ? "不明（このブラウザは未対応）" : coi ? "true（COOP/COEP が付いている）" : "false ← 現在の既定");
 put(
   "d-sab",
   typeof SharedArrayBuffer === "undefined"
     ? "undefined（この環境では使えない）"
-    : "定義あり（ただし COI でないので共有はできない）",
+    : "定義あり（COI でなければ共有はできない。単スレッド版は使わないので無関係）",
 );
 put("d-wasm", `${WASM_JS}（単スレッド版 = 全ページ共通）`);
 
-initLabPage({
-  flick: "off",
-  expectNoCoi: true,
-});
+initLabPage({ flick: "off" });
 
 // initLabPage は同期で #status を生成するので、この時点から監視できる。
 // 「準備完了」= conn.init() の解決を待って所要時間を出す（辞書のダウンロード込み）

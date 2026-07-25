@@ -1,38 +1,18 @@
-# hechima-wasm は 2026-07-25 に単スレッドビルド（-pthread なし）へ移行したので
-# SharedArrayBuffer は不要 = COOP/COEP は本来もう要らない。ただし段階を踏むため当面は残す
-# （実運用で単スレッド版の様子を見る安全段。COI 下でも単スレッド版は問題なく動く）。
-# **外すときは同時に下の no-store もやめられる**（キャッシュ汚染事象の前提が消えるため）。
-# ヘッダなしで動くことの確認は /coi-test/（下記で COOP/COEP を外したページ）で継続中。
-# CORP: 仕様上は same-origin 応答に不要だが、iPad Safari がプロセススワップ
-# （URL 欄からの同一サイト再訪等）後にキャッシュ済み応答を CORP 無しとして誤ブロックし、
-# CSS/worker が全滅する実機事象（2026-07-21）への対処として全応答に明示する。
+# COOP/COEP は 2026-07-25 に撤去した。
+# hechima-wasm を単スレッドビルド（-pthread なし）に切り替えて SharedArrayBuffer 依存が
+# 消えたため（grep で参照ゼロ・iPad Safari 実機で /coi-test/ 検証済み）。
+# これによりラボは「COOP/COEP を配れないホストにも置ける」構成になった。
+#
+# 副産物として、Safari の COI × キャッシュ再利用ブロック事象（2026-07-21 に発見・
+# 多層防御していたもの）の**前提そのものが消えた**ので、その防御だった小型アセットの
+# no-store も撤去してキャッシュを有効に戻した（再訪が速くなり転送量も減る）。
+# ※ 復旧スクリプト（各 HTML のインライン）と worker のキャッシュバスターは、
+#   念のためしばらく残す。安定を確認したら整理する。
+#
+# 将来 COOP/COEP を戻す必要があるのは、マルチスレッド wasm に回帰する場合だけ
+# （= SharedArrayBuffer を再び使うとき）。可逆なので、その時に 2 行足せばよい。
+#
+# CORP は COI の要件ではないので残す: 外部サイトから画像等として埋め込まれるのを防ぐ意味と、
+# iPad Safari のキャッシュ誤ブロック対策として入れた経緯がある（同一オリジン応答には無害）。
 /*
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
   Cross-Origin-Resource-Policy: same-origin
-
-# Safari の COI × キャッシュ再利用ブロック（上記）対策: 小さいアセットは
-# すべて no-store にして「汚染されうるキャッシュエントリ」自体を無くす。
-# 対象はページ JS/CSS + エンジン各種（合計 ~100KB 弱）。
-# wasm/辞書（2.7MB/18MB = /vendor/hechima-wasm/）は対象外 = キャッシュ維持
-/assets/*
-  Cache-Control: no-store
-/vendor/hechima/*
-  Cache-Control: no-store
-/vendor/keymap-engine/*
-  Cache-Control: no-store
-/vendor/flick/*
-  Cache-Control: no-store
-/vendor/gamepad/*
-  Cache-Control: no-store
-
-# 単スレッド wasm（-pthread なし）の検証ページ。
-# COOP/COEP を意図的に「外して」crossOriginIsolated = false の状態を作り、
-# それでも変換が動く（= SharedArrayBuffer に依存していない）ことを実ブラウザで確かめる。
-# `!` プレフィックスは上位ルール（/*）で付いたヘッダの削除。
-# CORP は COI の要件ではないので残す（同一オリジン応答には無害）。
-# 本番の pthread 版はこれまでどおり /* の COOP/COEP 下で動き続ける = 併存
-/coi-test/*
-  ! Cross-Origin-Opener-Policy
-  ! Cross-Origin-Embedder-Policy
-  Cache-Control: no-store

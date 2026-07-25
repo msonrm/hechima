@@ -38,22 +38,30 @@ hechima のエンジンは**ビルド済みの UMD バンドル**として本リ
 > （エクスポートは `globalThis.Hechima` 等に付く）。テストスクリプトを置く場所に注意するか、
 > `globalThis` 側を見てください。
 
-## 2. 先に知っておくべき制約 — COOP/COEP が必須
+## 2. 先に知っておくべき制約 — 特別なヘッダは要りません
 
-`hechima-wasm` は pthreads ビルドで、**SharedArrayBuffer を要求します**。したがって
-組み込み先のページは cross-origin isolated である必要があります。レスポンスヘッダに以下が要ります:
+**2026-07-25 以降、COOP/COEP は不要になりました。**
 
-```
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: require-corp
-```
+以前の `hechima-wasm` は pthreads ビルドで `SharedArrayBuffer` を要求したため、組み込み先の
+ページを cross-origin isolated にする（= `Cross-Origin-Opener-Policy: same-origin` と
+`Cross-Origin-Embedder-Policy: require-corp` をレスポンスヘッダで配る）必要がありました。
+これはサーバ側の権限が要るうえ、**COEP がページ全体に効いて CORP 無しの外部リソース
+（他ドメインの iframe・画像・スクリプト等）を同居させられなくなる**という強い制約でした。
 
-これはページ全体にかかる制約で、**CORP 無しの外部リソース（他ドメインの iframe・画像・
-スクリプト等）が同居できなくなります**。自己完結したページ向けだと考えてください。
+現在の `hechima-wasm` は**単スレッドビルド**（`-pthread` なし）で、`SharedArrayBuffer` を
+一切使いません。したがって:
 
-なお、この条件を満たせない環境でも**セッション層と配列エンジンだけは動きます**
-（`cb.convert` 不在時のフォールバック = よみ 1 文節・カタカナ/ひらがな巡回）。
-かな漢字変換なしでよければ COOP/COEP は不要です。
+- **静的ファイルを置けるだけのホストならどこでも動きます**（GitHub Pages 等のカスタムヘッダを
+  設定できない環境、既存ページへの後付け、ブラウザ拡張の中など）
+- ページの他の部分に外部リソースを埋めていても影響しません
+- 検証したい場合は、`window.crossOriginIsolated` が `false` のまま変換が動くことを確認してください
+  （ラボの診断ページ = `/coi-test/` が参照実装です）
+
+移行時の実測では、`SharedArrayBuffer` の参照がグルーコードから消え（0 件）、起動が速くなり
+（init 737ms → 156ms）、変換速度は同等でした。iPad Safari の実機でも確認済みです。
+
+> 単スレッドなので重い変換中はその実行コンテキストを占有します。ただし配布物は Worker で
+> 動かす前提（`hechima-worker.js`）なので、UI スレッドはブロックされません。
 
 ## 3. 最小構成
 
