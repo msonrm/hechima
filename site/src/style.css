@@ -537,7 +537,7 @@ body.theme-terminal .cand-num { color: #1f8a1f; }
 .theme-bar button.sw[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
 .theme-bar input[type="range"] { accent-color: var(--accent); }
 
-/* ---- 候補の二層化（/candfold/ 実験ページ） ---- */
+/* ---- 候補の二層化（/candlayer/ 実験ページ） ---- */
 
 /* 二層目のグリッド = 「探す」ためのモード。一層目（選ぶ）とは別物に見せる:
    画面下部に固定して広く取り、列内は縦に流す（新聞の段組と同じ読み順） */

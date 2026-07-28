@@ -103,7 +103,7 @@ export interface LabPageConfig {
   /** 辞書の URL（既定 `/vendor/hechima-wasm/mozc.data`） */
   dataUrl?: string;
   /**
-   * 候補の二層化（/candfold/ 実験ページ）。指定すると:
+   * 候補の二層化（/candlayer/ 実験ページ）。指定すると:
    *   - 候補窓が一層目だけを見せる（1 ページ pageSize 件・末尾に「+n 件」）
    *   - Tab で二層目のグリッドを開き、Esc で閉じる
    *   - パラメータ調整パネルが出る
@@ -130,7 +130,7 @@ export interface CandidateFoldConfig {
   gridCols: number;
 }
 
-/** 二層化パラメータの調整パネル（/candfold/ 専用）。既定値は config から */
+/** 二層化パラメータの調整パネル（/candlayer/ 専用）。既定値は config から */
 function foldPanelHtml(p: CandidateFoldConfig): string {
   const num = (id: string, label: string, value: number, min: number, max: number, step: number, hint: string) =>
     `<label class="fold-item" title="${hint}">
@@ -204,7 +204,7 @@ function renderScaffold(config: LabPageConfig): void {
     ${config.candidateFold ? foldPanelHtml(config.candidateFold) : ""}`;
 
   // ポップアップとフリックパネルは body 直下（absolute / fixed 配置のため）
-  // ※ 二層化パネル（/candfold/）は上の app HTML 内に差し込む
+  // ※ 二層化パネル（/candlayer/）は上の app HTML 内に差し込む
   const overlays = document.createElement("div");
   overlays.innerHTML = `
     <div id="candidates" class="candidates" hidden></div>
@@ -805,7 +805,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
   // 出た側で毎回決まり、矢印キーの視覚写像はこれに追従する
   let candFlowLtr = candOrder === "lr";
   let candWindowCount = 0; // 現在ページの表示候補数（位置ベース番号の振り直しと数字選択に使う）
-  // 候補の二層化（/candfold/）。null = 従来どおり全候補を 1 つの流れで見せる
+  // 候補の二層化（/candlayer/）。null = 従来どおり全候補を 1 つの流れで見せる
   let foldParams: CandidateFoldConfig | null = config.candidateFold ? { ...config.candidateFold } : null;
   const WINDOW_SIZE = (): number => foldParams?.pageSize ?? 9;
   let winStart = 0; // 現在ページの先頭（候補一覧の絶対 index。選択位置から導出）
@@ -965,7 +965,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     popupEl.style.top = `${Math.max(0, y)}px`;
   }
 
-  // ---- 二層目のグリッド（/candfold/。「探す」ためのモード = 一望させる） ----
+  // ---- 二層目のグリッド（/candlayer/。「探す」ためのモード = 一望させる） ----
   // 列内は縦に流れ（新聞の段組と同じ）、最下段の次は右隣の列頭。
   // Tab = 次の列頭 / Shift+Tab = 前の列頭 / 1-9 = 現在の列の中の行 / ↑↓ = 1 件ずつ。
   // 移動は 1 次元のまま（←→ は文節移動に割り当て済みなので取り上げない）。
@@ -1193,7 +1193,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     });
   });
 
-  // ---- 二層化パラメータのパネル（/candfold/） ----
+  // ---- 二層化パラメータのパネル（/candlayer/） ----
 
   if (foldParams) {
     const ids = ["delta", "min", "max", "page", "rows", "cols"] as const;
@@ -1250,7 +1250,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     if (e.metaKey) return; // OS/ブラウザのショートカットは奪わない
     if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLButtonElement ||
         e.target instanceof HTMLInputElement) return; // 辞書フォーム等の入力は素通し
-    // 候補の二層化（/candfold/）のキー。セッションの routing には触れず、
+    // 候補の二層化（/candlayer/）のキー。セッションの routing には触れず、
     // 数字キーと同じくホスト側の方針としてここで先取りする
     if (foldParams && !e.ctrlKey && !e.altKey) {
       const ex = expandedFocus();
