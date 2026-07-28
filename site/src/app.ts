@@ -816,6 +816,27 @@ export function initLabPage(config: LabPageConfig = {}): void {
     return !popupEl.hidden;
   }
 
+  /**
+   * ページ位置の点列（一層目の候補窓と二層目のグリッドで共通の語彙）。
+   * 全体のページ数と現在地を、数えずに掴めるようにするためのもの。
+   * 点が多すぎて数えられない領域（8 ページ超）では素直に数字へ倒す。
+   */
+  function pageDots(pages: number, page: number): HTMLElement {
+    if (pages > 8) {
+      const n = document.createElement("span");
+      n.textContent = `${page + 1}/${pages}`;
+      return n;
+    }
+    const dots = document.createElement("span");
+    dots.className = "cand-dots";
+    for (let i = 0; i < pages; i++) {
+      const d = document.createElement("span");
+      d.className = "cand-dot" + (i === page ? " on" : "");
+      dots.appendChild(d);
+    }
+    return dots;
+  }
+
   function renderCandidatePopup(segments: Hechima.SegmentView[]): void {
     // フリック中はポップアップ（縦長でキーボードと干渉する）の代わりに
     // キーボード上部の候補バーへ出す
@@ -912,21 +933,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
       more.className = "cand-more cand-more-nav";
       more.title = `${pages} ページ中 ${page + 1} ページ目`
         + (hidden > 0 ? `（Tab でさらに ${hidden} 件）` : "（これで全部）");
-      if (pages <= 8) {
-        const dots = document.createElement("span");
-        dots.className = "cand-dots";
-        for (let i = 0; i < pages; i++) {
-          const d = document.createElement("span");
-          d.className = "cand-dot" + (i === page ? " on" : "");
-          dots.appendChild(d);
-        }
-        more.appendChild(dots);
-      } else {
-        // 点が多すぎて数えられない領域では素直に数字へ倒す
-        const n = document.createElement("span");
-        n.textContent = `${page + 1}/${pages}`;
-        more.appendChild(n);
-      }
+      more.appendChild(pageDots(pages, page)); // 左詰め（右端は Tab の合図に空けておく）
       if (hidden > 0) {
         const tab = document.createElement("span");
         tab.className = "cand-tab-hint";
@@ -1041,11 +1048,16 @@ export function initLabPage(config: LabPageConfig = {}): void {
       grid.appendChild(cell);
     });
 
+    // フッタは一層目と同じ語彙: 左にページ位置の点列、右に操作説明。
+    // 正確な件数はホバーへ（探すモードでも、まず要るのは現在地と残りの量）
     const foot = document.createElement("div");
     foot.className = "cand-grid-foot";
-    const pages = Math.ceil(cands.length / per);
-    foot.textContent = `${idx + 1} / ${cands.length}（${Math.floor(idx / per) + 1}/${pages} ページ）`
-      + "　Tab=次の列 / 1-9=列の中 / Esc=閉じる";
+    const pages = Math.max(1, Math.ceil(cands.length / per));
+    const page = Math.floor(idx / per);
+    foot.title = `全 ${cands.length} 件・${pages} ページ中 ${page + 1} ページ目`;
+    const help = document.createElement("span");
+    help.textContent = "Tab=次の列 / 1-9=列の中 / Esc=閉じる";
+    foot.append(pageDots(pages, page), help);
     gridEl.replaceChildren(grid, foot);
     gridEl.hidden = false;
   }

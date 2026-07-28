@@ -576,10 +576,13 @@ body.theme-terminal .cand-num { color: #1f8a1f; }
 }
 .cand-cell.selected { background: var(--focus-bg); }
 .cand-grid-foot {
+  display: flex;
+  justify-content: space-between; /* 一層目と同じ: 点列は左詰め・操作説明は右詰め */
+  align-items: center;
+  gap: 12px;
   margin-top: 8px;
   padding-top: 5px;
   border-top: 0.5px solid var(--line);
-  text-align: right;
   font-size: 0.7rem;
   color: var(--muted);
 }
@@ -603,8 +606,9 @@ body.theme-terminal .cand-num { color: #1f8a1f; }
    .cand-more-nav は二層化ページ専用（既存ページの .cand-more は変えない） */
 .cand-more-nav {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between; /* 点列は左詰め・Tab の合図は右詰め */
   align-items: center;
+  gap: 12px;
   padding-top: 3px;
 }
 .cand-dots {
