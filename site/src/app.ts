@@ -899,16 +899,48 @@ export function initLabPage(config: LabPageConfig = {}): void {
     cols.className = "cand-cols";
     cols.append(...rows);
     popupEl.replaceChildren(cols);
-    if (layer1.length > WS || hidden > 0) {
+    // フッタは「読まなくても分かる」2 つだけに絞る:
+    //   (1) 全体で何ページあって今どこか = 点の列（先が長いか・現在地はどこか）
+    //   (2) 二層目があるか = 「… Tab」の有無（件数は出さない — 押す価値の有無だけ要る）
+    // 候補の番号や件数は候補窓を見れば分かるので出さない。
+    // **1 ページ・二層目なしでも点を 1 個出す**: 情報が消える瞬間を作らず、
+    // 点が 1 個だけ = それ自体が「これで全部」の合図になる。
+    if (foldParams) {
+      const pages = Math.max(1, Math.ceil(layer1.length / WS));
+      const page = Math.floor(idx / WS);
+      const more = document.createElement("div");
+      more.className = "cand-more cand-more-nav";
+      more.title = `${pages} ページ中 ${page + 1} ページ目`
+        + (hidden > 0 ? `（Tab でさらに ${hidden} 件）` : "（これで全部）");
+      if (pages <= 8) {
+        const dots = document.createElement("span");
+        dots.className = "cand-dots";
+        for (let i = 0; i < pages; i++) {
+          const d = document.createElement("span");
+          d.className = "cand-dot" + (i === page ? " on" : "");
+          dots.appendChild(d);
+        }
+        more.appendChild(dots);
+      } else {
+        // 点が多すぎて数えられない領域では素直に数字へ倒す
+        const n = document.createElement("span");
+        n.textContent = `${page + 1}/${pages}`;
+        more.appendChild(n);
+      }
+      if (hidden > 0) {
+        const tab = document.createElement("span");
+        tab.className = "cand-tab-hint";
+        tab.textContent = "… Tab";
+        more.appendChild(tab);
+      }
+      popupEl.append(more);
+    } else if (layer1.length > WS) {
+      // 二層化していないページ（従来どおり）: 表示は変えない
       const page = Math.floor(idx / WS) + 1;
       const pages = Math.ceil(layer1.length / WS);
       const more = document.createElement("div");
       more.className = "cand-more";
-      // 二層目がある場合は「隠れている件数と到達方法」を必ず出す。
-      // 候補そのものは見せないが、不在の証明ができない状態にはしない
-      more.textContent = hidden > 0
-        ? `${idx + 1} / ${layer1.length}（${page}/${pages}）　+${hidden} 件 Tab`
-        : `${idx + 1} / ${layer1.length}（${page}/${pages} ページ）`;
+      more.textContent = `${idx + 1} / ${layer1.length}（${page}/${pages} ページ）`;
       popupEl.append(more);
     }
     popupEl.hidden = false;
