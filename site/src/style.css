@@ -536,3 +536,74 @@ body.theme-terminal .cand-num { color: #1f8a1f; }
 }
 .theme-bar button.sw[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
 .theme-bar input[type="range"] { accent-color: var(--accent); }
+
+/* ---- 候補の二層化（/candfold/ 実験ページ） ---- */
+
+/* 二層目のグリッド = 「探す」ためのモード。一層目（選ぶ）とは別物に見せる:
+   画面下部に固定して広く取り、列内は縦に流す（新聞の段組と同じ読み順） */
+.cand-grid {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: min(96vw, 1100px);
+  max-height: 60vh;
+  overflow: auto;
+  padding: 10px 12px 6px;
+  background: var(--bg);
+  border: 0.5px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22);
+  font-size: var(--cand-size);
+  font-family: var(--editor-font);
+  user-select: none;
+}
+.cand-grid-cells {
+  display: grid;
+  grid-auto-flow: column;   /* 列内を縦に流し、最下段の次は右隣の列頭へ */
+  grid-auto-columns: minmax(5.5em, auto);
+  gap: 1px 10px;
+}
+.cand-cell {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 3px 6px;
+  white-space: nowrap;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.cand-cell.selected { background: var(--focus-bg); }
+.cand-grid-foot {
+  margin-top: 8px;
+  padding-top: 5px;
+  border-top: 0.5px solid var(--line);
+  text-align: right;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+/* パラメータ調整パネル */
+.fold-panel {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--line);
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+.fold-panel > summary { cursor: pointer; color: var(--muted); }
+.fold-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 8px;
+}
+.fold-item { display: flex; gap: 6px; align-items: center; }
+.fold-label { color: var(--muted); white-space: nowrap; }
+.fold-item input { width: 5.5em; padding: 2px 4px; font: inherit; }
+.fold-note {
+  margin: 8px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}

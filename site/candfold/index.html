@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>候補の二層化（実験）— へちま言語ラボ</title>
+    <meta name="description" content="変換候補を「選ぶ層」と「探す層」に分ける実験。1 位からのコスト差で既定で見せる候補を切り出し、残りは Tab で開くグリッドに送ります。" />
+    <script>
+      /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
+         app.js 自体が読めないケースがあるため、外部取得に依存しないインラインに置く */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/hechima/hechima.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; 候補の二層化（実験）</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>候補の二層化（実験）</h2>
+        <p>候補がたくさんあると、選ぼうとした文字が紛れます。正解が3位にあるとして、見えている候補が9個なら1/9、5個なら1/5。
+          探すストレスも「見た目の確率」も違う。そこで候補を<b>「選ぶ層」と「探す層」</b>に分けてみる実験ページです。</p>
+      </section>
+
+      <section class="layers">
+        <div class="stack" role="img" aria-label="入力 から キーマップ、変換、表示 へ。表示の箱を差し替えた">
+          <span class="blk">入力</span><span class="arw">→</span>
+          <span class="blk">キーマップ</span><span class="arw">→</span>
+          <span class="blk">変換</span><span class="arw">→</span>
+          <span class="blk swapped">表示</span>
+        </div>
+        <p><b>差し替えた層：表示</b> ／ <span class="kept">据え置き：入力・キーマップ・変換</span></p>
+        <p>変換エンジンは同じMozcのままで、<b>候補の見せ方だけ</b>を変えています。
+          変換結果に添えられた「コスト」（Mozcが内部で持っている、その候補のもっともらしさ）を使い、
+          1位からの差が一定以内のものだけを<b>一層目</b>に出します。</p>
+        <p class="src">このページ固有のソース：<a href="https://github.com/msonrm/hechima/blob/main/site/src/pages/candfold.ts" rel="noopener"><code>site/src/pages/candfold.ts</code></a></p>
+      </section>
+
+      <div id="app"></div>
+
+      <section class="hints">
+        <p>ふつうにローマ字で打って、スペースキーで変換してください（OS側の日本語IMEはオフで）。
+          候補窓の右下に「<b>+n 件 Tab</b>」と出ていたら、そこに隠れている候補があります。</p>
+        <ul>
+          <li><b>Space / ↑↓</b> = 候補移動。<b>一層目の中だけを巡回します</b>（二層目は現れません）</li>
+          <li><b>数字 1-5</b> = 一層目のウィンドウ内で直接選択（クリックでも可）</li>
+          <li><b>Tab</b> = 二層目のグリッドを開く。開いたあとの <b>Tab</b> は次の列へ（<b>Shift+Tab</b> = 前の列）</li>
+          <li>グリッド内の <b>数字 1-9</b> = いまの列の中の行を選択、<b>↑↓</b> = 1件ずつ移動（最下段の次は右隣の列頭）</li>
+          <li><b>Esc</b> = グリッドを閉じる。閉じる前に選んでいたものが一層目にあればそれを保ち、二層目のものを選んでいたら開いた時点の位置に戻ります</li>
+          <li><b>Enter</b> = 確定。そのほかの操作は<a href="/romaji/">標準IMEのページ</a>と同じです</li>
+        </ul>
+        <p>下の「候補の二層化（実験）」パネルで、切り方のパラメータをその場で変えられます
+          （変えるとすぐ反映されます。再変換は不要）。
+          <b>コスト差Δ</b>を0にすると二層化が止まり、従来どおり全候補が1つの流れになります。</p>
+        <p>実測では、一般語はコストが急に開き（「こうせい」は全94件だが実用圏は12件ほど）、
+          人名系は候補が拮抗したまま続きます（「ゆうき」は184件で、ほとんどが人名の当て字）。
+          コスト差で切ると、この違いが自動的に件数へ反映されます
+          — 件数を固定するより実態に合う、というのがこの実験の勘所です。</p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/candfold.ts"></script>
+  </body>
+</html>

@@ -21,6 +21,7 @@ export default defineConfig({
         flick: fileURLToPath(new URL("./flick/index.html", import.meta.url)),
         tategaki: fileURLToPath(new URL("./tategaki/index.html", import.meta.url)),
         gamepad: fileURLToPath(new URL("./gamepad/index.html", import.meta.url)),
+        candfold: fileURLToPath(new URL("./candfold/index.html", import.meta.url)),
         coiTest: fileURLToPath(new URL("./coi-test/index.html", import.meta.url)),
         theme: fileURLToPath(new URL("./theme/index.html", import.meta.url)),
       },

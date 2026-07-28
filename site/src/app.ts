@@ -102,6 +102,57 @@ export interface LabPageConfig {
   wasmJs?: string;
   /** 辞書の URL（既定 `/vendor/hechima-wasm/mozc.data`） */
   dataUrl?: string;
+  /**
+   * 候補の二層化（/candfold/ 実験ページ）。指定すると:
+   *   - 候補窓が一層目だけを見せる（1 ページ pageSize 件・末尾に「+n 件」）
+   *   - Tab で二層目のグリッドを開き、Esc で閉じる
+   *   - パラメータ調整パネルが出る
+   * **costs を返す wasm が要る**ので wasmJs に `/vendor/hechima-wasm-cost/hechima-wasm.js`
+   * を指定すること（既定の wasm は costs を返さないので二層化は起きない）。
+   * 設計と実測 = labo `docs/hechima-candidate-fold-design.md`
+   */
+  candidateFold?: CandidateFoldConfig;
+}
+
+/** 候補二層化の初期パラメータ（実験ページの UI で実行時に変更できる） */
+export interface CandidateFoldConfig {
+  /** 一層目に入れる「1 位からのコスト差」の上限 */
+  costDelta: number;
+  /** 一層目の最小件数（コスト差で切りすぎないための下限） */
+  minCandidates: number;
+  /** 一層目の最大件数（拮抗しているよみで出しすぎないための上限） */
+  maxCandidates: number;
+  /** 一層目の 1 ページ件数（候補窓に一度に見える数） */
+  pageSize: number;
+  /** 二層目グリッドの列の高さ（行数）。数字キー選択と揃えるなら 9 */
+  gridRows: number;
+  /** 二層目グリッドの列数 */
+  gridCols: number;
+}
+
+/** 二層化パラメータの調整パネル（/candfold/ 専用）。既定値は config から */
+function foldPanelHtml(p: CandidateFoldConfig): string {
+  const num = (id: string, label: string, value: number, min: number, max: number, step: number, hint: string) =>
+    `<label class="fold-item" title="${hint}">
+       <span class="fold-label">${label}</span>
+       <input type="number" id="fold-${id}" value="${value}" min="${min}" max="${max}" step="${step}" />
+     </label>`;
+  return `
+    <details class="fold-panel" id="fold-panel" open>
+      <summary>候補の二層化（実験）</summary>
+      <div class="fold-grid">
+        ${num("delta", "コスト差 Δ", p.costDelta, 0, 30000, 250,
+              "1 位からのこの差までを一層目に入れる。0 = 二層化しない")}
+        ${num("min", "下限", p.minCandidates, 1, 50, 1,
+              "コスト差で切りすぎないための最小件数")}
+        ${num("max", "上限", p.maxCandidates, 1, 100, 1,
+              "拮抗しているよみで出しすぎないための最大件数")}
+        ${num("page", "1 ページ", p.pageSize, 1, 20, 1, "候補窓に一度に見える件数")}
+        ${num("rows", "グリッド行", p.gridRows, 1, 20, 1, "二層目の列の高さ（数字キーと揃えるなら 9）")}
+        ${num("cols", "グリッド列", p.gridCols, 1, 20, 1, "二層目の列数")}
+      </div>
+      <p class="fold-note" id="fold-note"></p>
+    </details>`;
 }
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -149,12 +200,15 @@ function renderScaffold(config: LabPageConfig): void {
         <span id="dict-msg" class="status"></span>
       </form>
       <ul id="dict-list"></ul>
-    </details>`;
+    </details>
+    ${config.candidateFold ? foldPanelHtml(config.candidateFold) : ""}`;
 
   // ポップアップとフリックパネルは body 直下（absolute / fixed 配置のため）
+  // ※ 二層化パネル（/candfold/）は上の app HTML 内に差し込む
   const overlays = document.createElement("div");
   overlays.innerHTML = `
     <div id="candidates" class="candidates" hidden></div>
+    <div id="cand-grid" class="cand-grid" hidden></div>
     <div id="flick-panel" class="flick-panel" hidden>
       <div id="flick-cands" class="flick-cands"></div>
       <div id="flick-area" class="flick-area"></div>
@@ -688,7 +742,12 @@ export function initLabPage(config: LabPageConfig = {}): void {
 
   // ---- 未確定表示（インライン）と候補ポップアップ ----
 
+  // 直近の show 内容（二層目グリッドのキー処理が注目文節の候補を読むのに使う）
+  let lastSegments: Hechima.SegmentView[] = [];
+
   function renderComposition(segments: Hechima.SegmentView[]): void {
+    lastSegments = segments;
+    updateFoldNote(); // 二層化パネルの注記（実験ページ以外では何もしない）
     // フリック連携はここで一元更新する。cb.show / cb.hide だけに仕込むと、確定時
     // （セッションは cb.hide を呼ばず、ホストの cb.commit がここを直接呼ぶ契約）に
     // ラベルと postModify 用テキストが取り残される
@@ -746,8 +805,11 @@ export function initLabPage(config: LabPageConfig = {}): void {
   // 出た側で毎回決まり、矢印キーの視覚写像はこれに追従する
   let candFlowLtr = candOrder === "lr";
   let candWindowCount = 0; // 現在ページの表示候補数（位置ベース番号の振り直しと数字選択に使う）
-  const WINDOW_SIZE = 9;
+  // 候補の二層化（/candfold/）。null = 従来どおり全候補を 1 つの流れで見せる
+  let foldParams: CandidateFoldConfig | null = config.candidateFold ? { ...config.candidateFold } : null;
+  const WINDOW_SIZE = (): number => foldParams?.pageSize ?? 9;
   let winStart = 0; // 現在ページの先頭（候補一覧の絶対 index。選択位置から導出）
+  const gridEl = $<HTMLDivElement>("cand-grid");
 
   function popupVisible(): boolean {
     return !popupEl.hidden;
@@ -768,12 +830,26 @@ export function initLabPage(config: LabPageConfig = {}): void {
     const additional = seg?.additional ?? [];
     if (!seg || !cands || idx === undefined || (cands.length < 2 && additional.length === 0)) {
       popupEl.hidden = true;
+      gridEl.hidden = true;
       return;
     }
 
-    // ページング: 9 件目からさらに送ると次ページ（10 から始まりハイライトは先頭行）、
+    // 二層目を展開中はグリッド一覧に切り替える（候補窓は畳む）
+    if (seg.expanded) {
+      popupEl.hidden = true;
+      renderCandGrid(cands, idx);
+      return;
+    }
+    gridEl.hidden = true;
+
+    // 二層化しているときは一層目だけがページングの対象（二層目は Tab で開くまで現れない）
+    const layer1 = cands.slice(0, seg.foldCount ?? cands.length);
+    const hidden = cands.length - layer1.length;
+    const WS = WINDOW_SIZE();
+
+    // ページング: WS 件目からさらに送ると次ページ（ハイライトは先頭行）、
     // 戻ると前ページ（ハイライトは末尾行）。ページは選択位置から決まる純関数
-    winStart = Math.floor(idx / WINDOW_SIZE) * WINDOW_SIZE;
+    winStart = Math.floor(idx / WS) * WS;
 
     const inAdditional = seg.additionalIndex !== undefined;
     const rows: HTMLElement[] = [];
@@ -796,7 +872,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
       rows.push(divider);
     }
 
-    const visible = cands.slice(winStart, winStart + WINDOW_SIZE);
+    const visible = layer1.slice(winStart, winStart + WS);
     candWindowCount = visible.length;
     visible.forEach((text, i) => {
       const abs = winStart + i;
@@ -822,12 +898,16 @@ export function initLabPage(config: LabPageConfig = {}): void {
     cols.className = "cand-cols";
     cols.append(...rows);
     popupEl.replaceChildren(cols);
-    if (cands.length > WINDOW_SIZE) {
-      const page = Math.floor(idx / WINDOW_SIZE) + 1;
-      const pages = Math.ceil(cands.length / WINDOW_SIZE);
+    if (layer1.length > WS || hidden > 0) {
+      const page = Math.floor(idx / WS) + 1;
+      const pages = Math.ceil(layer1.length / WS);
       const more = document.createElement("div");
       more.className = "cand-more";
-      more.textContent = `${idx + 1} / ${cands.length}（${page}/${pages} ページ）`;
+      // 二層目がある場合は「隠れている件数と到達方法」を必ず出す。
+      // 候補そのものは見せないが、不在の証明ができない状態にはしない
+      more.textContent = hidden > 0
+        ? `${idx + 1} / ${layer1.length}（${page}/${pages}）　+${hidden} 件 Tab`
+        : `${idx + 1} / ${layer1.length}（${page}/${pages} ページ）`;
       popupEl.append(more);
     }
     popupEl.hidden = false;
@@ -885,6 +965,89 @@ export function initLabPage(config: LabPageConfig = {}): void {
     popupEl.style.top = `${Math.max(0, y)}px`;
   }
 
+  // ---- 二層目のグリッド（/candfold/。「探す」ためのモード = 一望させる） ----
+  // 列内は縦に流れ（新聞の段組と同じ）、最下段の次は右隣の列頭。
+  // Tab = 次の列頭 / Shift+Tab = 前の列頭 / 1-9 = 現在の列の中の行 / ↑↓ = 1 件ずつ。
+  // 移動は 1 次元のまま（←→ は文節移動に割り当て済みなので取り上げない）。
+
+  /** UI のパラメータ → セッションの FoldOptions（グリッド寸法はホスト側の関心なので渡さない） */
+  const foldOptionsOf = (p: CandidateFoldConfig) => ({
+    costDelta: p.costDelta,
+    minCandidates: p.minCandidates,
+    maxCandidates: p.maxCandidates,
+  });
+
+  const gridRows = (): number => Math.max(1, foldParams?.gridRows ?? 9);
+  const gridCols = (): number => Math.max(1, foldParams?.gridCols ?? 8);
+  const gridPageSize = (): number => gridRows() * gridCols();
+
+  function renderCandGrid(cands: string[], idx: number): void {
+    const rows = gridRows();
+    const per = gridPageSize();
+    const pageStart = Math.floor(idx / per) * per;
+    const view = cands.slice(pageStart, pageStart + per);
+
+    const grid = document.createElement("div");
+    grid.className = "cand-grid-cells";
+    // 列内縦流れ = grid-auto-flow: column + 行数固定
+    grid.style.gridTemplateRows = `repeat(${rows}, auto)`;
+    view.forEach((text, i) => {
+      const abs = pageStart + i;
+      const cell = document.createElement("div");
+      cell.className = "cand-cell" + (abs === idx ? " selected" : "");
+      const num = document.createElement("span");
+      num.className = "cand-num";
+      num.textContent = String((i % rows) + 1); // 列内の行番号 = 数字キーと一致
+      const label = document.createElement("span");
+      label.textContent = text;
+      cell.append(num, label);
+      cell.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();
+        fep.selectCandidate(abs);
+      });
+      grid.appendChild(cell);
+    });
+
+    const foot = document.createElement("div");
+    foot.className = "cand-grid-foot";
+    const pages = Math.ceil(cands.length / per);
+    foot.textContent = `${idx + 1} / ${cands.length}（${Math.floor(idx / per) + 1}/${pages} ページ）`
+      + "　Tab=次の列 / 1-9=列の中 / Esc=閉じる";
+    gridEl.replaceChildren(grid, foot);
+    gridEl.hidden = false;
+  }
+
+  /** 二層目グリッドの列移動。dir=+1 で右隣の列頭、-1 で左隣。端は循環 */
+  function gridMoveCol(cands: string[], idx: number, dir: 1 | -1): void {
+    const rows = gridRows();
+    const lastCol = Math.floor((cands.length - 1) / rows);
+    let col = Math.floor(idx / rows) + dir;
+    if (col > lastCol) col = 0;
+    if (col < 0) col = lastCol;
+    fep.selectCandidate(Math.min(col * rows, cands.length - 1));
+  }
+
+  /** パネル下部の注記: いまの文節が実際に何件 → 何件になったかを出す（数値決めの材料） */
+  function updateFoldNote(): void {
+    if (!foldParams) return;
+    const noteEl = document.getElementById("fold-note");
+    if (!noteEl) return;
+    const seg = lastSegments.find((s) => s.kind === "focus");
+    const total = seg?.candidates?.length;
+    const l1 = seg?.foldCount ?? total;
+    noteEl.textContent = total === undefined || l1 === undefined
+      ? `1 ページ ${foldParams.pageSize} 件 / グリッド ${foldParams.gridRows}×${foldParams.gridCols} = ${gridPageSize()} 件`
+      : `いまの文節: 全 ${total} 件 → 一層目 ${l1} 件 / 二層目 ${total - l1} 件`
+        + `（1 ページ ${foldParams.pageSize} 件・グリッド ${foldParams.gridRows}×${foldParams.gridCols}）`;
+  }
+
+  /** 展開中の注目文節（候補一覧と選択位置）。二層目のキー処理で使う */
+  function expandedFocus(): { cands: string[]; idx: number } | null {
+    const seg = lastSegments.find((s) => s.kind === "focus");
+    if (!seg?.expanded || !seg.candidates || seg.candidateIndex === undefined) return null;
+    return { cands: seg.candidates, idx: seg.candidateIndex };
+  }
+
   // ---- セッション（ホスト = このエディタ） ----
 
   // フリック postModify（゛゜小トグル）の対象特定用: 合成表示テキストを控える
@@ -926,7 +1089,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
       return true;
     },
     ...conn.callbacks(),
-  });
+  }, foldParams ? { fold: foldOptionsOf(foldParams) } : undefined);
   fep.setActive(true);
 
   // ---- 配列（keymap-format JSON。セレクタはページ config 次第） ----
@@ -1030,6 +1193,37 @@ export function initLabPage(config: LabPageConfig = {}): void {
     });
   });
 
+  // ---- 二層化パラメータのパネル（/candfold/） ----
+
+  if (foldParams) {
+    const ids = ["delta", "min", "max", "page", "rows", "cols"] as const;
+    const noteEl = document.getElementById("fold-note");
+    const apply = (): void => {
+      if (!foldParams) return;
+      const get = (id: string, fallback: number): number => {
+        const el = document.getElementById(`fold-${id}`) as HTMLInputElement | null;
+        const v = el ? Number(el.value) : NaN;
+        return Number.isFinite(v) ? v : fallback;
+      };
+      foldParams = {
+        costDelta: get("delta", foldParams.costDelta),
+        minCandidates: get("min", foldParams.minCandidates),
+        maxCandidates: get("max", foldParams.maxCandidates),
+        pageSize: get("page", foldParams.pageSize),
+        gridRows: get("rows", foldParams.gridRows),
+        gridCols: get("cols", foldParams.gridCols),
+      };
+      // Δ=0 は「二層化しない」= 従来どおり全候補を 1 つの流れで見せる
+      fep.setFold(foldParams.costDelta > 0 ? foldOptionsOf(foldParams) : null);
+      void noteEl;
+      updateFoldNote();
+    };
+    for (const id of ids) {
+      document.getElementById(`fold-${id}`)?.addEventListener("input", apply);
+    }
+    apply();
+  }
+
   // ---- 再変換（確定済みテキストを選択して 変換キー / Ctrl+/） ----
 
   async function doReconvert(): Promise<void> {
@@ -1056,6 +1250,32 @@ export function initLabPage(config: LabPageConfig = {}): void {
     if (e.metaKey) return; // OS/ブラウザのショートカットは奪わない
     if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLButtonElement ||
         e.target instanceof HTMLInputElement) return; // 辞書フォーム等の入力は素通し
+    // 候補の二層化（/candfold/）のキー。セッションの routing には触れず、
+    // 数字キーと同じくホスト側の方針としてここで先取りする
+    if (foldParams && !e.ctrlKey && !e.altKey) {
+      const ex = expandedFocus();
+      if (e.key === "Tab") {
+        // 一層目なら二層目を開く。既に開いていれば次（Shift で前）の列頭へ
+        if (ex) gridMoveCol(ex.cands, ex.idx, e.shiftKey ? -1 : 1);
+        else if (!fep.expandCandidates()) return; // 二層目が無ければブラウザに委ねる
+        e.preventDefault();
+        return;
+      }
+      if (ex && e.key === "Escape") {
+        fep.collapseCandidates();
+        e.preventDefault();
+        return;
+      }
+      if (ex && /^[1-9]$/.test(e.key)) {
+        // 列の中の行を選ぶ（列内縦流れなので「現在の列頭 + n-1」）
+        const rows = gridRows();
+        const target = Math.floor(ex.idx / rows) * rows + (Number(e.key) - 1);
+        if (target < ex.cands.length && fep.selectCandidate(target)) {
+          e.preventDefault();
+          return;
+        }
+      }
+    }
     // 候補ポップアップ表示中の数字 1-9 = ウィンドウ内の直接選択（標準 IME の作法）。
     // セッションのキー routing には触れず、ホスト側の方針としてここで先取りする
     if (popupVisible() && !e.ctrlKey && !e.altKey && /^[1-9]$/.test(e.key)) {
