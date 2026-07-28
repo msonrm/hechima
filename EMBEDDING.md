@@ -151,10 +151,13 @@ fep.setEngine(null);                                // null で内蔵ローマ�
 
 層をまたいで最低版の要求があります。**セットで差し替えてください**。
 
-- `hechima` v0.13.1 → **KeymapEngine >= 1.4.0** 必須
+- `hechima` v0.14.0 → **KeymapEngine >= 1.4.0** 必須
 - `flick-engine` / `gamepad-engine` → **hechima >= 0.13.0**（`insertKana`）必須
 - `hechima-worker` → `hechima-wasm` v0.7.1 とセット推奨（学習は v0.4.0+。旧 wasm では
   文節伸縮・学習が機能検出で段階的に無効化される）
+- **候補の二層化**（v0.14.0 の `createFep(cb, { fold })`）を使う場合のみ、変換コストを返す
+  wasm が要ります。`FoldOptions` を渡さなければ候補は従来どおり 1 つの流れなので、
+  **二層化を使わないなら wasm は据え置きで構いません**（v0.14.0 への差し替えは単体で完結）
 
 現在同梱している版は [`site/public/vendor/VENDOR.md`](site/public/vendor/VENDOR.md) が正典です。
 実行時は `Hechima.version` / `KeymapEngine.version` を記録しておくと事故を追いやすくなります。
