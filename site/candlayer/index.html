@@ -3,9 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="robots" content="noindex" />
-    <title>候補の二層化（実験）— へちま言語ラボ</title>
-    <meta name="description" content="変換候補を「選ぶ層」と「探す層」に分ける実験。1 位からのコスト差で既定で見せる候補を切り出し、残りは Tab で開くグリッドに送ります。" />
+    <title>候補の二層化 — へちま言語ラボ</title>
+    <meta name="description" content="変換候補を「選ぶ層」と「探す層」に分けます。ふだん見えるのは5件だけ、残りはTabで開く一覧に。変換エンジンは同じMozcのまま、候補の見せ方だけを変えた実験です。" />
+    <meta property="og:title" content="候補の二層化 — へちま言語ラボ" />
+    <meta property="og:description" content="候補がたくさんあると選ぼうとした文字が紛れる。だから「選ぶ層」と「探す層」に分けました。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://luffa-lang-labo.dev/candlayer/" />
+    <meta property="og:site_name" content="へちま言語ラボ" />
+    <meta name="twitter:card" content="summary" />
     <script>
       /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
          app.js 自体が読めないケースがあるため、外部取得に依存しないインラインに置く */
@@ -36,12 +41,12 @@
   <body>
     <header>
       <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
-      <nav class="breadcrumb"><a href="/">TOP</a> &gt; 候補の二層化（実験）</nav>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; 候補の二層化</nav>
     </header>
 
     <main>
       <section class="intro">
-        <h2>候補の二層化（実験）</h2>
+        <h2>候補の二層化</h2>
         <p>候補がたくさんあると、選ぼうとした文字が紛れます。正解が3位にあるとして、見えている候補が9個なら1/9、5個なら1/5。
           探すストレスも「見た目の確率」も違う。そこで候補を<b>「選ぶ層」と「探す層」</b>に分けてみる実験ページです。</p>
       </section>
@@ -64,7 +69,8 @@
 
       <section class="hints">
         <p>ふつうにローマ字で打って、スペースキーで変換してください（OS側の日本語IMEはオフで）。
-          候補窓の右下に「<b>+n 件 Tab</b>」と出ていたら、そこに隠れている候補があります。</p>
+          候補窓の下、左端の<b>点</b>が一層目のページ数と現在地、右端に「<b>… Tab</b>」と出ていれば
+          その先に二層目があります（点が1個だけで「… Tab」が無ければ、それで全部です）。</p>
         <ul>
           <li><b>Space / ↑↓</b> = 候補移動。<b>一層目の中だけを巡回します</b>（二層目は現れません）</li>
           <li><b>数字 1-5</b> = 一層目のウィンドウ内で直接選択（クリックでも可）</li>
@@ -73,7 +79,7 @@
           <li><b>Esc</b> = グリッドを閉じる。閉じる前に選んでいたものが一層目にあればそれを保ち、二層目のものを選んでいたら開いた時点の位置に戻ります</li>
           <li><b>Enter</b> = 確定。そのほかの操作は<a href="/romaji/">標準IMEのページ</a>と同じです</li>
         </ul>
-        <p>下の「候補の二層化（実験）」パネルで、切り方のパラメータをその場で変えられます
+        <p>下の「切り方のパラメータ」で、分け方をその場で変えられます
           （変えるとすぐ反映されます。再変換は不要）。
           <b>コスト差Δ</b>を0にすると二層化が止まり、従来どおり全候補が1つの流れになります。</p>
         <p>実測では、一般語はコストが急に開き（「こうせい」は全94件だが実用圏は12件ほど）、

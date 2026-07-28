@@ -139,7 +139,7 @@ function foldPanelHtml(p: CandidateFoldConfig): string {
      </label>`;
   return `
     <details class="fold-panel" id="fold-panel" open>
-      <summary>候補の二層化（実験）</summary>
+      <summary>切り方のパラメータ</summary>
       <div class="fold-grid">
         ${num("delta", "コスト差 Δ", p.costDelta, 0, 30000, 250,
               "1 位からのこの差までを一層目に入れる。0 = 二層化しない")}
