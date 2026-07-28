@@ -1,0 +1,11 @@
+hechima-wasm build info
+built-at: 2026-07-28T04:07:16Z
+labo-commit: c3cbc207cadd2bddb6ab6b7954c04d1505c36114
+fcitx5-mozc: 522a5f22673e03e32bcb290ba729bab42fbc5c18
+submodules:
+   255c84dadd029fd8ad25c5efb5933e47beaa00c7 abseil-cpp (255c84d)
+   3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732 mozc (heads/master)
+   4b0c3aacf0657fbf38253b38918d3358dd4319ec protobuf (4b0c3aa)
+emsdk: 3.1.69
+single-thread: true (-pthread なし = COOP/COEP 不要)
+build-cache: miss
