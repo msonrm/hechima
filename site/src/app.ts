@@ -148,6 +148,7 @@ function foldPanelHtml(p: CandidateFoldConfig): string {
         ${num("max", "上限", p.maxCandidates, 1, 100, 1,
               "拮抗しているよみで出しすぎないための最大件数")}
         ${num("page", "1 ページ", p.pageSize, 1, 20, 1, "候補窓に一度に見える件数")}
+        <div class="fold-break"></div>
         ${num("rows", "グリッド行", p.gridRows, 1, 20, 1, "二層目の列の高さ（数字キーと揃えるなら 9）")}
         ${num("cols", "グリッド列", p.gridCols, 1, 20, 1, "二層目の列数")}
       </div>

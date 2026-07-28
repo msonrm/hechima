@@ -599,6 +599,9 @@ body.theme-terminal .cand-num { color: #1f8a1f; }
   gap: 10px 16px;
   margin-top: 8px;
 }
+/* グリッド行/列（二層目のパラメータ）を必ず次の行から始める。
+   一層目のパラメータ（Δ・下限・上限・1 ページ）と混ざって折り返すのを防ぐ */
+.fold-break { flex-basis: 100%; height: 0; margin: 0; }
 .fold-item { display: flex; gap: 6px; align-items: center; }
 .fold-label { color: var(--muted); white-space: nowrap; }
 .fold-item input { width: 5.5em; padding: 2px 4px; font: inherit; }
