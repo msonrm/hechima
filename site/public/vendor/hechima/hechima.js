@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.14.0";
+	const HECHIMA_VERSION = "0.15.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {

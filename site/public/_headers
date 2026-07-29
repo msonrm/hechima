@@ -16,3 +16,22 @@
 # iPad Safari のキャッシュ誤ブロック対策として入れた経緯がある（同一オリジン応答には無害）。
 /*
   Cross-Origin-Resource-Policy: same-origin
+
+# 辞書の圧縮配信について（2026-07-29 に実測して決めた）
+#
+# Cloudflare の自動圧縮は **content-type の許可リスト**で決まる。1MB の同一データを
+# content-type だけ変えて置いて測った結果:
+#   (無指定) 1048576 B / application/octet-stream 1048576 B / text/plain 26 B / application/wasm 26 B
+# 辞書は拡張子 .data から content-type が決まらないため無圧縮のまま流れていた
+# （wasm は 2.6MB→0.9MB に縮んでいたのに、いちばん重い 18.9MB だけ素通し）。
+#
+# 採らなかった案が 2 つある:
+#   - content-type を application/wasm と偽る … 1 行で済むが嘘のラベル。CDN の挙動に
+#     依存する点も「どのホストにも置ける」方針と逆行する
+#   - 事前 gzip + Content-Encoding: gzip の申告 … **Workers 静的アセットは _headers の
+#     Content-Encoding を剥がす**（カナリアで実測）。Content-Type は通るが Content-Encoding は通らない
+#
+# 採ったのは「圧縮した実体を自分で持つ」形: ビルド時に mozc.data.gz を生成して置き
+# （scripts/gzip-dict.mjs）、hechima-worker v0.15.0+ が .gz を優先して取り
+# DecompressionStream で展開する。.gz が無いホストでは素の mozc.data に戻るので、
+# 配信側と worker のどちらが古くても動く。18.9MB → 12.6MB（-33%）。

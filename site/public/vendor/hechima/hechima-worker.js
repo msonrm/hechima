@@ -1,6 +1,6 @@
 (function() {
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.14.0";
+	const HECHIMA_VERSION = "0.15.0";
 	//#endregion
 	//#region src/hechima/worker-main.ts
 	let M = null;
@@ -67,8 +67,23 @@
 			lastYomi = lastKeys.join("");
 		}
 	}
-	/** 辞書を fetch（進捗をへちま蔓で流す）。SPA フォールバックの HTML 混入も検出する */
+	/**
+	* 辞書を取得する。事前圧縮版（`<dataUrl>.gz`）があればそちらを使う。
+	*
+	* 辞書は 18.9MB あるうえ CDN の自動圧縮が効かない（拡張子から content-type が決まらず、
+	* 圧縮対象の型一覧から外れる — Cloudflare で実測）。ホスト側のヘッダ設定に頼ると
+	* 「どのホストにも置ける」という前提が崩れるので、**圧縮した実体を自分で持つ**。
+	*
+	* `.gz` が無い・展開できない・`DecompressionStream` が無い環境では素の `dataUrl` に戻る。
+	* つまり配信側が `.gz` を置いていなくても従来どおり動く（旧ホストと相互運用できる）。
+	*/
 	async function fetchDictionary(dataUrl) {
+		if (typeof DecompressionStream === "function") try {
+			return await fetchDictionaryBody(`${dataUrl}.gz`, true);
+		} catch {}
+		return fetchDictionaryBody(dataUrl, false);
+	}
+	async function fetchDictionaryBody(dataUrl, gzipped) {
 		const res = await fetch(new URL(dataUrl, self.location.href).href);
 		if (!res.ok) throw new Error(`辞書の取得に失敗 (HTTP ${res.status}: ${dataUrl})`);
 		const total = Number(res.headers.get("content-length")) || 0;
@@ -95,6 +110,11 @@
 				o += p.length;
 			}
 		} else buf = new Uint8Array(await res.arrayBuffer());
+		if (gzipped) {
+			if (buf.length < 2 || buf[0] !== 31 || buf[1] !== 139) throw new Error(`${dataUrl} は gzip ではない`);
+			const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+			buf = new Uint8Array(await new Response(stream).arrayBuffer());
+		}
 		if (!buf.length || buf[0] === 60) throw new Error("mozc.data が不正（未配備で HTML が返った可能性）");
 		return buf;
 	}
