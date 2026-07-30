@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.15.0";
+	const HECHIMA_VERSION = "0.16.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -645,6 +645,11 @@
 		}
 		function handleEngineAction(action) {
 			const t = action.type;
+			if (t === "insertSpace") {
+				if (!(!segs && !composing() && !(engine && engine.getState().isComposing))) return handleEngineAction({ type: "convert" });
+				cb.commit(action.shifted ? " " : "　");
+				return true;
+			}
 			if (t === "editSegmentLeft" || t === "editSegmentRight") {
 				if (segs && cb.resize) startResize(t === "editSegmentRight" ? 1 : -1);
 				return true;

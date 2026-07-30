@@ -1,6 +1,6 @@
 (function() {
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.15.0";
+	const HECHIMA_VERSION = "0.16.0";
 	//#endregion
 	//#region src/hechima/worker-main.ts
 	let M = null;
@@ -112,7 +112,10 @@
 		} else buf = new Uint8Array(await res.arrayBuffer());
 		if (gzipped) {
 			if (buf.length < 2 || buf[0] !== 31 || buf[1] !== 139) throw new Error(`${dataUrl} は gzip ではない`);
-			const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+			const stream = new ReadableStream({ start(c) {
+				c.enqueue(buf);
+				c.close();
+			} }).pipeThrough(new DecompressionStream("gzip"));
 			buf = new Uint8Array(await new Response(stream).arrayBuffer());
 		}
 		if (!buf.length || buf[0] === 60) throw new Error("mozc.data が不正（未配備で HTML が返った可能性）");
