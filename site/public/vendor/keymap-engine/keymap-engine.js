@@ -1149,12 +1149,13 @@
 		}
 		const shiftKeys = /* @__PURE__ */ new Set();
 		const shiftSingleTapActions = /* @__PURE__ */ new Map();
+		const spaceRole = hidToChordKey.get(HID.SPACE);
 		for (const sk of config.shiftKeys) {
 			shiftKeys.add(sk.key);
 			if (sk.singleTapAction) {
 				const action = parseSpecialAction(sk.singleTapAction);
 				if (action) shiftSingleTapActions.set(sk.key, action);
-			}
+			} else if (sk.key === spaceRole) shiftSingleTapActions.set(sk.key, { type: "convert" });
 		}
 		let englishLookupTable = null;
 		if (config.englishLookupTable) {
@@ -1188,7 +1189,7 @@
 	}
 	//#endregion
 	//#region src/engine/version.ts
-	const ENGINE_VERSION = "1.6.0";
+	const ENGINE_VERSION = "1.8.0";
 	//#endregion
 	//#region src/engine/key-router.ts
 	/** Route a KeyEvent to a KeyAction based on the expanded keymap */
@@ -1201,7 +1202,10 @@
 			const ctrlAction = routeStandardControlKey(event, state, keymap.chordData ? isChordShiftKeyCode(event.keyCode, keymap.chordData) : false);
 			if (ctrlAction) return ctrlAction;
 		}
-		if (keymap.chordData) return routeChord(event, keymap.chordData, isDirectEnglishMode);
+		if (keymap.chordData) {
+			const spaceIsChordKey = keymap.chordData.hidToChordKey.has(HID.SPACE);
+			if (!(event.keyCode === HID.SPACE && !spaceIsChordKey)) return routeChord(event, keymap.chordData, isDirectEnglishMode);
+		}
 		if (!isComposing && !isDirectEnglishMode && event.keyCode === HID.SPACE) return {
 			type: "insertSpace",
 			shifted: !!(event.modifiers & KeyModifierFlags.SHIFT)
