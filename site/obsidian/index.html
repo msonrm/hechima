@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Obsidian で使う — へちま言語ラボ</title>
-    <meta name="description" content="hechima 一式を Obsidian のプラグインに入れて、そのエディタで日本語を打てるようにしたものです。OSのIMEを使わないので、iPadでも薙刀式やNICOLAで書けます。" />
+    <meta name="description" content="hechima 一式を Obsidian のプラグインに入れて、そのエディタで日本語を打てるようにしたものです。OSのIMEを使わないので、iPadでも薙刀式やAZIK、月配列で書けます。" />
     <meta property="og:title" content="Obsidian で使う — へちま言語ラボ" />
-    <meta property="og:description" content="差し替えたのは層ではなく宿主。iPadでも薙刀式やNICOLAで日本語が打てます。" />
+    <meta property="og:description" content="差し替えたのは層ではなく宿主。iPadでも薙刀式やAZIK、月配列で日本語が打てます。" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://luffa-lang-labo.dev/obsidian/" />
     <meta property="og:site_name" content="へちま言語ラボ" />
@@ -44,13 +44,14 @@
       <section class="hints">
         <h3>何ができるのか</h3>
         <p><b>OSのIMEは使いません。</b>変換エンジン（Mozc の WebAssembly ビルド）はプラグインの中に入っています。
-          つまり<b>iPadでも薙刀式やNICOLAで日本語が打てます</b> —
+          つまり<b>iPadでも薙刀式やAZIK、月配列で日本語が打てます</b> —
           本来ならOSが対応していない限り不可能なことです。</p>
         <ul>
           <li><b>配列</b>：ローマ字・Colemak・AZIK・月配列2-263・薙刀式v18・NICOLA を同梱（JIS / US 版あり）。
             自分の配列JSONをノートと同じ場所に置けば、それも一覧に出ます</li>
           <li><b>同時打鍵</b>：薙刀式の相互シフト、NICOLAの親指シフト。
-            ただし<b>エディタが離鍵（keyup）を返す環境でだけ</b>成立します（下記）</li>
+            ただし<b>エディタが離鍵（keyup）を返す環境でだけ</b>成立します（下記）。
+            <b>NICOLAはiPadだと親指キーが片方しか取れず、実用になりません</b>（理由も下記）</li>
           <li><b>文節の移動・伸縮</b>、確定アンドゥ、再変換、<b>ユーザー辞書</b></li>
           <li><b>学習とユーザー辞書はノートと同じ場所</b>に置いてあるので、
             Obsidian Sync がそのまま端末間へ運びます。iPadで覚えた変換がMacに乗ります</li>
@@ -65,7 +66,10 @@
         <ul>
           <li><b>パソコン（Windows / Mac / Linux）</b>：変換・同時打鍵ともに動きます</li>
           <li><b>iPad ＋ 外付けキーボード</b>：同上。<b>ただし親指シフトに使えるキーは実質スペースだけ</b>
-            — 無変換・変換・英数・かなはiPadOSが入力ソース切替に予約していて、アプリまで届きません</li>
+            — 無変換・変換・英数・かなはiPadOSが入力ソース切替に予約していて、アプリまで届きません。
+            Altも文字キーとの同時押しをOSが奪います。<b>NICOLAは左右2つの親指キーで面を3つ作る方式</b>なので、
+            片方しか無いと面が半分落ちます（濁音か拗音のどちらかが打てない）。
+            <b>iPadなら薙刀式（スペース1つで成立）か、AZIK・月配列のような逐次系が向きます</b></li>
           <li><b>Androidスマホ ＋ Bluetoothキーボード</b>：変換は動きます。同時打鍵は未対応（情報は届いているので、いずれ）</li>
           <li><b>ChromeOSのAndroid版アプリ</b>：変換は動きます。同時打鍵は不可（離鍵が来ないため）</li>
         </ul>
