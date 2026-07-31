@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Obsidian で使う — へちま言語ラボ</title>
+    <meta name="description" content="hechima 一式を Obsidian のプラグインに入れて、そのエディタで日本語を打てるようにしたものです。OSのIMEを使わないので、iPadでも薙刀式やNICOLAで書けます。" />
+    <meta property="og:title" content="Obsidian で使う — へちま言語ラボ" />
+    <meta property="og:description" content="差し替えたのは層ではなく宿主。iPadでも薙刀式やNICOLAで日本語が打てます。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://luffa-lang-labo.dev/obsidian/" />
+    <meta property="og:site_name" content="へちま言語ラボ" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; Obsidian で使う</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>Obsidian で使う</h2>
+        <p>hechima 一式を <a href="https://obsidian.md/" rel="noopener">Obsidian</a>（メモアプリ）の
+          プラグインに入れて、そのエディタで日本語を打てるようにしたものです。
+          <b>デモではなく、ふつうに文章を書けます。</b></p>
+        <p class="src">配布先：<a href="https://github.com/msonrm/obsidian-hechima" rel="noopener"><code>msonrm/obsidian-hechima</code></a></p>
+      </section>
+
+      <section class="layers">
+        <div class="stack" role="img" aria-label="入力・キーマップ・変換・表示のすべてを、別の宿主の中へ持っていった">
+          <span class="blk">入力</span><span class="arw">→</span>
+          <span class="blk">キーマップ</span><span class="arw">→</span>
+          <span class="blk">変換</span><span class="arw">→</span>
+          <span class="blk">表示</span>
+        </div>
+        <p><b>差し替えた層：宿主</b> ／ <span class="kept">据え置き：入力・キーマップ・変換・表示</span></p>
+        <p>ほかの実験ページは4つの箱のどれかを差し替えたものでしたが、これは<b>箱を一つも差し替えていません</b>。
+          そのかわり、4つまとめて<b>置き場所のほう</b>を変えました。ブラウザのページの中ではなく、
+          メモアプリの中で同じものが動いています。</p>
+      </section>
+
+      <section class="hints">
+        <h3>何ができるのか</h3>
+        <p><b>OSのIMEは使いません。</b>変換エンジン（Mozc の WebAssembly ビルド）はプラグインの中に入っています。
+          つまり<b>iPadでも薙刀式やNICOLAで日本語が打てます</b> —
+          本来ならOSが対応していない限り不可能なことです。</p>
+        <ul>
+          <li><b>配列</b>：ローマ字・Colemak・AZIK・月配列2-263・薙刀式v18・NICOLA を同梱（JIS / US 版あり）。
+            自分の配列JSONをノートと同じ場所に置けば、それも一覧に出ます</li>
+          <li><b>同時打鍵</b>：薙刀式の相互シフト、NICOLAの親指シフト。
+            ただし<b>エディタが離鍵（keyup）を返す環境でだけ</b>成立します（下記）</li>
+          <li><b>文節の移動・伸縮</b>、確定アンドゥ、再変換、<b>ユーザー辞書</b></li>
+          <li><b>学習とユーザー辞書はノートと同じ場所</b>に置いてあるので、
+            Obsidian Sync がそのまま端末間へ運びます。iPadで覚えた変換がMacに乗ります</li>
+        </ul>
+      </section>
+
+      <section class="hints">
+        <h3>環境によって、できることが違います</h3>
+        <p>薙刀式やNICOLAのような同時打鍵は、<b>エディタが離鍵を返す環境でしか原理的に成立しません</b>。
+          押下しか来ないと「Dを押しながらx」と「Dを打ってからx」が同じイベントの並びになり、
+          区別そのものが不可能だからです。実機で測った結果がこれです。</p>
+        <ul>
+          <li><b>パソコン（Windows / Mac / Linux）</b>：変換・同時打鍵ともに動きます</li>
+          <li><b>iPad ＋ 外付けキーボード</b>：同上。<b>ただし親指シフトに使えるキーは実質スペースだけ</b>
+            — 無変換・変換・英数・かなはiPadOSが入力ソース切替に予約していて、アプリまで届きません</li>
+          <li><b>Androidスマホ ＋ Bluetoothキーボード</b>：変換は動きます。同時打鍵は未対応（情報は届いているので、いずれ）</li>
+          <li><b>ChromeOSのAndroid版アプリ</b>：変換は動きます。同時打鍵は不可（離鍵が来ないため）</li>
+        </ul>
+        <p>親指シフトのキーは<b>設定で「押して割り当て」</b>ができます。この画面はそのまま可用性の確認にもなっていて、
+          <b>押しても反応しないキーは、その端末では使えないキー</b>だと分かります。</p>
+      </section>
+
+      <section class="hints">
+        <h3>入れ方</h3>
+        <p>まだ早期のものなので、ストアには出していません。配布は
+          <a href="https://github.com/TfTHacker/obsidian42-brat" rel="noopener">BRAT</a>
+          （Obsidianのベータ版プラグイン導入ツール）経由です。
+          BRATの「Add beta plugin」に <code>msonrm/obsidian-hechima</code> を指定してください。
+          <b>iPad単体で完結します。</b></p>
+        <p>変換エンジンと辞書（あわせて約20MB）は<b>初回に自動で取得します</b>。
+          落としたものは端末内に持つので、2回目からは取りに行きません。
+          手順の詳細と、うまくいかないときの切り分け方は
+          <a href="https://github.com/msonrm/obsidian-hechima" rel="noopener">配布先のREADME</a>にあります。</p>
+        <p><b>試して不具合を教えていただけるとありがたいです。</b>
+          このラボのページと違って、こちらは毎日の書き物に使うものなので、
+          実際に使った人からしか出てこない不具合があります。</p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+  </body>
+</html>
