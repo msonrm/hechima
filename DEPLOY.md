@@ -49,7 +49,16 @@ npx wrangler deploy                   # site/dist を本番へ。数十秒で反
 1. **labo でビルド**: `cd ~/development/logical-layout-labo/web && npm run build:<engine>`
    （例 `build:gamepad` / `build:flick` / `build:engine` / `build:hechima`）
 2. **コピー**: `cp web/public/<engine>/<file>.js <hechima>/site/public/vendor/<engine>/<file>.js`
-3. **`site/public/vendor/VENDOR.md`** の版数・注記を更新（pin 記録。必須）
+3. **版を書いてある場所をまとめて更新する**。1 か所だけ直して満足しないこと（2026-07 に
+   VENDOR.md だけ更新して README を 5 版ぶん置き去りにした。手順書に書いてある項目は守られ、
+   書いていない項目が落ちた、というだけの事故）:
+   - `site/public/vendor/VENDOR.md` の表 — pin 記録（版 + 何が変わったかの注記）
+   - `README.md` の構成表 — 対外的な「いま同梱している版」
+   - `site/public/vendor/hechima/hechima.d.ts` の 1 行目 — **正典は labo 側**なので、
+     labo の `web/public/hechima/hechima.d.ts` を直してから cp する
+   - `EMBEDDING.md` の「版の組み合わせ」— **層をまたぐ最低版が変わったときだけ**。
+     ここは機械照合できない（後述）ので、セット必須の変更を入れたら必ず手で見る
+   - 挙動や機能が変わったなら `README.md` の機能列・ラボサイトのページ表も
 4. ~~新規エンジンに `no-store` を追加~~ → **不要になった**（2026-07-25。COOP/COEP 撤去で
    Safari の COI × キャッシュ再利用ブロック事象の前提が消えたため、`no-store` 戦略ごと撤去）
 5. `cd site && npm run build` → リポジトリルートで `npx wrangler deploy`
@@ -58,6 +67,23 @@ npx wrangler deploy                   # site/dist を本番へ。数十秒で反
    キャッシュは `max-age=0, must-revalidate`（ETag 再検証）なので、内容が変われば必ず新しいものが
    届く。ただし**デプロイ直後は CDN エッジが一部ファイルの古い応答を返す瞬間があるので、
    確認は `?cb=<適当な値>` を付けて行う**こと。
+
+## ドキュメントが腐るのを止める仕掛け
+
+版を書いた場所が複数あり、更新は手作業なので、放っておくと必ず食い違う。歯止めは 2 つ:
+
+- **機械照合**（`site/scripts/check-versions.mjs`）。バンドル実体の `VERSION` を正として、
+  README.md の構成表・VENDOR.md の表・`hechima.d.ts` のヘッダを突き合わせる。
+  `npm run build` の先頭で走るので、**食い違ったままではビルドもデプロイもできない**
+  （単体で回すなら `cd site && npm run check`）。パッケージを増やしたのに表へ書き忘れた場合も
+  「表に行が無い」で落ちる。hechima-wasm だけは実体が版を名乗らないので README と
+  VENDOR.md の一致だけ見ている
+- **手で見るしかない領域**。機械照合できないのは「文章で書いた仕様」のほう。とくに
+  **何かを撤去したとき**が漏れやすい（追加はコードと一緒に書くが、撤去は grep しても
+  「残っている記述」しか出てこない）。実際 COOP/COEP と `no-store` の撤去は `_headers` と
+  本ファイルには反映したのに、EMBEDDING.md には「多層防御を入れています」が 1 週間残った。
+  仕様を撤去したら、**実装 → 運用書（本ファイル）→ 対外ドキュメント（README / EMBEDDING）**
+  の 3 階層を順に確認すること。対外ドキュメントがいちばん実装から遠く、いちばん読まれる
 
 ## 実験ページを足す
 

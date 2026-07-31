@@ -34,4 +34,4 @@
 # 採ったのは「圧縮した実体を自分で持つ」形: ビルド時に mozc.data.gz を生成して置き
 # （scripts/gzip-dict.mjs）、hechima-worker v0.15.0+ が .gz を優先して取り
 # DecompressionStream で展開する。.gz が無いホストでは素の mozc.data に戻るので、
-# 配信側と worker のどちらが古くても動く。18.9MB → 12.6MB（-33%）。
+# 配信側と worker のどちらが古くても動く。18.9MB → 12.8MB（-32%）。

@@ -15,10 +15,15 @@
 
 ## 互換性の要点
 
-- hechima v0.13.0 は **KeymapEngine >= 1.4.0 必須**（セット差し替え）
-- flick-engine は **hechima v0.13.0+（insertKana）必須**
-- hechima-worker は hechima-wasm v0.7.1 とセット推奨（学習は v0.4.0+。旧 wasm では resize/learn が機能検出で段階的に無効）
+**層をまたぐ最低版の要求は [EMBEDDING.md](../../../EMBEDDING.md) の「版の組み合わせ」に一本化した**
+（同じ制約を 2 か所に書くと、片方が必ず腐る。実際 v0.13.0 のまま 5 版ぶん放置した）。
+ここに書くのは pin 固有の話だけ:
+
+- 上の表の版は**この組み合わせで検証したもの**。1 レイヤだけ上げ下げしない
+- hechima-worker は hechima-wasm v0.7.1 とセット（学習は v0.4.0+。旧 wasm では resize/learn が機能検出で段階的に無効）
 - `mozc.data` は Mozc の辞書（名前と帰属を保つため改名しない）
+- `mozc.data.gz`（事前圧縮版）はリポジトリに置かない — ビルド時に生成する（`site/scripts/gzip-dict.mjs`）
+- 表の版とバンドル実体の `VERSION` は `npm run build` が機械照合する（`site/scripts/check-versions.mjs`）
 
 ## 帰属 / powered by Mozc
 

@@ -6,8 +6,8 @@
 （pin している正確な版は [site/public/vendor/VENDOR.md](site/public/vendor/VENDOR.md) と
 同梱の BUILD_INFO.txt を参照）。
 
-自作部分（サイト・hechima / hechima-keymap の各バンドル）のライセンスは
-[LICENSE](LICENSE)（MIT、Copyright (c) 2026 msonrm）です。
+自作部分（サイトと、`hechima` / `hechima-keymap` / `flick-engine` / `gamepad-engine` の
+各バンドル）のライセンスは [LICENSE](LICENSE)（MIT、Copyright (c) 2026 msonrm）です。
 
 ## Mozc（変換エンジン本体・wasm バイナリのコード部分）
 

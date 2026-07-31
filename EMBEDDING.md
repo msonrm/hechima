@@ -26,8 +26,14 @@ hechima のエンジンは**ビルド済みの UMD バンドル**として本リ
 | `gamepad/` | `gamepad-engine.js` | ゲームパッド日本語入力フロント |
 | `keymaps/` | `naginata_jis.json` / `naginata_us.json` | 配列定義（薙刀式）のサンプル |
 
-`hechima.js` + `keymap-engine.js` は約 26KB / 62KB。`mozc.data`（辞書）が 18.9MB あり、
+`hechima.js` + `keymap-engine.js` は約 29KB / 62KB。`mozc.data`（辞書）が 18.9MB あり、
 初回だけダウンロードが走ります（以後はブラウザキャッシュ）。
+
+> 辞書を縮めたい場合: worker（v0.15.0+）は `<dataUrl>.gz` を先に取りにいき、あれば
+> `DecompressionStream` で展開します（12.8MB / -33%）。無ければ素の `mozc.data` に落ちるので、
+> **置かなくても動きます**。`.gz` は同梱していないので、必要なら配信側で作ってください
+> （本リポジトリではビルド時に生成 = [`site/scripts/gzip-dict.mjs`](site/scripts/gzip-dict.mjs)）。
+> CDN の自動圧縮は content-type の許可リストで決まり、`.data` は対象外になりがち、というのが背景です。
 
 いずれも **UMD**（グローバル名 `Hechima` / `KeymapEngine` / `FlickEngine` / `GamepadEngine`）で、
 素の `<script>`・Worker の `importScripts`・node の `require` の 3 通りで読めます。
@@ -140,18 +146,28 @@ fep.setEngine(null);                                // null で内蔵ローマ�
   `worker.addEventListener("error", ...)` をホスト側で必ず付けてください。
 - **iOS Safari の COI × キャッシュ事象**。cross-origin isolated なサイトで、URL 欄からの
   再 navigation 後にキャッシュ済み応答が誤ってブロックされ、CSS や worker だけ読めなくなる
-  事象を実機で踏んでいます。本リポジトリでは ①小型アセットを `Cache-Control: no-store`
-  ②worker は `?t=` でキャッシュバスト ③各 HTML にインライン復旧スクリプト、の多層防御を
-  入れています（[`site/public/_headers`](site/public/_headers) 参照）。
+  事象を実機で踏んでいます。**単スレッド化（2026-07-25）で COOP/COEP を撤去したため、
+  この事象の前提そのものが消えました**。当時の多層防御のうち小型アセットの `Cache-Control:
+  no-store` は撤去し、worker の `?t=` キャッシュバストと各 HTML のインライン復旧スクリプトだけ
+  残してあります（経緯は [`site/public/_headers`](site/public/_headers) のコメント）。
+  **COOP/COEP を配らない組み込み先では、そもそも踏みません**。
 - **タッチ端末では OS のソフトキーボードを抑止する**。エディタ要素に `inputmode="none"` を
   立てると、フォーカスしても OS キーボードが出ません（物理キーボードの keydown は影響を
   受けません）。フリック/ゲームパッド入力フロントを使う場合は必須です。
 
 ## 5. 版の組み合わせ
 
-層をまたいで最低版の要求があります。**セットで差し替えてください**。
+層をまたいで最低版の要求があります。**セットで差し替えてください**。**検証済みの組み合わせは
+同梱のもの**（[`VENDOR.md`](site/public/vendor/VENDOR.md) の表）だけです。片方だけ新しくすると、
+下記のように「動くが挙動が壊れる」形で出ます。
 
-- `hechima` v0.14.0 → **KeymapEngine >= 1.4.0** 必須
+- `hechima` v0.16.0+ → **KeymapEngine >= 1.6.0** 必須。混ぜると逐次系の配列 JSON で
+  **Space が「よみのまま確定」になります**（v0.16.0 で Space の意味は状態で分かれた =
+  composing 中は変換 / 空バッファなら空白コミット）
+- chord 系の配列（薙刀式・NICOLA 等）を使うなら **KeymapEngine >= 1.8.0**。それ未満だと
+  **配列によっては Space が死にキーになります**（v1.7.0 = 役に無い Space、v1.8.0 = 役に載って
+  いるが `singleTapAction` の宣言が無い Space。どちらも実機で踏んだもの）
+- `hechima` v0.13.0+ → KeymapEngine >= 1.4.0（上の条件を満たしていれば自動的に満たされます）
 - `flick-engine` / `gamepad-engine` → **hechima >= 0.13.0**（`insertKana`）必須
 - `hechima-worker` → `hechima-wasm` v0.7.1 とセット推奨（学習は v0.4.0+。旧 wasm では
   文節伸縮・学習が機能検出で段階的に無効化される）
