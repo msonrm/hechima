@@ -61,9 +61,15 @@
           <span class="blk">表示</span>
         </div>
         <p><b>差し替えた層：キーマップだけ</b> ／ <span class="kept">据え置き：入力・変換・表示</span></p>
-        <p>薙刀式の同時押しは <code>naginata_jis.json</code> / <code>naginata_us.json</code> に書いてあるだけで、
-          このページのためにコードは一行も変えていません。上のJIS / USの切り替えも、読み込むJSONを差し替えているだけです。
+        <p>薙刀式の同時押しは <code>naginata.json</code> に書いてあるだけで、
+          このページのためにコードは一行も変えていません。
           <b>別の配列を載せたければ、触るのはJSON一枚です。</b></p>
+        <p>上のJIS / USは<b>配列の切り替えではありません</b>。同じJSONを読んだまま、
+          「シフトの役をどの物理キーに置くか」だけを切り替えています。
+          配列が決めるのは<b>役</b>で、それをどのキーに割り当てるかは環境の関心事
+          ——キーボードが違う、OSがキーを奪う、単に好み——だからです。
+          薙刀式はセンターシフトがスペース固定なので実際の差はごく小さいのですが、
+          親指シフト系の配列だとここが効いてきます。</p>
         <p class="src">このページ固有のソース：<a href="https://github.com/msonrm/hechima/blob/main/site/src/pages/naginata.ts" rel="noopener"><code>site/src/pages/naginata.ts</code></a></p>
       </section>
 
