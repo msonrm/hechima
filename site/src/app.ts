@@ -16,7 +16,8 @@
 
 declare const KeymapEngine: {
   version: string;
-  decodeKeymap(json: unknown): unknown;
+  /** v2: opts.layout で `layouts` の追加バインドを選ぶ（ホストの責務） */
+  decodeKeymap(json: unknown, opts?: { layout?: string }): unknown;
   InputEngine: new (keymap: unknown) => Hechima.InputEngineLike;
   keyEventFromBrowser(tap: Hechima.KeyTap): Hechima.KeyEvent | null;
 };
@@ -60,13 +61,18 @@ declare const GamepadEngine: {
 };
 
 export interface KeymapChoice {
-  /** /vendor/keymaps/<value>.json */
+  /**
+   * keymap v2 の**レイアウト**（`layouts` のキー。"jis" / "us"）。
+   * v1 までは配列ファイル名だったが、JIS/US が 1 本に統合されたので選ぶ対象が変わった。
+   */
   value: string;
   label: string;
 }
 
 export interface LabPageConfig {
-  /** 配列セレクタの選択肢。省略時はセレクタなし = 内蔵ローマ字固定 */
+  /** 使う配列（`/vendor/keymaps/<keymap>.json`）。省略時は内蔵ローマ字 */
+  keymap?: string;
+  /** レイアウトセレクタの選択肢。省略時はセレクタなし */
   keymapChoices?: KeymapChoice[];
   /** セレクタのラベル（既定 "配列:"） */
   keymapLabel?: string;
@@ -1139,7 +1145,8 @@ export function initLabPage(config: LabPageConfig = {}): void {
 
   // ---- 配列（keymap-format JSON。セレクタはページ config 次第） ----
 
-  async function setKeymap(id: string): Promise<void> {
+  async function setKeymap(layout: string): Promise<void> {
+    const id = config.keymap;
     if (!id) {
       fep.setEngine(null);
       return;
@@ -1149,7 +1156,10 @@ export function initLabPage(config: LabPageConfig = {}): void {
       setStatus(`配列の読み込みに失敗: ${id} (HTTP ${res.status})`);
       return;
     }
-    const engine = new KeymapEngine.InputEngine(KeymapEngine.decodeKeymap(await res.json()));
+    // v2: レイアウトは**ホストが決める**。役 → 物理キーの追加バインドがこれで決まる
+    const engine = new KeymapEngine.InputEngine(
+      KeymapEngine.decodeKeymap(await res.json(), layout ? { layout } : {}),
+    );
     engine.onStateChange = () => fep.pumpEngine();
     fep.setEngine(engine, (tap) => KeymapEngine.keyEventFromBrowser(tap));
   }

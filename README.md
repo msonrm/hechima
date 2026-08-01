@@ -22,8 +22,8 @@ L.L.L. は生まれ故郷の logical-layout-labo と同じ）: **[https://luffa-
 
 | レイヤ | 中身 | 版 |
 |---|---|---|
-| `hechima` | 変換セッション層 + hechima-worker（へちま蔓 v0）。よみ合成・文節候補選択・文節伸縮・編集キー二重経路・英字合成（Shift+英字）・追加候補・**候補の二層化**・**学習**（OPFS 永続化）・**確定アンドゥ**（Ctrl+BS）・**再変換**・ユーザー辞書 RPC・かな直接注入 `insertKana`（フリック / ゲームパッド等の非キーボード入力フロント用） | v0.18.0 |
-| `hechima-keymap`（= KeymapEngine） | 配列エンジン。論理配列 JSON（薙刀式等）・同時打鍵/chord（時間窓 + **相互シフト** = 薙刀式本家仕様の状態ベース判定）・SandS をデータ駆動で解決 | v1.8.0 |
+| `hechima` | 変換セッション層 + hechima-worker（へちま蔓 v0）。よみ合成・文節候補選択・文節伸縮・編集キー二重経路・英字合成（Shift+英字）・追加候補・**候補の二層化**・**学習**（OPFS 永続化）・**確定アンドゥ**（Ctrl+BS）・**再変換**・ユーザー辞書 RPC・かな直接注入 `insertKana`（フリック / ゲームパッド等の非キーボード入力フロント用） | v0.19.0 |
+| `hechima-keymap`（= KeymapEngine） | 配列エンジン。論理配列 JSON（薙刀式等）・同時打鍵/chord（時間窓 + **相互シフト** = 薙刀式本家仕様の状態ベース判定）・SandS をデータ駆動で解決。**keymap v2 = 役と物理キーの分離（roles / layouts / roleOverrides）・JIS/US の統合・後置変調・局面ガード** | v2.0.0 |
 | `hechima-wasm` | Mozc（fcitx5-mozc）の Emscripten ビルド。かな → 文節/候補 JSON に加え、学習（FinishConversion）・取り消し・逆変換・ユーザー辞書の最小 C API。**単スレッドビルド = COOP/COEP 不要**。**powered by Mozc** | v0.7.1 |
 | `flick-engine` | フリック入力フロント。flickmap（flick-1）データ駆動の 12 キーフリック（゛゜小トグル・英字/数字レイヤ・ペタル）— **スマホでも OS IME 非依存の日本語入力**が成立する | v1.1.1 |
 | `gamepad-engine` | ゲームパッド入力フロント（日本語）。左手で子音・右手で母音、フリック入力の文法を応用。文節伸縮・確定アンドゥ・カーソル移動/範囲選択まで割り当て済み | v1.7.0 |

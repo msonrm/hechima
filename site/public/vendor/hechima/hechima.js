@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.18.0";
+	const HECHIMA_VERSION = "0.19.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -921,12 +921,19 @@
 						engine.reset();
 					} catch {}
 					engine.onHostAction = null;
+					engine.hostPhase = null;
 				}
 				clear();
 				cb.hide();
 				engine = eng ?? null;
 				engineKeyOf = keyOf ?? null;
-				if (engine) engine.onHostAction = (action) => handleEngineAction(action);
+				if (engine) {
+					engine.onHostAction = (action) => handleEngineAction(action);
+					engine.hostPhase = () => {
+						if (segs) return "selecting";
+						return composing() || engine.isComposing ? "composing" : "idle";
+					};
+				}
 			},
 			pumpEngine,
 			selectCandidate(index) {
