@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.19.0";
+	const HECHIMA_VERSION = "0.20.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -196,16 +196,6 @@
 		"!": "！",
 		"/": "・"
 	};
-	const DIRECT_COMMIT = {
-		".": "。",
-		",": "、",
-		"?": "？",
-		"!": "！",
-		"[": "「",
-		"]": "」",
-		"-": "ー",
-		"/": "・"
-	};
 	const HOST_NAV_KEYS = /* @__PURE__ */ new Set([
 		"Backspace",
 		"Delete",
@@ -350,6 +340,11 @@
 					return;
 				}
 			}
+		};
+		const eijiAppend = (ch) => {
+			kana += ch;
+			genId++;
+			render();
 		};
 		const clear = () => {
 			kana = "";
@@ -764,6 +759,11 @@
 				}
 				if (k === "ArrowLeft" || k === "ArrowRight" || k === "ArrowUp" || k === "ArrowDown") return true;
 			}
+			const printable = tap.key.length === 1 && tap.key >= " " && tap.key <= "~";
+			if (eiji && !segs && printable && tap.key !== " ") {
+				eijiAppend(tap.key);
+				return true;
+			}
 			if (!composingNow && tap.code !== void 0 && HOST_NAV_KEYS.has(tap.code)) return false;
 			const kev = engineKeyOf ? engineKeyOf(tap) : null;
 			if (!kev) return false;
@@ -848,19 +848,11 @@
 					return true;
 				}
 				if (eiji && !segs) {
-					kana += k;
-					genId++;
-					render();
+					eijiAppend(k);
 					return true;
 				}
 				const ch = k.toLowerCase();
-				if (!composing() && !/[a-z]/.test(ch)) {
-					if (DIRECT_COMMIT[ch]) {
-						commit(DIRECT_COMMIT[ch]);
-						return true;
-					}
-					return false;
-				}
+				if (!composing() && !/[a-z]/.test(ch) && ROMAJI[ch] === void 0) return false;
 				if (segs) commit(joined());
 				pend += ch;
 				const r = resolveRomaji(kana, pend, false);

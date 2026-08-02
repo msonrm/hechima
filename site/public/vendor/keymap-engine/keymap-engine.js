@@ -1580,8 +1580,9 @@
 			where: "roles",
 			key: name
 		});
-		const inputMappings = expandInputMappings(def.inputBase, def.suffixRules, def.inputMappings);
+		const { mappings: inputMappings, baseOnlyKeys } = expandInputMappings(def.inputBase, def.suffixRules, def.inputMappings);
 		const prefixSet = buildPrefixSet(inputMappings);
+		const displayRawKeys = buildDisplayRawKeys(baseOnlyKeys, prefixSet);
 		const charMapBase = def.inputBase === "romaji" ? h2zMapUS : {};
 		const characterMap = def.behavior.type === "sequential" ? {
 			...charMapBase,
@@ -1595,6 +1596,7 @@
 			unboundRoles: roles.unbound,
 			inputMappings,
 			prefixSet,
+			displayRawKeys,
 			characterMap,
 			modeKeys: def.modeKeys ?? [],
 			keyRemap: def.keyRemap ?? {},
@@ -1630,11 +1632,42 @@
 			}
 		}
 		const result = { ...base };
-		for (const [k, v] of Object.entries(suffixExpansions)) result[k] = v;
-		if (explicitMappings) {
-			for (const [k, v] of Object.entries(explicitMappings)) if (!k.startsWith("_comment")) result[k] = v;
+		const baseOnlyKeys = new Set(Object.keys(base));
+		for (const [k, v] of Object.entries(suffixExpansions)) {
+			result[k] = v;
+			baseOnlyKeys.delete(k);
 		}
-		return result;
+		if (explicitMappings) {
+			for (const [k, v] of Object.entries(explicitMappings)) if (!k.startsWith("_comment")) {
+				result[k] = v;
+				baseOnlyKeys.delete(k);
+			}
+		}
+		return {
+			mappings: result,
+			baseOnlyKeys
+		};
+	}
+	/**
+	* 未確定バッファを**素のまま**見せるキー（かなへ仮解決しない）。
+	*
+	* 対象は「一致しているのに、より長いキーの接頭辞でもある」もの。このとき仮解決を見せるか
+	* どうかは、その割り当てが**配列の意思か既定の受け皿か**で変わる:
+	*
+	* - 配列が明示したキー（AZIK の `q`=ん・`kk`=きん、月配列の `q`=そ）は**それ自体が完成したかな**。
+	*   1 打鍵 1 かなの配列で素のアルファベットを見せても読めないので、仮解決を見せる（従来どおり）
+	* - 標準ローマ字が既定で敷いた分は**続きが来なかったときの救済**。該当するのは撥音の `n` だけで、
+	*   打った人の意図は多く「な行」。ここで「ん」を見せると次の打鍵で「な」へ巻き戻って見える
+	*   （内蔵ローマ字 = hechima の `resolveRomaji` も `n` のまま見せる）
+	*
+	* 原典の Swift `pendingBufferText` は月配列などのカスタムテーブル専用で、
+	* 標準ローマ字は AzooKey の trie を通るためこの経路に来なかった。web は両方を
+	* 同じ経路に流したので、この切り分けが要る。
+	*/
+	function buildDisplayRawKeys(baseOnlyKeys, prefixSet) {
+		const keys = /* @__PURE__ */ new Set();
+		for (const k of baseOnlyKeys) if (prefixSet.has(k)) keys.add(k);
+		return keys;
 	}
 	/** Build a set of all prefixes of mapping keys (for greedy longest-match) */
 	function buildPrefixSet(mappings) {
@@ -1897,7 +1930,7 @@
 	}
 	//#endregion
 	//#region src/engine/version.ts
-	const ENGINE_VERSION = "2.0.0";
+	const ENGINE_VERSION = "2.1.0";
 	//#endregion
 	//#region src/engine/key-router.ts
 	/** Route a KeyEvent to a KeyAction based on the expanded keymap */
@@ -2040,12 +2073,14 @@
 			this.buffer = "";
 			this.mappings = {};
 			this.prefixSet = /* @__PURE__ */ new Set();
+			this.displayRawKeys = /* @__PURE__ */ new Set();
 			this.resolvedKana = "";
 		}
 		/** Update the mapping tables (call when keymap changes) */
-		setMappings(mappings, prefixSet) {
+		setMappings(mappings, prefixSet, displayRawKeys = /* @__PURE__ */ new Set()) {
 			this.mappings = mappings;
 			this.prefixSet = prefixSet;
+			this.displayRawKeys = displayRawKeys;
 			this.buffer = "";
 			this.resolvedKana = "";
 		}
@@ -2059,11 +2094,6 @@
 		*  Returns any remaining kana. */
 		flush() {
 			if (this.buffer.length === 0) return "";
-			const exact = this.mappings[this.buffer];
-			if (exact !== void 0) {
-				this.buffer = "";
-				return exact;
-			}
 			return this.drain(true);
 		}
 		/** Delete the last character from the buffer.
@@ -2083,31 +2113,20 @@
 		get pending() {
 			return this.buffer;
 		}
-		/** Get pending buffer resolved as kana for display (pendingBufferText port) */
+		/** Get pending buffer resolved as kana for display (pendingBufferText port)
+		*
+		*  **解決の本体は drain と同じ**（`resolve` を共有）。違うのは「続きを待つ」ところに
+		*  来たときの見せ方だけで、そこは `displayRawKeys`（配列の意思か既定の受け皿か）で決める。
+		*
+		*  かつてここだけが独自に exact 一致を優先していたため、ローマ字の `n` が「ん」に化け、
+		*  次に `a` を打つと「な」へ巻き戻って見えた（バッファ側は正しく `n` を保持していたので、
+		*  **表示だけの不一致**だった）。同じ表に 2 つの解決規則を置かないこと。 */
 		get pendingDisplay() {
-			if (this.buffer.length === 0) return "";
-			const exact = this.mappings[this.buffer];
-			if (exact !== void 0) return exact;
-			let result = "";
-			let remaining = this.buffer;
-			while (remaining.length > 0) {
-				let matched = false;
-				for (let len = remaining.length; len >= 1; len--) {
-					const prefix = remaining.slice(0, len);
-					const kana = this.mappings[prefix];
-					if (kana !== void 0) {
-						result += kana;
-						remaining = remaining.slice(len);
-						matched = true;
-						break;
-					}
-				}
-				if (!matched) {
-					result += remaining[0];
-					remaining = remaining.slice(1);
-				}
-			}
-			return result;
+			const { kana, rest } = this.resolve(this.buffer, false);
+			if (rest.length === 0) return kana;
+			const exact = this.mappings[rest];
+			if (exact !== void 0 && !this.displayRawKeys.has(rest)) return kana + exact;
+			return kana + rest;
 		}
 		/** Whether the buffer is empty */
 		get isEmpty() {
@@ -2121,32 +2140,47 @@
 		/** Drain the buffer using greedy longest-match + backtracking.
 		*  Port of drainSequentialBuffer (InputManager.swift L477-515) */
 		drain(force = false) {
+			const { kana, rest } = this.resolve(this.buffer, force);
+			this.buffer = rest;
+			return kana;
+		}
+		/** 解決規則の本体。**非破壊**（バッファを触らない）なので表示側からも呼べる。
+		*
+		*  戻り値 = `{ kana: 解決できた分, rest: 続きを待って残った分 }`。
+		*  `force`（確定直前の flush）では待たずに出し切るので `rest` は必ず空になる。 */
+		resolve(buffer, force) {
 			let output = "";
-			while (this.buffer.length > 0) {
-				const hasMatch = this.mappings[this.buffer] !== void 0;
-				const isPrefix = this.prefixSet.has(this.buffer);
+			while (buffer.length > 0) {
+				const hasMatch = this.mappings[buffer] !== void 0;
+				const isPrefix = this.prefixSet.has(buffer);
 				if (hasMatch && (!isPrefix || force)) {
-					output += this.mappings[this.buffer];
-					this.buffer = "";
-				} else if (isPrefix && !force) return output;
+					output += this.mappings[buffer];
+					buffer = "";
+				} else if (isPrefix && !force) return {
+					kana: output,
+					rest: buffer
+				};
 				else {
 					let resolved = false;
-					for (let len = this.buffer.length - 1; len >= 1; len--) {
-						const prefix = this.buffer.slice(0, len);
+					for (let len = buffer.length - 1; len >= 1; len--) {
+						const prefix = buffer.slice(0, len);
 						if (this.mappings[prefix] !== void 0) {
 							output += this.mappings[prefix];
-							this.buffer = this.buffer.slice(len);
+							buffer = buffer.slice(len);
 							resolved = true;
 							break;
 						}
 					}
 					if (!resolved) {
-						output += this.buffer[0];
-						this.buffer = this.buffer.slice(1);
+						output += buffer[0];
+						buffer = buffer.slice(1);
 					}
 				}
 			}
-			return output;
+			return {
+				kana: output,
+				rest: ""
+			};
 		}
 	};
 	//#endregion
@@ -2613,14 +2647,14 @@
 			this.onHostAction = null;
 			this.hostPhase = null;
 			this.keymap = keymap;
-			this.buffer.setMappings(keymap.inputMappings, keymap.prefixSet);
+			this.buffer.setMappings(keymap.inputMappings, keymap.prefixSet, keymap.displayRawKeys);
 			this.setupChordBuffer(keymap);
 		}
 		/** Switch to a different keymap */
 		setKeymap(keymap) {
 			this.confirmComposition();
 			this.keymap = keymap;
-			this.buffer.setMappings(keymap.inputMappings, keymap.prefixSet);
+			this.buffer.setMappings(keymap.inputMappings, keymap.prefixSet, keymap.displayRawKeys);
 			this.chordBuffer?.reset();
 			this.setupChordBuffer(keymap);
 		}

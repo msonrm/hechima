@@ -5,6 +5,7 @@
 import { initLabPage } from "../app";
 
 initLabPage({
+  keymap: "romaji",
   flick: "off",
   writingMode: "vertical",
   verticalCandOrder: new URLSearchParams(location.search).get("cand") === "lr" ? "lr" : "rl",

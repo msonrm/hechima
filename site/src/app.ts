@@ -70,8 +70,16 @@ export interface KeymapChoice {
 }
 
 export interface LabPageConfig {
-  /** 使う配列（`/vendor/keymaps/<keymap>.json`）。省略時は内蔵ローマ字 */
+  /**
+   * 使う配列（`/vendor/keymaps/<keymap>.json`）。**省略時は内蔵ローマ字**だが、
+   * 内蔵は畳む方針なので新しいページでは必ず指定すること（通常は `"romaji"`）。
+   */
   keymap?: string;
+  /**
+   * レイアウトセレクタを持たないページで使うレイアウト（`"jis"` / `"us"`）。
+   * `layouts` を持つ配列（NICOLA 等）を固定で使うときだけ要る。ローマ字は不要。
+   */
+  keymapLayout?: string;
   /** レイアウトセレクタの選択肢。省略時はセレクタなし */
   keymapChoices?: KeymapChoice[];
   /** セレクタのラベル（既定 "配列:"） */
@@ -1151,6 +1159,14 @@ export function initLabPage(config: LabPageConfig = {}): void {
       fep.setEngine(null);
       return;
     }
+    // **KeymapEngine はページの HTML が読み込む**（`/vendor/keymap-engine/keymap-engine.js`）。
+    // 忘れると以前はここで例外になり、握りつぶされて**内蔵ローマ字のまま黙って動いていた**
+    // ——「cya が ちゃ にならない」等の綴りの欠けとしてしか現れず、原因に辿り着きにくい。
+    // 気づける形にする（`scripts/check-keymap-script.mjs` がビルド時にも検査する）。
+    if (typeof KeymapEngine === "undefined") {
+      setStatus(`配列エンジンが読み込まれていません（このページの HTML に keymap-engine.js の script タグが要ります）`);
+      return;
+    }
     const res = await fetch(`/vendor/keymaps/${id}.json`);
     if (!res.ok) {
       setStatus(`配列の読み込みに失敗: ${id} (HTTP ${res.status})`);
@@ -1170,6 +1186,10 @@ export function initLabPage(config: LabPageConfig = {}): void {
       editorEl.focus(); // そのまま打鍵を続けられるように
     });
     void setKeymap(keymapSelect.value); // ページの既定配列を即ロード
+  } else if (config.keymap) {
+    // レイアウトセレクタを持たないページ。**ここが無いと config.keymap が黙って無視され**、
+    // 内蔵ローマ字のまま動いてしまう（セレクタのあるページだけが engine 経路だった）
+    void setKeymap(config.keymapLayout ?? "");
   }
 
   $<HTMLButtonElement>("clear").addEventListener("click", () => {

@@ -26,7 +26,7 @@ put(
 );
 put("d-wasm", `${WASM_JS}（単スレッド版 = 全ページ共通）`);
 
-initLabPage({ flick: "off" });
+initLabPage({ keymap: "romaji", flick: "off" });
 
 // initLabPage は同期で #status を生成するので、この時点から監視できる。
 // 「準備完了」= conn.init() の解決を待って所要時間を出す（辞書のダウンロード込み）

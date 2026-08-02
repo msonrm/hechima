@@ -2,7 +2,47 @@
 	typeof exports === "object" && typeof module !== "undefined" ? factory(exports) : typeof define === "function" && define.amd ? define(["exports"], factory) : (global = typeof globalThis !== "undefined" ? globalThis : global || self, factory(global.FlickEngine = {}));
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-	//#region src/flick/postmodify.ts
+	//#region src/engine/gamepad-kana-table.ts
+	/** 濁点変換マップ */
+	const DAKUTEN_MAP = /* @__PURE__ */ new Map([
+		["か", "が"],
+		["き", "ぎ"],
+		["く", "ぐ"],
+		["け", "げ"],
+		["こ", "ご"],
+		["さ", "ざ"],
+		["し", "じ"],
+		["す", "ず"],
+		["せ", "ぜ"],
+		["そ", "ぞ"],
+		["た", "だ"],
+		["ち", "ぢ"],
+		["つ", "づ"],
+		["て", "で"],
+		["と", "ど"],
+		["は", "ば"],
+		["ひ", "び"],
+		["ふ", "ぶ"],
+		["へ", "べ"],
+		["ほ", "ぼ"],
+		["う", "ゔ"]
+	]);
+	/** 半濁点変換マップ */
+	const HANDAKUTEN_MAP = /* @__PURE__ */ new Map([
+		["は", "ぱ"],
+		["ひ", "ぴ"],
+		["ふ", "ぷ"],
+		["へ", "ぺ"],
+		["ほ", "ぽ"]
+	]);
+	new Map([...DAKUTEN_MAP.entries()].map(([k, v]) => [v, k]));
+	new Map([...HANDAKUTEN_MAP.entries()].map(([k, v]) => [v, k]));
+	//#endregion
+	//#region src/engine/postmodify.ts
+	/**
+	* サイクルの既定表。iOS 標準 12 キーの「゛゜小」と同系列（押すたびに次へ、末尾 → 先頭）。
+	* flickmap は `postModifyCycles` で完全置換できる。
+	*/
 	const DEFAULT_POST_MODIFY_CYCLES = [
 		"かが",
 		"きぎ",
@@ -34,7 +74,7 @@
 		"よょ",
 		"わゎ"
 	];
-	/** tail（末尾 1 字）の次のトグル字を返す。どのサイクルにも無ければ null */
+	/** tail（末尾 1 字）の次のトグル字。どのサイクルにも無ければ null */
 	function nextPostModify(tail, cycles) {
 		for (const cycle of cycles) {
 			const chars = Array.from(cycle);
@@ -276,24 +316,51 @@
 	//#region src/flick/resolver.ts
 	/** アクション → 合成 KeyTap（keymap v1 specialActions と同じ意味論） */
 	const ACTION_TAPS = {
-		deleteBack: { key: "Backspace" },
-		convert: { key: " " },
-		confirm: { key: "Enter" },
-		escape: { key: "Escape" },
+		deleteBack: {
+			key: "Backspace",
+			code: "Backspace"
+		},
+		convert: {
+			key: " ",
+			code: "Space"
+		},
+		confirm: {
+			key: "Enter",
+			code: "Enter"
+		},
+		escape: {
+			key: "Escape",
+			code: "Escape"
+		},
 		undo: {
 			key: "Backspace",
+			code: "Backspace",
 			ctrlKey: true
 		},
-		moveLeft: { key: "ArrowLeft" },
-		moveRight: { key: "ArrowRight" },
-		moveUp: { key: "ArrowUp" },
-		moveDown: { key: "ArrowDown" },
+		moveLeft: {
+			key: "ArrowLeft",
+			code: "ArrowLeft"
+		},
+		moveRight: {
+			key: "ArrowRight",
+			code: "ArrowRight"
+		},
+		moveUp: {
+			key: "ArrowUp",
+			code: "ArrowUp"
+		},
+		moveDown: {
+			key: "ArrowDown",
+			code: "ArrowDown"
+		},
 		resizeLeft: {
 			key: "ArrowLeft",
+			code: "ArrowLeft",
 			shiftKey: true
 		},
 		resizeRight: {
 			key: "ArrowRight",
+			code: "ArrowRight",
 			shiftKey: true
 		}
 	};
@@ -614,7 +681,7 @@
 	}
 	//#endregion
 	//#region src/flick/version.ts
-	const FLICK_ENGINE_VERSION = "1.1.1";
+	const FLICK_ENGINE_VERSION = "1.2.0";
 	//#endregion
 	exports.DEFAULT_POST_MODIFY_CYCLES = DEFAULT_POST_MODIFY_CYCLES;
 	exports.classifyGesture = classifyGesture;

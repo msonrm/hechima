@@ -29,7 +29,7 @@ const $ = <T extends HTMLElement>(id: string): T => {
   return el as T;
 };
 
-initLabPage({ flick: "off" });
+initLabPage({ keymap: "romaji", flick: "off" });
 
 const swatches = $<HTMLSpanElement>("themes");
 const sizeInput = $<HTMLInputElement>("size");

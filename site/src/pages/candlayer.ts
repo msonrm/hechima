@@ -11,6 +11,7 @@
 import { initLabPage } from "../app";
 
 initLabPage({
+  keymap: "romaji",
   flick: "off",
   wasmJs: "/vendor/hechima-wasm-cost/hechima-wasm.js",
   // dataUrl は既定（/vendor/hechima-wasm/mozc.data）のまま = 辞書を共有する

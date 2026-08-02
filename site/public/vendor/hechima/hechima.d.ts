@@ -1,7 +1,10 @@
-// Hechima v0.19.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// Hechima v0.20.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 2.0.0（keymap v2。配列は roles で役を宣言し、物理キーへの割当は
 // layouts + ホストの roleOverrides で決まる。**v1 のキーマップは読めない**）。
 // v0.19.0 は engine の局面問い合わせ（InputEngine.hostPhase）を配線する。
+// v0.20.0 は内蔵ローマ字と engine 経路（JSON 配列）の挙動差を消した: 英字合成が engine 挿し
+// でも 2 字目以降続くようになり（「Ja」が「Jあ」にならない）、記号は**どちらの経路でも
+// 特別扱いしない**（空でも文中でも未確定に入り変換対象。内蔵の「空なら即確定」を廃止）。
 // ※ このヘッダの版は web/src/hechima/version.ts の HECHIMA_VERSION と一致させること
 //   （hechima リポジトリ側は npm run build が機械照合する）。
 // 対応バンドル: hechima.js / hechima.min.js（UMD、グローバル名 `Hechima`）
@@ -165,6 +168,8 @@ export interface InputEngineLike {
   reset(): void;
   onStateChange: (() => void) | null;
   onHostAction: ((action: { type: string }) => boolean) | null;
+  /** chord 系の配列か（同時打鍵）。Shift をかな面に使いうるので、Shift+英字の英字合成を避ける判定に使う */
+  isChord?: boolean;
 }
 
 /** createFep が返すセッションオブジェクト（公開 API 契約） */
