@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>配列JSONダウンロード — へちま言語ラボ</title>
+    <meta name="description" content="キー配列の定義JSONをダウンロードできます。落としたファイルは実験ページに読み込ませて、その場で試せます。" />
+    <meta property="og:title" content="配列JSONダウンロード — へちま言語ラボ" />
+    <meta property="og:description" content="キー配列の定義JSONをダウンロード。落として実験ページに読ませると、その場で日本語が打てます。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://luffa-lang-labo.dev/keymaps/list/" />
+    <meta property="og:site_name" content="へちま言語ラボ" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/keymap-engine/keymap-engine.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; <a href="/keymaps/">配列JSONを読み込んで試す</a> &gt; ダウンロード</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>配列JSONダウンロード</h2>
+        <p>キー配列の定義ファイルです。1配列につきJSONが1枚。落としたら
+          <a href="/keymaps/">配列JSONを読み込んで試す</a>ページに読ませてください。
+          同じファイルは Obsidian のプラグインでもそのまま使えます。</p>
+        <p class="note">右の <b>L1</b> / <b>L3</b> は、その配列を動かすのに必要な入力の細かさです。
+          L3 は「キーを離したことが分かる環境」が要ります（同時打鍵の判定に押しているキーの集合が要るため）。
+          L1 はどこでも動きます。</p>
+      </section>
+
+      <ul id="kml-list" class="kml-list"><li>読み込み中…</li></ul>
+
+      <section class="hints">
+        <p>これらのJSONは <a href="https://github.com/msonrm/KeyLogicKit/blob/main/docs/keymap-format.md" rel="noopener">キーマップ定義フォーマット v2.0</a> に従っています。
+          自分で書いたJSONも同じように読み込ませられます。</p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+        各配列の著作は原作者に帰属します。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/keymaps-list.ts"></script>
+  </body>
+</html>

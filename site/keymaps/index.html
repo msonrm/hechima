@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>配列JSONを読み込んで試す — へちま言語ラボ</title>
+    <meta name="description" content="キー配列の定義JSONをこのページに読み込ませると、その場で反映されて日本語が打てます。配列の作者・方式・要求する機能まで、JSONから機械的に読み出して表示します。" />
+    <meta property="og:title" content="配列JSONを読み込んで試す — へちま言語ラボ" />
+    <meta property="og:description" content="配列の定義JSONを読ませると即反映。同じファイルは Obsidian でもそのまま使えます。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://luffa-lang-labo.dev/keymaps/" />
+    <meta property="og:site_name" content="へちま言語ラボ" />
+    <meta name="twitter:card" content="summary" />
+    <script>
+      /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
+         app.js 自体が読めないケースがあるため、外部取得に依存しないインラインに置く */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/keymap-engine/keymap-engine.js"></script>
+    <script src="/vendor/hechima/hechima.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; 配列JSONを読み込んで試す</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>配列JSONを読み込んで試す</h2>
+        <p>ほかの実験ページが「この配列がブラウザで動く」を見せているのに対して、このページの主役は
+          <b>JSONファイルそのもの</b>です。</p>
+        <p>配列の定義を1枚のJSONに書けるなら、それはどこへでも持ち運べる成果物になります。
+          だからここには<b>配列を選ぶプルダウンを置いていません</b>。
+          外から持ってきたファイルを読ませてください。</p>
+      </section>
+
+      <section class="layers">
+        <div class="stack" role="img" aria-label="入力 から キーマップ、変換、表示 へ。キーマップだけ差し替え">
+          <span class="blk">入力</span><span class="arw">→</span>
+          <span class="blk swap">キーマップ</span><span class="arw">→</span>
+          <span class="blk">変換</span><span class="arw">→</span>
+          <span class="blk">表示</span>
+        </div>
+        <p><b>差し替えた層：キーマップだけ</b> ／ <span class="kept">据え置き：入力・変換・表示</span></p>
+        <p>読み込んだJSONは、この場で解釈されてキーマップ層に載ります。
+          ページのコードは配列について何も知りません。</p>
+        <p class="src">このページ固有のソース：<a href="https://github.com/msonrm/hechima/blob/main/site/src/pages/keymaps.ts" rel="noopener"><code>site/src/pages/keymaps.ts</code></a>
+          ／ 配列エンジン <code>KeymapEngine v<span id="km-engine">…</span></code></p>
+      </section>
+
+      <section class="km-load">
+        <h3>1. 配列JSONを持ってくる</h3>
+        <p>ダウンロードページから好きな配列のJSONを1枚落としてください。
+          自分で書いたJSONでも構いません。</p>
+        <p><a href="/keymaps/list/">→ 配列JSONダウンロード</a></p>
+
+        <h3>2. このページに読ませる</h3>
+        <p>
+          <input type="file" id="km-file" accept=".json,application/json" />
+          <label for="km-layout">キーボード:</label>
+          <select id="km-layout">
+            <option value="">指定なし</option>
+            <option value="jis">JIS（日本語配列）</option>
+            <option value="us">US（英語配列）</option>
+          </select>
+        </p>
+        <p id="km-status" class="note">まだ読み込んでいません。いまは標準ローマ字が入っています。</p>
+      </section>
+
+      <div id="km-info"></div>
+
+      <div id="app"></div>
+
+      <section class="hints">
+        <p>OS 側の日本語 IME はオフ（英数直接入力）にしてから打鍵してください。
+          変換・学習・ユーザー辞書・テキストはラボ内の各実験ページ間で共有です。
+          読み込んだJSONはこのブラウザの外へは出ません。</p>
+        <ul>
+          <li><b>Space</b> = 変換 / 次候補、<b>Enter</b> = 確定、<b>Esc</b> = 戻す、<b>数字 1-9</b> = 直接選択</li>
+          <li>「キーボード」の選択は<b>配列の切り替えではありません</b>。同じJSONを読んだまま、
+            役（シフトなど）をどの物理キーに置くかだけが変わります。</li>
+          <li>同時打鍵の配列はキーを離したことが届く環境（L3）でのみ成立します。
+            JSONを読み込むと「動く条件」に、その配列が要求する細かさと
+            <b>いまの環境の実測値</b>が並びます。</li>
+        </ul>
+      </section>
+
+      <section class="km-portable">
+        <h3>同じファイルは、ほかの場所でも使えます</h3>
+        <p>いま読み込んだJSONは、このページ専用の形式ではありません。
+          <b>Obsidian のプラグイン</b>に同じファイルを渡すと、エディタでそのまま同じ配列が使えます
+          （vault の <code>hechima/keymaps/</code> に置くだけです）。</p>
+        <p>ただし<b>環境によって制限があります</b>。同時打鍵の配列（上の表の L3）は
+          キーを離したことが届く環境でしか成立しないので、そうでない環境では
+          逐次入力の配列（L1）だけが動きます。</p>
+        <p class="note">これまでに実測した環境: iPad + 外付けキーボード（成立）/ ChromeOS デスクトップ版 Obsidian（成立）
+          / Android スマホ + BTキーボード（要対応・未実装）/ ChromeOS の Android 版 Obsidian（不成立）。
+          <b>Windows・macOS・素の Linux・iPhone・デスクトップ機は未検証です。</b>
+          上の環境判定は、いま見ている環境をその場で測ったものです。</p>
+        <p><a href="/obsidian/">→ Obsidian プラグインについて</a></p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/keymaps.ts"></script>
+  </body>
+</html>

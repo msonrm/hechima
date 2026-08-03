@@ -18,6 +18,8 @@ export default defineConfig({
         home: fileURLToPath(new URL("./index.html", import.meta.url)),
         romaji: fileURLToPath(new URL("./romaji/index.html", import.meta.url)),
         naginata: fileURLToPath(new URL("./naginata/index.html", import.meta.url)),
+        keymaps: fileURLToPath(new URL("./keymaps/index.html", import.meta.url)),
+        keymapsList: fileURLToPath(new URL("./keymaps/list/index.html", import.meta.url)),
         flick: fileURLToPath(new URL("./flick/index.html", import.meta.url)),
         tategaki: fileURLToPath(new URL("./tategaki/index.html", import.meta.url)),
         gamepad: fileURLToPath(new URL("./gamepad/index.html", import.meta.url)),

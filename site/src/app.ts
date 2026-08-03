@@ -17,7 +17,7 @@
 declare const KeymapEngine: {
   version: string;
   /** v2: opts.layout で `layouts` の追加バインドを選ぶ（ホストの責務） */
-  decodeKeymap(json: unknown, opts?: { layout?: string }): unknown;
+  decodeKeymap(json: unknown, opts?: { layout?: string; roleOverrides?: Map<string, string[]> }): unknown;
   InputEngine: new (keymap: unknown) => Hechima.InputEngineLike;
   keyEventFromBrowser(tap: Hechima.KeyTap): Hechima.KeyEvent | null;
 };
@@ -84,6 +84,17 @@ export interface LabPageConfig {
   keymapChoices?: KeymapChoice[];
   /** セレクタのラベル（既定 "配列:"） */
   keymapLabel?: string;
+  /**
+   * 配列を**外から差し替える口**を呼び出し側へ渡す（`/keymaps/` 実験ページ用）。
+   * エンジンの準備が済んだ時点で 1 度だけ呼ばれる。
+   *
+   * `/vendor/keymaps/` に置いた配列を選ばせるのではなく、**利用者が持ってきた JSON**
+   * をその場で読ませたいページのためにある。`load()` は decode 済みの生 JSON を受け取り、
+   * 失敗したら例外を投げる（呼び出し側が利用者へ見せる）。
+   */
+  onKeymapControl?(control: {
+    load(json: unknown, layout?: string, roleOverrides?: Map<string, string[]>): Promise<void>;
+  }): void;
   /**
    * フリックキーボード:
    *   "on"  = ページを開いたら即表示（/flick/ 実験ページ）
@@ -1179,6 +1190,27 @@ export function initLabPage(config: LabPageConfig = {}): void {
     engine.onStateChange = () => fep.pumpEngine();
     fep.setEngine(engine, (tap) => KeymapEngine.keyEventFromBrowser(tap));
   }
+
+  // 外から配列を差し込む口（`/keymaps/` 実験ページ）。ここだけは fetch を経由せず、
+  // 呼び出し側が持っている JSON をそのまま decode する
+  config.onKeymapControl?.({
+    async load(
+      json: unknown,
+      layout?: string,
+      roleOverrides?: Map<string, string[]>,
+    ): Promise<void> {
+      if (typeof KeymapEngine === "undefined") {
+        throw new Error("配列エンジンが読み込まれていません（HTML に keymap-engine.js の script タグが要ります）");
+      }
+      // 役 → 物理キーの上書きはホストの領分（v2 の芯）。読み込み側が選ばせた結果が入る
+      const opts: { layout?: string; roleOverrides?: Map<string, string[]> } = {};
+      if (layout) opts.layout = layout;
+      if (roleOverrides && roleOverrides.size > 0) opts.roleOverrides = roleOverrides;
+      const engine = new KeymapEngine.InputEngine(KeymapEngine.decodeKeymap(json, opts));
+      engine.onStateChange = () => fep.pumpEngine();
+      fep.setEngine(engine, (tap) => KeymapEngine.keyEventFromBrowser(tap));
+    },
+  });
 
   if (keymapSelect) {
     keymapSelect.addEventListener("change", () => {

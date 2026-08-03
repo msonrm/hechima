@@ -640,3 +640,46 @@ body.theme-terminal .cand-num { color: #1f8a1f; }
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+/* ---- /keymaps/ 配列JSON実験ページ ---- */
+.km-load { margin: 1.2rem 0; padding: 0.9rem 1rem; border: 1px solid var(--line, #ddd); border-radius: 8px; }
+.km-load h3 { margin: 0.6rem 0 0.3rem; font-size: 1rem; }
+.km-load h3:first-child { margin-top: 0; }
+.km-load p { margin: 0.35rem 0; font-size: 0.9rem; }
+.km-load input[type="file"] { max-width: 100%; }
+.km-load label { margin-left: 0.8rem; }
+#km-info { margin: 1.2rem 0; }
+#km-info h3 { margin: 1.1rem 0 0.4rem; font-size: 1.05rem; }
+#km-info h4 { margin: 0.8rem 0 0.3rem; font-size: 0.92rem; }
+table.km-card { border-collapse: collapse; width: 100%; font-size: 0.9rem; margin: 0.3rem 0; }
+table.km-card th, table.km-card td { border: 1px solid var(--line, #ddd); padding: 0.35rem 0.6rem; text-align: left; vertical-align: top; }
+table.km-card th { width: 10rem; white-space: nowrap; color: var(--muted); font-weight: 600; }
+ul.km-req, ul.km-diag, ul.km-feat { margin: 0.3rem 0; padding-left: 1.3rem; font-size: 0.88rem; }
+ul.km-feat { columns: 2; column-gap: 1.6rem; }
+ul.km-feat li { break-inside: avoid; }
+#km-info details { margin: 0.3rem 0; font-size: 0.88rem; }
+#km-info details summary { cursor: pointer; font-weight: 600; }
+#km-info .note, .km-load .note { color: var(--muted); font-size: 0.85rem; }
+#km-info .where { color: var(--muted); }
+.ok { color: #0a7f3f; }
+.ng { color: #b3261e; }
+.km-portable { margin-top: 1.4rem; padding: 0.9rem 1rem; border: 1px solid var(--line, #ddd); border-radius: 8px; font-size: 0.9rem; }
+.km-portable h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+.km-portable p { margin: 0.35rem 0; }
+@media (max-width: 600px) { ul.km-feat { columns: 1; } table.km-card th { width: auto; } }
+
+/* ---- /keymaps/ 追加分（役の割当・入力段・DL 一覧） ---- */
+table.km-levels th { width: 3rem; text-align: center; }
+table.km-levels td.km-mark { width: 11rem; white-space: nowrap; color: var(--muted); }
+table.km-levels tr.km-hit { background: rgba(10, 127, 63, 0.07); }
+table.km-roles th { width: 12rem; }
+table.km-roles select { max-width: 100%; }
+table.km-roles td.note { font-size: 0.8rem; }
+.kml-list { list-style: none; margin: 1rem 0; padding: 0; }
+.kml-row { border: 1px solid var(--line, #ddd); border-radius: 8px; padding: 0.7rem 0.9rem; margin: 0.6rem 0; }
+.kml-head { font-size: 1rem; }
+.kml-author { color: var(--muted); font-size: 0.85rem; margin-left: 0.4rem; }
+.kml-lv { display: inline-block; margin-left: 0.5rem; padding: 0 0.4rem; border: 1px solid var(--line, #ddd); border-radius: 4px; font-size: 0.75rem; color: var(--muted); }
+.kml-kind { margin: 0.25rem 0; font-size: 0.85rem; color: var(--muted); }
+.kml-desc { margin: 0.25rem 0; font-size: 0.85rem; }
+.kml-dl { margin: 0.4rem 0 0; font-size: 0.9rem; }
