@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>入力のリプレイ — へちま言語ラボ</title>
+    <meta name="description" content="打鍵と変換の全部を記録して、あとから再生します。記録はこの端末から出ません。配列とログをセットで書き出せば、第三者の画面でも同じ入力が再現されます。" />
+    <meta property="og:title" content="入力のリプレイ — へちま言語ラボ" />
+    <meta property="og:description" content="文章が生まれる過程を、打鍵と変換ごと再生する。新しい配列の実演にも使えます。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://luffa-lang-labo.dev/replay/" />
+    <meta property="og:site_name" content="へちま言語ラボ" />
+    <meta name="twitter:card" content="summary" />
+    <script>
+      /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
+         app.js 自体が読めないケースがあるため、外部取得に依存しないインラインに置く */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/keymap-engine/keymap-engine.js"></script>
+    <script src="/vendor/hechima/hechima.js"></script>
+    <script src="/vendor/replay/replay-engine.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; 入力のリプレイ</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>入力のリプレイ</h2>
+        <p>打った内容ではなく、<b>打っていく過程</b>を記録して再生します。キーを押した瞬間、変換候補に何が並んで
+          どれを選んだか、消した文、迷って戻したカーソル。書き上がった文章からは消えてしまうものが、そのまま残ります。</p>
+        <p>イラストのタイムラプスに近い見え方になりますが、使い道はそれだけではありません。
+          <b>新しい配列の実演</b>——どの指がどう動いて「ぎゅっ」と出るのか——は、文章で説明するより見せたほうが速い。</p>
+      </section>
+
+      <section class="layers">
+        <div class="stack" role="img" aria-label="入力 から キーマップ、変換、表示 へ。全部の層を記録した">
+          <span class="blk swap">入力</span><span class="arw">→</span>
+          <span class="blk swap">キーマップ</span><span class="arw">→</span>
+          <span class="blk swap">変換</span><span class="arw">→</span>
+          <span class="blk swap">表示</span>
+        </div>
+        <p><b>記録したもの：全部の層</b></p>
+        <p>再生のときは<b>変換エンジンを動かしません</b>。同じキーをもう一度打ち直すのではなく、
+          「そのとき何が起きたか」を並べ直しているだけです。だから変換の学習が違う人の画面でも、
+          記録どおりの候補が記録どおりの順で出ます。</p>
+        <p class="src">このページ固有のソース：<a href="https://github.com/msonrm/hechima/blob/main/site/src/pages/replay.ts" rel="noopener"><code>site/src/pages/replay.ts</code></a></p>
+      </section>
+
+      <section class="optin" id="optin">
+        <h3>記録について</h3>
+        <ul>
+          <li><b>押すまで何も記録しません。</b>「記録を開始」を押したときだけ始まります</li>
+          <li><b>打鍵した内容は、この端末の中だけで処理されます。外部へは一切送信されません。</b>
+            このページは静的なファイルを配っているだけで、データを受け取るサーバーがそもそもありません
+            （変換もこの端末の中で動いています）</li>
+          <li>記録されるのは<b>打鍵のタイミング・本文・変換候補と選択・編集とカーソル移動</b>です。
+            消した文も、迷って書き直した跡も残ります</li>
+          <li>記録はブラウザのメモリの中にあるだけです。<b>ファイルになるのは「書き出す」を押したときだけ</b>で、
+            押さなければページを閉じた時点で消えます</li>
+        </ul>
+        <p class="rec-controls">
+          <label>配列 <select id="rep-keymap"></select></label>
+          <label>キーボード
+            <select id="rep-layout">
+              <option value="">JIS</option>
+              <option value="us">US</option>
+            </select>
+          </label>
+          <span id="rep-keymap-status" class="status">配列を読み込み中…</span>
+        </p>
+        <p class="rec-controls">
+          <button id="rec-toggle" type="button">⏺ 記録を開始</button>
+          <span id="rec-info" class="status">記録していません</span>
+        </p>
+        <p class="rec-note" id="rec-note" hidden>記録を開始すると本文がクリアされます（途中から記録すると再生の頭が繋がらないため）。</p>
+      </section>
+
+      <div id="app"></div>
+
+      <section class="player-wrap" id="player-wrap" hidden>
+        <h3>再生</h3>
+        <div class="play-doc" id="play-doc"></div>
+        <div class="play-controls">
+          <button id="play-toggle" type="button">▶</button>
+          <button id="play-back" type="button" title="1 手戻る">⏮</button>
+          <button id="play-step" type="button" title="1 手進む">⏭</button>
+          <input type="range" id="play-scrub" min="0" max="1000" value="0" aria-label="再生位置" />
+          <span id="play-time" class="status">0.0s</span>
+          <label>速度
+            <select id="play-rate">
+              <option value="0.25">0.25x</option>
+              <option value="0.5">0.5x</option>
+              <option value="1" selected>1x</option>
+              <option value="2">2x</option>
+              <option value="4">4x</option>
+              <option value="8">8x</option>
+            </select>
+          </label>
+          <label>進み方
+            <select id="play-mode">
+              <option value="realtime" selected>実時間</option>
+              <option value="even">等間隔</option>
+            </select>
+          </label>
+        </div>
+        <p class="play-meta status" id="play-meta"></p>
+      </section>
+
+      <section class="file-io">
+        <h3>ログの持ち運び</h3>
+        <p class="rec-controls">
+          <button id="rec-download" type="button" disabled>⬇ 書き出す（配列ごと）</button>
+          <button id="rec-discard" type="button" disabled>🗑 記録を捨てる</button>
+          <button id="log-open" type="button">📂 ログを読み込む</button>
+          <input type="file" id="log-file" accept=".json,application/json" hidden />
+        </p>
+        <p><b>再生に配列は要りません。</b>記録した結果を並べ直しているだけなので、受け取った人が
+          どの配列を持っていても、読み込めばそのまま再生できます。</p>
+        <p>それでも書き出したファイルには<b>使った配列の定義を一緒に入れてあります</b>。
+          この先キーボードの絵と指の動きを重ねるときに、どのキーに何が刻まれているかが必要になるからです
+          （同梱できたかどうかは、再生パネルの下に出ます）。</p>
+      </section>
+
+      <section class="hints">
+        <p>使い方: <b>配列を選ぶ →「記録を開始」→ ふつうに書く →「停止」→ 再生</b>。OS 側の日本語 IME はオフにしてください。
+          薙刀式や NICOLA のような同時打鍵の配列も、押した/離したのタイミングごと記録されます。</p>
+        <ul>
+          <li><b>実時間</b>は打ったとおりの間隔で進みます。考え込んで手が止まっていた時間も、そのまま止まって待ちます
+            —— 書いている人のリズムが見えるのはこちらです</li>
+          <li><b>等間隔</b>は 1 打鍵ずつ一定の速さで進みます。間延びが詰まるので<b>読ませたいときはこちら</b>。
+            そのかわり、実際にどこで悩んでいたのかは分からなくなります</li>
+          <li><b>⏮ / ⏭</b> は<b>1 打鍵ずつ</b>のコマ送り（その打鍵で何が起きたかを全部見せて、次の打鍵の直前で止まります）。
+            スライダーで任意の位置へ飛べます</li>
+          <li>再生中の表示は、記録したときの候補窓をそのまま出しています。<b>あなたの変換学習は使われません</b></li>
+        </ul>
+        <p class="status">まだ実験中のページです。ポーズと字幕を差し込んでチュートリアルにする・
+          キーボードの絵と指の動きを重ねる、はこれから作ります。</p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/replay.ts"></script>
+  </body>
+</html>

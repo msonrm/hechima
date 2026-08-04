@@ -27,6 +27,7 @@ const PACKAGES = [
     { name: "hechima-keymap", bundle: "keymap-engine/keymap-engine.js", readmeKey: "`hechima-keymap`", vendorKey: "`keymap-engine/`" },
     { name: "flick-engine", bundle: "flick/flick-engine.js", readmeKey: "`flick-engine`", vendorKey: "`flick/`" },
     { name: "gamepad-engine", bundle: "gamepad/gamepad-engine.js", readmeKey: "`gamepad-engine`", vendorKey: "`gamepad/`" },
+    { name: "replay-engine", bundle: "replay/replay-engine.js", readmeKey: "`replay-engine`", vendorKey: "`replay/`" },
 ];
 
 const errors = [];

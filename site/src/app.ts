@@ -137,6 +137,31 @@ export interface LabPageConfig {
    * 設計と実測 = labo `docs/hechima-candidate-fold-design.md`
    */
   candidateFold?: CandidateFoldConfig;
+  /**
+   * 入力の記録先（/replay/ 実験ページ）。**ReplayEngine の Recorder が構造的にそのまま入る**
+   * ので、ページ側は `createRecorder()` の戻り値を渡すだけでよい。
+   *
+   * ここが呼ばれるのは「状態が変わる点」— 文字の増減 / 選択の移動 / 未確定表示と候補の変化。
+   * 記録の開始・停止は Recorder 側の責務（`start()` を呼ぶまで全部無視される = オプトイン）。
+   */
+  recordSink?: RecordSink;
+}
+
+/**
+ * 記録シンク。ReplayEngine の `Recorder` が構造的に適合する
+ * （メソッド名と引数はそちらに合わせてある）。すべて省略可。
+ */
+export interface RecordSink {
+  keyDown?(e: { code: string; key: string; shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean; repeat?: boolean }): void;
+  keyUp?(e: { code: string }): void;
+  paste?(charCount: number): void;
+  show?(segments: Hechima.SegmentView[]): void;
+  hide?(): void;
+  commit?(text: string): void;
+  /** 文字増減の合流点（afterEdit）から。差分は記録側が取る */
+  doc?(text: string, caret: number, anchor?: number | null): void;
+  /** 選択・キャレットの移動（selectionchange）から */
+  caret?(caret: number, anchor?: number | null): void;
 }
 
 /** 候補二層化の初期パラメータ（実験ページの UI で実行時に変更できる） */
@@ -186,6 +211,117 @@ const $ = <T extends HTMLElement>(id: string): T => {
   if (!el) throw new Error(`#${id} が見つからない`);
   return el as T;
 };
+
+/** buildCandidateColumns の結果（呼び出し側がフッタと配置を組むのに使う） */
+export interface CandidateColumns {
+  cols: HTMLElement;
+  /** 現在ページの先頭（候補一覧の絶対 index） */
+  winStart: number;
+  /** 現在ページに出ている件数 */
+  visibleCount: number;
+  pages: number;
+  page: number;
+  /** 二層目に隠れている件数 */
+  hidden: number;
+  layer1Length: number;
+}
+
+/**
+ * 候補窓の中身（`.cand-cols`）を作る。**本番の入力と /replay/ の再生で共有する。**
+ *
+ * 同じ見た目を 2 か所に書くと必ずズレる —— 実際、再生側で作り直したときに
+ * 追加候補（↑ のひらがな/カタカナ）とページングが丸ごと抜けていた。
+ * ここは seg と窓サイズだけに依存する純粋な組み立てで、配置・フリック候補バー・
+ * 二層目グリッドへの分岐は呼び出し側の責務。
+ *
+ * null = 候補窓を出さない（候補が 1 件以下で追加候補も無い）。
+ */
+export function buildCandidateColumns(
+  seg: Hechima.SegmentView,
+  opts: { windowSize: number; onSelect?(abs: number): void },
+): CandidateColumns | null {
+  const cands = seg.candidates;
+  const idx = seg.candidateIndex;
+  const additional = seg.additional ?? [];
+  if (!cands || idx === undefined || (cands.length < 2 && additional.length === 0)) return null;
+
+  // 二層化しているときは一層目だけがページングの対象（二層目は Tab で開くまで現れない）
+  const layer1 = cands.slice(0, seg.foldCount ?? cands.length);
+  const hidden = cands.length - layer1.length;
+  const WS = opts.windowSize;
+
+  // ページング: WS 件目からさらに送ると次ページ（ハイライトは先頭行）、
+  // 戻ると前ページ（ハイライトは末尾行）。ページは選択位置から決まる純関数
+  const winStart = Math.floor(idx / WS) * WS;
+
+  const inAdditional = seg.additionalIndex !== undefined;
+  const rows: HTMLElement[] = [];
+
+  // 追加候補（↑ で段階展開。通常候補の上に注釈付きで表示 = KeyLogicKit と同配置）
+  additional.forEach((a, i) => {
+    const row = document.createElement("div");
+    row.className = "cand-row" + (inAdditional && i === seg.additionalIndex ? " selected" : "");
+    const ann = document.createElement("span");
+    ann.className = "cand-ann";
+    ann.textContent = a.annotation;
+    const label = document.createElement("span");
+    label.textContent = a.text;
+    row.append(ann, label);
+    rows.push(row);
+  });
+  if (additional.length > 0) {
+    const divider = document.createElement("div");
+    divider.className = "cand-divider";
+    rows.push(divider);
+  }
+
+  const visible = layer1.slice(winStart, winStart + WS);
+  visible.forEach((text, i) => {
+    const abs = winStart + i;
+    const row = document.createElement("div");
+    row.className = "cand-row" + (!inAdditional && abs === idx ? " selected" : "");
+    const label = document.createElement("span");
+    label.textContent = text;
+    const num = document.createElement("span");
+    num.className = "cand-num";
+    // 番号は「位置ハンドル」— 常に画面の左から 1,2,… で物理数字キーの並びと一致させる。
+    // ここでは仮に候補順で振り、縦書きの右→左流はアンカー確定後に振り直す
+    num.textContent = String(i + 1);
+    row.append(num, label);
+    if (opts.onSelect) {
+      row.addEventListener("mousedown", (ev) => {
+        ev.preventDefault(); // フォーカス移動を防ぐ
+        opts.onSelect?.(abs);
+      });
+    }
+    rows.push(row);
+  });
+
+  // 段組コンテナ。縦書きでは writing-mode をここに持たせ、ページ表示フッタ
+  // （cand-more）はポップアップ直下で横書きのまま残す
+  const cols = document.createElement("div");
+  cols.className = "cand-cols";
+  cols.append(...rows);
+
+  return {
+    cols,
+    winStart,
+    visibleCount: visible.length,
+    pages: Math.max(1, Math.ceil(layer1.length / WS)),
+    page: Math.floor(idx / WS),
+    hidden,
+    layer1Length: layer1.length,
+  };
+}
+
+/** 二層化していないときのフッタ（従来表示）。1 ページに収まるなら null */
+export function buildCandidateFooter(c: CandidateColumns, idx: number): HTMLElement | null {
+  if (c.pages <= 1) return null;
+  const more = document.createElement("div");
+  more.className = "cand-more";
+  more.textContent = `${idx + 1} / ${c.layer1Length}（${c.page + 1}/${c.pages} ページ）`;
+  return more;
+}
 
 /** #app と body に共通 UI 骨格を生成する（id は従来の単一ページ時代と同一） */
 function renderScaffold(config: LabPageConfig): void {
@@ -393,12 +529,15 @@ export function initLabPage(config: LabPageConfig = {}): void {
     selectRange(r);
   }
 
-  /** キャレット位置（本文の UTF-16 オフセット。未確定 span は挿入位置として数えない） */
-  function caretOffset(): number {
-    const r = caretRange();
+  /** 任意の点（container, offset）を本文オフセットへ。未確定 span は数えない */
+  function offsetOfPoint(container: Node, offset: number): number {
     const pre = document.createRange();
     pre.selectNodeContents(editorEl);
-    pre.setEnd(r.startContainer, r.startOffset);
+    try {
+      pre.setEnd(container, offset);
+    } catch {
+      return 0; // エディタ外の点（選択が外れている等）
+    }
     let out = 0;
     const walker = document.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) =>
@@ -406,13 +545,41 @@ export function initLabPage(config: LabPageConfig = {}): void {
     });
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       const len = (n.textContent ?? "").length;
-      if (pre.comparePoint(n, 0) > 0) break; // キャレットより後ろのノード
+      if (pre.comparePoint(n, 0) > 0) break; // 点より後ろのノード
       const inPre = pre.comparePoint(n, len) <= 0 ? len
-        : (n === r.startContainer ? r.startOffset : 0);
+        : (n === container ? offset : 0);
       out += inPre;
-      if (n === r.startContainer) break;
+      if (n === container) break;
     }
     return out;
+  }
+
+  /** キャレット位置（本文の UTF-16 オフセット。未確定 span は挿入位置として数えない） */
+  function caretOffset(): number {
+    const r = caretRange();
+    return offsetOfPoint(r.startContainer, r.startOffset);
+  }
+
+  /**
+   * リプレイ記録用のキャレットと選択アンカー。
+   *
+   * `caretOffset()` は選択を **end 側へ潰す**ので、そのまま使うと Shift+← のような
+   * 左向き選択で caret と anchor が同値になり、**範囲がまるごと消える**。
+   * 記録には focus / anchor をそれぞれの実点から取る。
+   */
+  function recordPoints(): { caret: number; anchor: number | null } {
+    const sel = window.getSelection();
+    if (
+      !sel || sel.rangeCount === 0 || sel.isCollapsed ||
+      !sel.focusNode || !sel.anchorNode ||
+      !editorEl.contains(sel.focusNode) || !editorEl.contains(sel.anchorNode)
+    ) {
+      return { caret: caretOffset(), anchor: null };
+    }
+    return {
+      caret: offsetOfPoint(sel.focusNode, sel.focusOffset),
+      anchor: offsetOfPoint(sel.anchorNode, sel.anchorOffset),
+    };
   }
 
   /** 本文オフセット [start, end) を指す Range（未確定 span が無い前提で使う） */
@@ -632,6 +799,12 @@ export function initLabPage(config: LabPageConfig = {}): void {
     ensureEofBr();
     scheduleSave();
     updateCounts();
+    // リプレイ記録: 文字増減の合流点はここ 1 点（自前編集も native 編集も通る）。
+    // キャレット移動だけはここを通らないので selectionchange で別に拾う
+    if (config.recordSink?.doc) {
+      const pt = recordPoints();
+      config.recordSink.doc(docText(), pt.caret, pt.anchor);
+    }
     scrollCaretIntoView();
     updateVCaret();
     if (vertical) {
@@ -889,62 +1062,21 @@ export function initLabPage(config: LabPageConfig = {}): void {
     }
     gridEl.hidden = true;
 
-    // 二層化しているときは一層目だけがページングの対象（二層目は Tab で開くまで現れない）
-    const layer1 = cands.slice(0, seg.foldCount ?? cands.length);
-    const hidden = cands.length - layer1.length;
-    const WS = WINDOW_SIZE();
-
-    // ページング: WS 件目からさらに送ると次ページ（ハイライトは先頭行）、
-    // 戻ると前ページ（ハイライトは末尾行）。ページは選択位置から決まる純関数
-    winStart = Math.floor(idx / WS) * WS;
-
-    const inAdditional = seg.additionalIndex !== undefined;
-    const rows: HTMLElement[] = [];
-
-    // 追加候補（↑ で段階展開。通常候補の上に注釈付きで表示 = KeyLogicKit と同配置）
-    additional.forEach((a, i) => {
-      const row = document.createElement("div");
-      row.className = "cand-row" + (inAdditional && i === seg.additionalIndex ? " selected" : "");
-      const ann = document.createElement("span");
-      ann.className = "cand-ann";
-      ann.textContent = a.annotation;
-      const label = document.createElement("span");
-      label.textContent = a.text;
-      row.append(ann, label);
-      rows.push(row);
-    });
-    if (additional.length > 0) {
-      const divider = document.createElement("div");
-      divider.className = "cand-divider";
-      rows.push(divider);
-    }
-
-    const visible = layer1.slice(winStart, winStart + WS);
-    candWindowCount = visible.length;
-    visible.forEach((text, i) => {
-      const abs = winStart + i;
-      const row = document.createElement("div");
-      row.className = "cand-row" + (!inAdditional && abs === idx ? " selected" : "");
-      const label = document.createElement("span");
-      label.textContent = text;
-      const num = document.createElement("span");
-      num.className = "cand-num";
-      // 番号は「位置ハンドル」— 常に画面の左から 1,2,… で物理数字キーの並びと一致させる。
-      // ここでは仮に候補順で振り、縦書きの右→左流はアンカー確定後に振り直す
-      num.textContent = String(i + 1);
-      row.append(num, label);
-      row.addEventListener("mousedown", (ev) => {
-        ev.preventDefault(); // フォーカス移動を防ぐ
+    // 行の組み立ては /replay/ の再生と共有する（二重に書くとズレる）
+    const built = buildCandidateColumns(seg, {
+      windowSize: WINDOW_SIZE(),
+      onSelect: (abs) => {
         fep.selectCandidate(abs);
-      });
-      rows.push(row);
+      },
     });
-    // 段組コンテナ。縦書きでは writing-mode をここに持たせ、ページ表示フッタ
-    // （cand-more）はポップアップ直下で横書きのまま残す
-    const cols = document.createElement("div");
-    cols.className = "cand-cols";
-    cols.append(...rows);
-    popupEl.replaceChildren(cols);
+    if (!built) {
+      popupEl.hidden = true;
+      return;
+    }
+    const hidden = built.hidden;
+    winStart = built.winStart;
+    candWindowCount = built.visibleCount;
+    popupEl.replaceChildren(built.cols);
     // フッタは「読まなくても分かる」2 つだけに絞る:
     //   (1) 全体で何ページあって今どこか = 点の列（先が長いか・現在地はどこか）
     //   (2) 二層目があるか = 「… Tab」の有無（件数は出さない — 押す価値の有無だけ要る）
@@ -952,13 +1084,11 @@ export function initLabPage(config: LabPageConfig = {}): void {
     // **1 ページ・二層目なしでも点を 1 個出す**: 情報が消える瞬間を作らず、
     // 点が 1 個だけ = それ自体が「これで全部」の合図になる。
     if (foldParams) {
-      const pages = Math.max(1, Math.ceil(layer1.length / WS));
-      const page = Math.floor(idx / WS);
       const more = document.createElement("div");
       more.className = "cand-more cand-more-nav";
-      more.title = `${pages} ページ中 ${page + 1} ページ目`
+      more.title = `${built.pages} ページ中 ${built.page + 1} ページ目`
         + (hidden > 0 ? `（Tab でさらに ${hidden} 件）` : "（これで全部）");
-      more.appendChild(pageDots(pages, page)); // 左詰め（右端は Tab の合図に空けておく）
+      more.appendChild(pageDots(built.pages, built.page)); // 左詰め（右端は Tab の合図に空けておく）
       if (hidden > 0) {
         const tab = document.createElement("span");
         tab.className = "cand-tab-hint";
@@ -966,14 +1096,10 @@ export function initLabPage(config: LabPageConfig = {}): void {
         more.appendChild(tab);
       }
       popupEl.append(more);
-    } else if (layer1.length > WS) {
+    } else {
       // 二層化していないページ（従来どおり）: 表示は変えない
-      const page = Math.floor(idx / WS) + 1;
-      const pages = Math.ceil(layer1.length / WS);
-      const more = document.createElement("div");
-      more.className = "cand-more";
-      more.textContent = `${idx + 1} / ${layer1.length}（${page}/${pages} ページ）`;
-      popupEl.append(more);
+      const more = buildCandidateFooter(built, idx);
+      if (more) popupEl.append(more);
     }
     popupEl.hidden = false;
 
@@ -1125,9 +1251,16 @@ export function initLabPage(config: LabPageConfig = {}): void {
   let flickComposingText = "";
 
   const fep = Hechima.createFep({
-    show: (segments) => renderComposition(segments),
-    hide: () => renderComposition([]),
+    show: (segments) => {
+      config.recordSink?.show?.(segments);
+      renderComposition(segments);
+    },
+    hide: () => {
+      config.recordSink?.hide?.();
+      renderComposition([]);
+    },
     commit: (text) => {
+      config.recordSink?.commit?.(text);
       snapshot();
       renderComposition([]); // 未確定 span を畳んでから
       insertTextAtCaret(text);
@@ -1345,6 +1478,10 @@ export function initLabPage(config: LabPageConfig = {}): void {
     editorEl.normalize();
     range.collapse(true);
     selectRange(range); // キャレットを取り除いた位置へ（composition がここに開く）
+    // ★await の前に確定させる。ここを飛ばすと「文書から消えた」より先に「未確定表示が出た」が
+    // 記録され、リプレイに実在しない中間状態（元テキストが残ったまま未確定が出る）が現れる。
+    // 最終文書は正しいままなので docHash では捕まらない（labo docs/hechima-replay-design.md §3-1）
+    afterEdit();
     const ok = await fep.reconvert(surface);
     if (!ok) insertTextAtCaret(surface); // 逆変換不能 → 元に戻す
     afterEdit();
@@ -1357,6 +1494,8 @@ export function initLabPage(config: LabPageConfig = {}): void {
     if (e.metaKey) return; // OS/ブラウザのショートカットは奪わない
     if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLButtonElement ||
         e.target instanceof HTMLInputElement) return; // 辞書フォーム等の入力は素通し
+    // リプレイ記録: ここが打鍵の唯一の入口（フォーム類を除いたあと）
+    config.recordSink?.keyDown?.(e);
     // 候補の二層化（/candlayer/）のキー。セッションの routing には触れず、
     // 数字キーと同じくホスト側の方針としてここで先取りする
     if (foldParams && !e.ctrlKey && !e.altKey) {
@@ -1501,7 +1640,19 @@ export function initLabPage(config: LabPageConfig = {}): void {
     // （native 編集のスナップショットは beforeinput で取る）
   });
   window.addEventListener("keyup", (e) => {
+    config.recordSink?.keyUp?.(e);
     fep.feedUp(e);
+  });
+
+  // リプレイ記録: キャレット・選択の移動は afterEdit を通らない（編集を伴わないので）。
+  // 素通しの矢印キーも cb.hostKey の sel.modify もここでしか捕まらない
+  document.addEventListener("selectionchange", () => {
+    if (!config.recordSink?.caret) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    if (!editorEl.contains(sel.getRangeAt(0).startContainer)) return; // エディタ外の選択は無視
+    const pt = recordPoints();
+    config.recordSink.caret(pt.caret, pt.anchor);
   });
 
   // native 編集（BS・Delete・数字等の透過入力）の undo スナップショットと保存。
@@ -1527,6 +1678,8 @@ export function initLabPage(config: LabPageConfig = {}): void {
     e.preventDefault();
     const text = e.clipboardData?.getData("text/plain") ?? "";
     if (!text) return;
+    // リプレイ記録: 内容は doc 層の ins に出るので、ここでは「貼り付けだった」ことだけ残す
+    config.recordSink?.paste?.(Array.from(text).length);
     snapshot();
     insertTextAtCaret(text);
     afterEdit();
