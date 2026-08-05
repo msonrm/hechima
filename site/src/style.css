@@ -729,6 +729,8 @@ table.km-roles td.note { font-size: 0.8rem; }
 .play-controls button { min-width: 2.6rem; }
 .play-controls input[type="range"] { flex: 1 1 8rem; min-width: 6rem; }
 .play-meta { margin: 0.6rem 0 0; font-size: 0.78rem; }
+/* 章（annotation の chapter）。見出しの横に添える */
+.play-chapter { margin-left: 0.6rem; font-size: 0.85rem; font-weight: normal; color: var(--accent); }
 /* キーボード図（ReplayEngine.mountKeyboard）。色は本文の currentColor を継承する */
 .play-keyboard {
   margin: 0.9rem 0 0.4rem;

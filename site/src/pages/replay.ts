@@ -338,6 +338,7 @@ const playTime = $<HTMLSpanElement>("play-time");
 const playMeta = $<HTMLParagraphElement>("play-meta");
 const playRate = $<HTMLSelectElement>("play-rate");
 const playMode = $<HTMLSelectElement>("play-mode");
+const playChapter = $<HTMLSpanElement>("play-chapter");
 
 /** コードポイント単位の slice（サロゲートペアで割らない） */
 const cp = (s: string, a: number, b?: number) => Array.from(s).slice(a, b).join("");
@@ -507,6 +508,8 @@ function render(v: PlayerView): void {
   lastAnchorEl = anchorEl;
   placeCands(v, anchorEl);
   playToggle.textContent = v.playing ? "⏸" : "▶";
+  // 章（annotation の chapter）は見出しの横。次の章が来るまで出しっぱなし
+  playChapter.textContent = v.chapter ?? "";
   playTime.textContent = `${(v.time / 1000).toFixed(1)}s / ${(v.duration / 1000).toFixed(1)}s`;
   if (document.activeElement !== playScrub) {
     playScrub.value = String(v.duration === 0 ? 0 : Math.round((v.time / v.duration) * 1000));

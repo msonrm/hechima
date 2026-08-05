@@ -101,7 +101,7 @@
       <div id="app"></div>
 
       <section class="player-wrap" id="player-wrap" hidden>
-        <h3>再生</h3>
+        <h3>再生 <span id="play-chapter" class="play-chapter"></span></h3>
         <div class="play-doc" id="play-doc"></div>
         <div class="play-controls">
           <button id="play-toggle" type="button">▶</button>
@@ -151,8 +151,9 @@
           <code>"annotations": []</code> があります。ここに
           <code>{ "t": 1500, "k": "caption", "x": "ここで同時押し", "ms": 2000 }</code>
           のように書いて読み込み直すと、再生の <code>t</code>（記録開始からのミリ秒）の位置で字幕が出ます。
-          <code>"k"</code> は <b>caption</b>（字幕）／<b>chapter</b>（章。<code>x</code> がそれ以降ずっと出る）／
-          <b>pause</b>（<code>ms</code> だけ止める）／<b>speed</b>（<code>rate</code> で速度）。
+          <code>"k"</code> は <b>caption</b>（字幕。本文の下に <code>ms</code> のあいだ出る）／
+          <b>chapter</b>（章。上の「再生」の横に出て、次の章まで続く）／
+          <b>pause</b>（<code>ms</code> だけ止める）／<b>speed</b>（<code>rate</code> で速度。跨いだ次の瞬間から効く）。
           注釈は本体と分けてあるので、<b>同じ記録から字幕違いを何本でも作れます</b>。</p>
       </section>
 
