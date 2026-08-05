@@ -30,7 +30,7 @@
 	}
 	//#endregion
 	//#region src/replay/version.ts
-	const REPLAY_ENGINE_VERSION = "0.8.0";
+	const REPLAY_ENGINE_VERSION = "0.8.1";
 	//#endregion
 	//#region src/replay/types.ts
 	/** ログ形式の版。未知の版は読み込み時に明確なエラーで弾く（keymap v2 の版ゲートと同じ作法）。 */
@@ -589,6 +589,11 @@
 		let lastFrame = 0;
 		/** 直近の打鍵単位コマ送りで押されたキー（連続再生では空） */
 		let strokeKeys = /* @__PURE__ */ new Set();
+		/**
+		* 等間隔モードの時間の溜め（ms）。★毎フレームの delta を割り算するだけでは、
+		* rAF の 16.7ms が evenStepMs（既定 40ms）に足りず **1 イベントも進まない**。
+		*/
+		let evenAccum = 0;
 		/** pause 注釈による停止の残り ms */
 		let pauseRemain = 0;
 		/** 発火済みの注釈（pause / speed を二重に適用しない） */
@@ -690,6 +695,7 @@
 			time = index > 0 ? events[index - 1].t : 0;
 			pauseRemain = 0;
 			strokeKeys = /* @__PURE__ */ new Set();
+			evenAccum = 0;
 		}
 		function seek(ms) {
 			const target = Math.max(0, Math.min(ms, duration));
@@ -740,9 +746,13 @@
 			const from = time;
 			let to;
 			if (mode === "even") {
-				const consumed = Math.floor(deltaMs / (evenStepMs / Math.max(rate, .01)));
-				if (consumed <= 0) return;
-				let n = consumed;
+				evenAccum += deltaMs * Math.max(rate, .01);
+				let n = 0;
+				while (evenAccum >= evenStepMs) {
+					evenAccum -= evenStepMs;
+					n++;
+				}
+				if (n === 0) return;
 				while (n > 0 && index < events.length) {
 					applyOne(events[index], true);
 					time = events[index].t;
@@ -839,6 +849,7 @@
 			},
 			setMode(m) {
 				mode = m;
+				evenAccum = 0;
 				notify();
 			},
 			tick,

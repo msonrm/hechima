@@ -131,7 +131,7 @@
           <label>キーボード図
             <select id="play-profile"></select>
           </label>
-          <label><input type="checkbox" id="play-hands" checked /> 手を重ねる</label>
+          <label><input type="checkbox" id="play-hands" /> 手を重ねる</label>
           <span class="status">再生中に押しているキーが光ります</span>
         </p>
         <p class="play-meta status" id="play-meta"></p>
@@ -140,16 +140,13 @@
       <section class="file-io">
         <h3>ログの持ち運び</h3>
         <p class="rec-controls">
-          <button id="rec-download" type="button" disabled>⬇ 書き出す（配列ごと）</button>
+          <button id="rec-download" type="button" disabled>⬇ 書き出す</button>
           <button id="rec-discard" type="button" disabled>🗑 記録を捨てる</button>
           <button id="log-open" type="button">📂 ログを読み込む</button>
           <input type="file" id="log-file" accept=".json,application/json" hidden />
         </p>
-        <p><b>再生に配列は要りません。</b>記録した結果を並べ直しているだけなので、受け取った人が
-          どの配列を持っていても、読み込めばそのまま再生できます。</p>
-        <p>それでも書き出したファイルには<b>使った配列の定義を一緒に入れてあります</b>。
-          この先キーボードの絵と指の動きを重ねるときに、どのキーに何が刻まれているかが必要になるからです
-          （同梱できたかどうかは、再生パネルの下に出ます）。</p>
+        <p>書き出したファイルには<b>使った配列の定義も一緒に入ります</b>。キーボード図に刻む文字が
+          そこから来るので、受け取った人がその配列を持っていなくても同じ絵で再生されます。</p>
       </section>
 
       <section class="hints">
@@ -164,8 +161,8 @@
             スライダーで任意の位置へ飛べます</li>
           <li>再生中の表示は、記録したときの候補窓をそのまま出しています。<b>あなたの変換学習は使われません</b></li>
         </ul>
-        <p class="status">まだ実験中のページです。ポーズと字幕を差し込んでチュートリアルにする・
-          キーボードの絵と指の動きを重ねる、はこれから作ります。</p>
+        <p class="status">まだ実験中のページです。要所にポーズと字幕を差し込んでチュートリアルにする、
+          はこれから作ります。手の造形もまだ荒いので、いずれ描き直します。</p>
       </section>
     </main>
 

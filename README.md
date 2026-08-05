@@ -27,7 +27,7 @@ L.L.L. は生まれ故郷の logical-layout-labo と同じ）: **[https://luffa-
 | `hechima-wasm` | Mozc（fcitx5-mozc）の Emscripten ビルド。かな → 文節/候補 JSON に加え、学習（FinishConversion）・取り消し・逆変換・ユーザー辞書の最小 C API。**単スレッドビルド = COOP/COEP 不要**。**powered by Mozc** | v0.7.1 |
 | `flick-engine` | フリック入力フロント。flickmap（flick-1）データ駆動の 12 キーフリック（゛゜小トグル・英字/数字レイヤ・ペタル）— **スマホでも OS IME 非依存の日本語入力**が成立する | v1.2.0 |
 | `gamepad-engine` | ゲームパッド入力フロント（日本語）。左手で子音・右手で母音、フリック入力の文法を応用。文節伸縮・確定アンドゥ・カーソル移動/範囲選択まで割り当て済み | v1.7.0 |
-| `replay-engine` | 入力の記録と再生（ログ形式 `hlog-1`）。打鍵・変換候補の提示と選択・編集・カーソル移動を記録し、**変換エンジンを動かさずに**再生する（学習状態が違う第三者の画面でも記録どおりに再現される）。キーボード図の SVG ビジュアライザ（物理配置プロファイル + 押下ハイライト + 手指オーバーレイ）を同梱 | v0.8.0 |
+| `replay-engine` | 入力の記録と再生（ログ形式 `hlog-1`）。打鍵・変換候補の提示と選択・編集・カーソル移動を記録し、**変換エンジンを動かさずに**再生する（学習状態が違う第三者の画面でも記録どおりに再現される）。キーボード図の SVG ビジュアライザ（物理配置プロファイル + 押下ハイライト + 手指オーバーレイ）を同梱 | v0.8.1 |
 | `site/` | **へちま言語ラボ（luffa lang labo）** — 上記スタックを備えたプレーンエディタ（カーソル/選択・OPFS 自動保存・undo/redo・文字数カウント）。**PC = 物理キーボード + 候補ポップアップ / スマホ = フリック + 候補バー**の両 UI。Cloudflare Workers（静的アセット）で配信 | — |
 
 各レイヤは差し替え可能（配列は JSON、変換は cb 注入、エンジン境界はへちま蔓 =
@@ -50,6 +50,7 @@ L.L.L. は生まれ故郷の logical-layout-labo と同じ）: **[https://luffa-
 | [/theme/](https://luffa-lang-labo.dev/theme/) テーマ連動 | 本文と一緒に候補窓も着替える。ダークテーマで候補窓だけ白く光らない（表示） |
 | [/candlayer/](https://luffa-lang-labo.dev/candlayer/) 候補の二層化 | 候補を「選ぶ層」と「探す層」に分ける。見えるのは 5 件、残りは Tab（表示） |
 | [/gamepad/](https://luffa-lang-labo.dev/gamepad/) ゲームパッド日本語入力 | コントローラーで日本語を打つ（入力・キーマップ） |
+| [/replay/](https://luffa-lang-labo.dev/replay/) 入力のリプレイ | 打っていく過程を記録して再生する。キーボード図に押したキーと指が重なる（記録は端末内だけ） |
 | [/obsidian/](https://luffa-lang-labo.dev/obsidian/) Obsidian で使う | ラボの外の話（下記） |
 
 ほかに `/coi-test/`（環境診断）を隠しページとして置いてある。
