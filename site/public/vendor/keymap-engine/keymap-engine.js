@@ -275,12 +275,12 @@
 		return HID_TO_NAME[code];
 	}
 	/** HID key code → browser KeyboardEvent.code (reverse of CODE_TO_HID) */
-	const HID_TO_BROWSER = {};
-	for (const [code, hid] of Object.entries(CODE_TO_HID)) if (!HID_TO_BROWSER[hid]) HID_TO_BROWSER[hid] = code;
+	const HID_TO_BROWSER$1 = {};
+	for (const [code, hid] of Object.entries(CODE_TO_HID)) if (!HID_TO_BROWSER$1[hid]) HID_TO_BROWSER$1[hid] = code;
 	/** HID usage name → browser code */
 	function hidNameToBrowserCode(name) {
 		const hid = NAME_TO_HID[name];
-		return hid !== void 0 ? HID_TO_BROWSER[hid] : void 0;
+		return hid !== void 0 ? HID_TO_BROWSER$1[hid] : void 0;
 	}
 	const HID_TO_US_LEGEND = {
 		[HID.A]: "a",
@@ -1932,7 +1932,7 @@
 	}
 	//#endregion
 	//#region src/engine/version.ts
-	const ENGINE_VERSION = "2.4.0";
+	const ENGINE_VERSION = "2.5.0";
 	//#endregion
 	//#region src/engine/key-router.ts
 	/** Route a KeyEvent to a KeyAction based on the expanded keymap */
@@ -3734,7 +3734,7 @@
 		module.exports = require_react_development();
 	})))();
 	/** Map physical character → browser KeyboardEvent.code */
-	function charToCode(c) {
+	function charToCode$1(c) {
 		if (c.length !== 1) return null;
 		const upper = c.toUpperCase();
 		if (upper >= "A" && upper <= "Z") return `Key${upper}`;
@@ -3845,7 +3845,7 @@
 	}
 	/** Character → browser code with inverse remap */
 	function charToBrowserCode(c, inverseRemap) {
-		return charToCode(inverseRemap.get(c) ?? c);
+		return charToCode$1(inverseRemap.get(c) ?? c);
 	}
 	function popcountSafe(n) {
 		let count = 0;
@@ -3974,7 +3974,7 @@
 		if (Object.keys(keymap.keyRemap).length > 0) {
 			const items = [];
 			for (const [physical, logical] of Object.entries(keymap.keyRemap).sort(([a], [b]) => a.localeCompare(b))) {
-				const code = charToCode(physical);
+				const code = charToCode$1(physical);
 				items.push({
 					type: "feature",
 					inputLabel: physical,
@@ -4169,6 +4169,143 @@
 		}
 	}
 	//#endregion
+	//#region src/engine/keycap-labels.ts
+	/** 逆引き表を作るための候補 code 一覧（英数字・記号・親指キー） */
+	function browserCodeCandidates() {
+		const out = [];
+		for (const c of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") out.push(`Key${c}`);
+		for (const d of "0123456789") out.push(`Digit${d}`);
+		out.push("Minus", "Equal", "BracketLeft", "BracketRight", "Backslash", "Semicolon", "Quote", "Backquote", "Comma", "Period", "Slash", "Space", "Enter", "Tab", "Backspace", "IntlYen", "IntlRo", "NonConvert", "Convert", "KanaMode", "Lang1", "Lang2");
+		return out;
+	}
+	/** HID コード → browser code（engine には名前版しか無いので数値版をここで作る） */
+	const HID_TO_BROWSER = /* @__PURE__ */ new Map();
+	for (const code of browserCodeCandidates()) {
+		const hid = browserCodeToHID(code);
+		if (hid !== void 0 && !HID_TO_BROWSER.has(hid)) HID_TO_BROWSER.set(hid, code);
+	}
+	/** 1 文字の論理キー → browser code。layout に応じて JIS の刻印位置を補正する */
+	function charToCode(ch, layout) {
+		if (ch.length !== 1) return void 0;
+		const upper = ch.toUpperCase();
+		if (upper >= "A" && upper <= "Z") return `Key${upper}`;
+		if (ch >= "0" && ch <= "9") return `Digit${ch}`;
+		const us = {
+			"-": "Minus",
+			"=": "Equal",
+			"[": "BracketLeft",
+			"]": "BracketRight",
+			"\\": "Backslash",
+			";": "Semicolon",
+			"'": "Quote",
+			"`": "Backquote",
+			",": "Comma",
+			".": "Period",
+			"/": "Slash",
+			" ": "Space"
+		};
+		if (layout === "jis") {
+			const jis = {
+				"@": "BracketLeft",
+				"[": "BracketRight",
+				":": "Quote",
+				"]": "Backslash",
+				"^": "Equal",
+				"¥": "IntlYen"
+			};
+			if (jis[ch]) return jis[ch];
+		}
+		return us[ch];
+	}
+	/**
+	* 機能アクション → キーキャップに出す短い表示。
+	*
+	* かなが載っていないキーに機能が割り当たっていることは珍しくない
+	* （薙刀式の T=← / Y=→ / U=⌫ など）。刻印が物理のままだと「そこは何もない」に見えるので、
+	* 機能も出す。語彙の正典は labo `docs/key-action-registry.json`。
+	* ここに無いアクションは出さない（物理刻印のまま = 読めない文字列を出すより良い）。
+	*/
+	const ACTION_CAPS = {
+		convert: "変換",
+		convertPrev: "前候補",
+		confirm: "確定",
+		cancel: "取消",
+		deleteBack: "⌫",
+		moveLeft: "←",
+		moveRight: "→",
+		moveUp: "↑",
+		moveDown: "↓",
+		editSegmentLeft: "文節←",
+		editSegmentRight: "文節→",
+		confirmHiragana: "かな",
+		confirmKatakana: "カナ",
+		confirmHalfWidthKatakana: "半カナ",
+		confirmFullWidthRoman: "全英",
+		confirmHalfWidthRoman: "半英",
+		switchToEnglish: "英数",
+		switchToJapanese: "日本語",
+		toggleInputMode: "英/日",
+		insertSpace: "空白",
+		undo: "取消",
+		moveSentenceStart: "行頭",
+		moveSentenceEnd: "行末"
+	};
+	/** アクション文字列（`"insertAndConfirm:、"` 等）→ キーキャップの表示。無ければ undefined */
+	function actionCap(raw) {
+		if (typeof raw !== "string") return void 0;
+		const [name, ...rest] = raw.split(":");
+		if ((name === "insertAndConfirm" || name === "directInsert") && rest.length > 0) return rest.join(":");
+		return ACTION_CAPS[name];
+	}
+	/**
+	* 配列の基本面のキーキャップ表示を作る。返り値は **browser の KeyboardEvent.code** →
+	* 表示文字列（keymap v2 の役名ではない —— キーボード図と打鍵記録が使う空間に合わせる）。
+	*
+	* - chord 配列（薙刀式・NICOLA 等）: `lookupTable` の**単打**エントリ
+	* - sequential 配列（月配列・AZIK 等）: `characterMap` と 1 文字の `inputMappings`
+	*
+	* ローマ字系はキー 1 個にかなが対応しないので、ほとんど何も返らない（＝ 図には
+	* 物理刻印がそのまま残る）。それが正しい —— ローマ字は組み合わせで決まる。
+	*/
+	function keyCapLabels(km, opts = {}) {
+		const out = /* @__PURE__ */ new Map();
+		const def = km.definition;
+		if (def.behavior.type === "chord" && km.chordData) {
+			const nameToCode = /* @__PURE__ */ new Map();
+			for (const [hid, name] of km.chordData.hidToChordKey) {
+				const code = HID_TO_BROWSER.get(hid);
+				if (code && !nameToCode.has(name)) nameToCode.set(name, code);
+			}
+			const config = def.behavior.config;
+			const codeOf = (keyStr) => nameToCode.get(keyStr) ?? hidNameToBrowserCode(keyStr) ?? charToCode(keyStr, opts.layout);
+			for (const [keyStr, output] of Object.entries(config.lookupTable ?? {})) {
+				if (keyStr.startsWith("_comment") || keyStr.includes("+")) continue;
+				const code = codeOf(keyStr);
+				if (code && typeof output === "string") out.set(code, output);
+			}
+			for (const [keyStr, action] of Object.entries(config.specialActions ?? {})) {
+				if (keyStr.startsWith("_comment") || keyStr.includes("+")) continue;
+				const code = codeOf(keyStr);
+				if (!code || out.has(code)) continue;
+				const cap = actionCap(action);
+				if (cap) out.set(code, cap);
+			}
+			return out;
+		}
+		const logicalToPhysical = /* @__PURE__ */ new Map();
+		for (const [physical, logical] of Object.entries(km.keyRemap)) logicalToPhysical.set(logical, physical);
+		const put = (logical, label) => {
+			const code = charToCode(logicalToPhysical.get(logical) ?? logical, opts.layout);
+			if (code) out.set(code, label);
+		};
+		for (const [ch, mapped] of Object.entries(km.characterMap)) put(ch, mapped);
+		for (const [seq, output] of Object.entries(def.inputMappings ?? {})) {
+			if (seq.startsWith("_comment") || seq.length !== 1) continue;
+			put(seq, output);
+		}
+		return out;
+	}
+	//#endregion
 	//#region src/engine/index.ts
 	/** このバンドルのバージョン（取り込み側が記録する用） */
 	const version = ENGINE_VERSION;
@@ -4233,6 +4370,7 @@
 	exports.hidNameToBrowserCode = hidNameToBrowserCode;
 	exports.hidNameToCode = hidNameToCode;
 	exports.isSatisfiedBy = isSatisfiedBy;
+	exports.keyCapLabels = keyCapLabels;
 	exports.keyEventFromBrowser = keyEventFromBrowser;
 	exports.requiredInputLevel = requiredInputLevel;
 	exports.version = version;

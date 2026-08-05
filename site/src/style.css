@@ -729,3 +729,9 @@ table.km-roles td.note { font-size: 0.8rem; }
 .play-controls button { min-width: 2.6rem; }
 .play-controls input[type="range"] { flex: 1 1 8rem; min-width: 6rem; }
 .play-meta { margin: 0.6rem 0 0; font-size: 0.78rem; }
+/* キーボード図（ReplayEngine.mountKeyboard）。色は本文の currentColor を継承する */
+.play-keyboard {
+  margin: 0.9rem 0 0.4rem;
+  --rk-key-on: var(--accent);
+  --rk-key-on-fg: var(--bg);
+}

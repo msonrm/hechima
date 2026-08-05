@@ -33,6 +33,13 @@ interface PlayCand {
 interface PlayState {
   doc: PlayDoc;
   ime: { visible: boolean; segments: PlaySeg[]; cands: Map<number, PlayCand> };
+  /** 押下中のキー（KeyboardEvent.code）。キーボード図が読む */
+  pressed: Set<string>;
+}
+
+interface KeyboardProfile {
+  id: string;
+  name: string;
 }
 interface PlayerView {
   time: number;
@@ -40,6 +47,8 @@ interface PlayerView {
   playing: boolean;
   index: number;
   state: PlayState;
+  /** キーボード図に見せる押下集合（コマ送りではその 1 打鍵ぶん） */
+  pressedForDisplay: Set<string>;
   caption: string | null;
   chapter: string | null;
 }
@@ -94,6 +103,30 @@ declare const ReplayEngine: {
     destroy(): void;
   };
   visibleCandidates(c: PlayCand): { list: string[]; hidden: number };
+  KEYBOARD_PROFILES: KeyboardProfile[];
+  findProfile(id: string): KeyboardProfile | undefined;
+  mountKeyboard(
+    container: HTMLElement,
+    opts: { profile: KeyboardProfile; labels?: Map<string, string> | null; hands?: boolean },
+  ): {
+    update(pressed: Set<string>): void;
+    setProfile(p: KeyboardProfile): void;
+    setLabels(m: Map<string, string> | null): void;
+    setHands(on: boolean): void;
+    destroy(): void;
+  };
+};
+
+/**
+ * 配列エンジン（`/vendor/keymap-engine/keymap-engine.js`）。
+ * キーキャップに何を刻むかは配列 JSON にしか書いていないので、ここを通る。
+ * **ReplayEngine 側には持たせない** —— 再生はログの描画だけで成立する、が全体の芯なので、
+ * 再生器に配列エンジンへの依存を作らない（ホストが繋ぐ）。
+ */
+declare const KeymapEngine: {
+  version: string;
+  decodeKeymap(json: unknown, opts?: { layout?: string }): unknown;
+  keyCapLabels(km: unknown, opts?: { layout?: string }): Map<string, string>;
 };
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -148,7 +181,12 @@ async function applyKeymap(): Promise<void> {
     const json = (await res.json()) as { name?: string };
     await keymapControl.load(json, layout || undefined);
     currentKeymap = { id, name: json?.name, layout: layout || undefined, inline: json };
-    keymapStatus.textContent = `「${json?.name ?? id}」で打てます`;
+    // ★記録済みのログがあるあいだは図を触らない。いま選んでいる配列で塗り替えると、
+    // 「薙刀式のキーキャップでローマ字の打鍵が再生される」ような嘘の絵になる
+    if (!log) syncKeyboardTo(json, layout || undefined);
+    keymapStatus.textContent = log
+      ? `「${json?.name ?? id}」で打てます（図は記録した配列のまま）`
+      : `「${json?.name ?? id}」で打てます`;
   } catch (e) {
     keymapStatus.textContent = `⚠ 読み込めません: ${e instanceof Error ? e.message : String(e)}`;
   }
@@ -218,6 +256,7 @@ function startRecording(): void {
   playerWrap.hidden = true;
   downloadBtn.disabled = true;
   discardBtn.disabled = true;
+  syncKeyboardTo(currentKeymap.inline, currentKeymap.layout); // 図をこれから打つ配列へ戻す
   recToggle.textContent = "⏹ 停止";
   recNote.hidden = true;
   updateRecInfo();
@@ -253,6 +292,7 @@ discardBtn.addEventListener("click", () => {
   playerWrap.hidden = true;
   downloadBtn.disabled = true;
   discardBtn.disabled = true;
+  syncKeyboardTo(currentKeymap.inline, currentKeymap.layout); // 図をいま選んでいる配列へ戻す
   updateRecInfo();
 });
 
@@ -406,9 +446,59 @@ function followCaret(caretEl: HTMLElement): void {
   }
 }
 
+// ---- キーボード図（段階 B。input 層＝打鍵を読む唯一の消費者） -----------------
+
+const profileSel = $<HTMLSelectElement>("play-profile");
+profileSel.innerHTML = ReplayEngine.KEYBOARD_PROFILES.map(
+  (p) => `<option value="${p.id}">${p.name}</option>`,
+).join("");
+
+const handsToggle = $<HTMLInputElement>("play-hands");
+const keyboard = ReplayEngine.mountKeyboard($<HTMLDivElement>("play-keyboard"), {
+  profile: ReplayEngine.KEYBOARD_PROFILES[0],
+  hands: handsToggle.checked,
+});
+
+handsToggle.addEventListener("change", () => keyboard.setHands(handsToggle.checked));
+
+profileSel.addEventListener("change", () => {
+  const p = ReplayEngine.findProfile(profileSel.value);
+  if (p) keyboard.setProfile(p);
+});
+
+/** 配列 JSON からキーキャップの刻印を作る（読めなければ物理刻印のまま） */
+function capLabels(json: unknown, layout?: string): Map<string, string> | null {
+  if (!json) return null;
+  try {
+    const km = KeymapEngine.decodeKeymap(json, { layout });
+    const labels = KeymapEngine.keyCapLabels(km, { layout });
+    return labels.size > 0 ? labels : null;
+  } catch {
+    return null; // 読めない配列でもキーボード図は出す（刻印が物理のままになるだけ）
+  }
+}
+
+/**
+ * キーボード図を配列に合わせる（刻印 + 物理配置）。
+ * レイアウト（JIS/US）は配列側の選択に**連動させる** —— 別々に動かせると
+ * 「US の図に JIS 配列の刻印」のような、実在しない組み合わせが作れてしまう。
+ * 図だけを別の配置で見たい場合は、あとから図のセレクタで変えられる。
+ */
+function syncKeyboardTo(json: unknown, layout?: string): void {
+  const want = layout === "us" ? "us" : "jis";
+  const p = ReplayEngine.findProfile(want);
+  if (p && profileSel.value !== want) {
+    profileSel.value = want;
+    keyboard.setProfile(p);
+  }
+  keyboard.setLabels(capLabels(json, layout));
+}
+
 let lastAnchorEl: HTMLElement | null = null;
 
 function render(v: PlayerView): void {
+  // コマ送りでは keyup まで進んでいるので、素の押下状態ではなく表示用の集合を使う
+  keyboard.update(v.pressedForDisplay);
   const { anchorEl, caretEl } = renderPlayDoc(v);
   followCaret(caretEl);
   lastAnchorEl = anchorEl;
@@ -439,6 +529,11 @@ function openPlayer(l: Hlog): void {
   player.setMode(playMode.value as "realtime" | "even");
 
   const km = l.meta.keymap;
+  // 記録した配列のレイアウトにキーボード図を合わせる（NICOLA の US 版など）
+  const wantProfile = km?.layout === "us" ? "us" : "jis";
+  // 図は **記録した配列** に合わせる（読み込んだログなら送り主の配列）
+  syncKeyboardTo(km?.inline, km?.layout);
+
   const parts = [
     `配列: ${km?.name ?? km?.id ?? "不明"}${km?.layout ? `／${km.layout.toUpperCase()}` : ""}` +
       `${km?.inline ? "（定義を同梱）" : "（定義なし）"}`,
