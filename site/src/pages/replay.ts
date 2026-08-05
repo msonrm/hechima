@@ -103,6 +103,8 @@ declare const ReplayEngine: {
     destroy(): void;
   };
   visibleCandidates(c: PlayCand): { list: string[]; hidden: number };
+  /** 人が開いて注釈を書き足せる形の JSON 文字列にする */
+  stringifyLog(log: Hlog): string;
   KEYBOARD_PROFILES: KeyboardProfile[];
   findProfile(id: string): KeyboardProfile | undefined;
   mountKeyboard(
@@ -299,7 +301,8 @@ discardBtn.addEventListener("click", () => {
 downloadBtn.addEventListener("click", () => {
   if (!log) return;
   const stamp = log.meta.recordedAt.replace(/[:+]/g, "-").slice(0, 16);
-  const blob = new Blob([JSON.stringify(log)], { type: "application/json" });
+  // 1 行 JSON だと開いても読めない。注釈を書き足せる形で出す
+  const blob = new Blob([ReplayEngine.stringifyLog(log)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

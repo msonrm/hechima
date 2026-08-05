@@ -30,7 +30,7 @@
 	}
 	//#endregion
 	//#region src/replay/version.ts
-	const REPLAY_ENGINE_VERSION = "0.8.1";
+	const REPLAY_ENGINE_VERSION = "0.9.0";
 	//#endregion
 	//#region src/replay/types.ts
 	/** ログ形式の版。未知の版は読み込み時に明確なエラーで弾く（keymap v2 の版ゲートと同じ作法）。 */
@@ -904,6 +904,45 @@
 			hashOk,
 			final
 		};
+	}
+	//#endregion
+	//#region src/replay/format.ts
+	const INLINE_MARK = "\0inline\0";
+	/** 各行に指定量のインデントを足す（先頭行は呼び出し側が置く前提で 2 行目以降だけ） */
+	function indentRest(text, pad) {
+		return text.split("\n").map((line, i) => i === 0 ? line : pad + line).join("\n");
+	}
+	/**
+	* ログを「人が開いて注釈を書き足せる」形の JSON 文字列にする。
+	* 読み込み側は素の `JSON.parse` で戻せる（整形は見た目だけ）。
+	*/
+	function stringifyLog(log) {
+		const out = ["{"];
+		out.push(`  "formatVersion": ${JSON.stringify(log.formatVersion)},`);
+		const ann = log.annotations ?? [];
+		if (ann.length === 0) out.push(`  "annotations": [],`);
+		else {
+			out.push(`  "annotations": [`);
+			out.push(ann.map((a) => `    ${JSON.stringify(a)}`).join(",\n"));
+			out.push(`  ],`);
+		}
+		const keymap = log.meta.keymap;
+		const hasInline = !!keymap && keymap.inline !== void 0;
+		const metaForPrint = hasInline ? {
+			...log.meta,
+			keymap: {
+				...keymap,
+				inline: INLINE_MARK
+			}
+		} : log.meta;
+		let metaText = JSON.stringify(metaForPrint, null, 2);
+		if (hasInline) metaText = metaText.replace(JSON.stringify(INLINE_MARK), JSON.stringify(keymap?.inline));
+		out.push(`  "meta": ${indentRest(metaText, "  ")},`);
+		out.push(`  "events": [`);
+		out.push(log.events.map((e) => `    ${JSON.stringify(e)}`).join(",\n"));
+		out.push(`  ]`);
+		out.push("}");
+		return out.join("\n");
 	}
 	//#endregion
 	//#region src/replay/keyboard/profiles.ts
@@ -1797,6 +1836,7 @@
 	exports.isInputEvent = isInputEvent;
 	exports.mountKeyboard = mountKeyboard;
 	exports.replayAll = replayAll;
+	exports.stringifyLog = stringifyLog;
 	exports.verifyLog = verifyLog;
 	exports.version = REPLAY_ENGINE_VERSION;
 	exports.visibleCandidates = visibleCandidates;
