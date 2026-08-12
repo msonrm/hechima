@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.22.0";
+	const HECHIMA_VERSION = "0.22.1";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -509,9 +509,6 @@
 			const at = segs[0].candidates.indexOf(text);
 			segs[0].idx = at >= 0 ? at : 0;
 			resetAddl();
-			suggestSegs = null;
-			suggestCands = [];
-			suggestKey = "";
 			return commitFocused();
 		}
 		const joined = () => (segs ?? []).map((s, i) => segText(s, i)).join("");
@@ -532,6 +529,7 @@
 				learned
 			} : null;
 			clear();
+			clearSuggest();
 			cb.commit(text);
 		}
 		/**

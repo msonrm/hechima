@@ -1,4 +1,4 @@
-// Hechima v0.22.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// Hechima v0.22.1 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 2.0.0（keymap v2。配列は roles で役を宣言し、物理キーへの割当は
 // layouts + ホストの roleOverrides で決まる。**v1 のキーマップは読めない**）。
 // v0.19.0 は engine の局面問い合わせ（InputEngine.hostPhase）を配線する。
