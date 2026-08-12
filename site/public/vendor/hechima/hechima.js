@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.20.0";
+	const HECHIMA_VERSION = "0.22.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -445,6 +445,74 @@
 				kind: "yomi"
 			}]);
 			else cb.hide();
+			maybeSuggest();
+		}
+		let suggestSegs = null;
+		let suggestCands = [];
+		let suggestKey = "";
+		let suggestGen = 0;
+		let suggestOn = true;
+		/** いまのよみを求める（pend を flush した形。表示は変えない） */
+		const suggestYomi = () => composing() ? resolveRomaji(kana, pend, true).kana : "";
+		function clearSuggest() {
+			const had = suggestKey !== "" || suggestCands.length > 0;
+			suggestSegs = null;
+			suggestCands = [];
+			suggestKey = "";
+			suggestGen++;
+			if (had && cb.suggest) cb.suggest([]);
+		}
+		/** よみが変わったときだけ引き直す（render は候補移動などでも呼ばれる） */
+		function maybeSuggest() {
+			if (!suggestOn || !cb.suggest || !cb.convert) return;
+			if (segs) {
+				if (suggestKey) clearSuggest();
+				return;
+			}
+			const yomi = suggestYomi();
+			if (yomi === suggestKey) return;
+			if (!yomi) {
+				clearSuggest();
+				return;
+			}
+			suggestKey = yomi;
+			const gen = ++suggestGen;
+			Promise.resolve(cb.convert(yomi)).then((result) => {
+				if (gen !== suggestGen || segs || suggestYomi() !== yomi) return;
+				const cands = result?.[0]?.candidates;
+				if (!result || !result.length || !cands || !cands.length) {
+					suggestSegs = null;
+					suggestCands = [];
+					cb.suggest([]);
+					return;
+				}
+				suggestSegs = result;
+				suggestCands = cands.slice();
+				cb.suggest(suggestCands.slice());
+			}).catch(() => {});
+		}
+		/**
+		* サジェストの n 番目を選んで確定する（v0.22.0+）。
+		* **保持した変換結果を Phase 2 へ昇格させてから部分確定する**ので、変換は走り直さない。
+		* 選んだ語がよみ全体を覆っていなければ、残りは候補選択状態で続く（commitFocused と同じ）。
+		*/
+		function commitSuggestion(index) {
+			if (!active || segs || !suggestSegs) return false;
+			const text = suggestCands[index];
+			if (text === void 0) return false;
+			if (suggestYomi() !== suggestKey) return false;
+			const promoted = suggestSegs;
+			kana = resolveRomaji(kana, pend, true).kana;
+			pend = "";
+			segs = promoted.map(ingestSegment);
+			focus = 0;
+			const at = segs[0].candidates.indexOf(text);
+			segs[0].idx = at >= 0 ? at : 0;
+			resetAddl();
+			suggestSegs = null;
+			suggestCands = [];
+			suggestKey = "";
+			return commitFocused();
 		}
 		const joined = () => (segs ?? []).map((s, i) => segText(s, i)).join("");
 		let lastCommit = null;
@@ -465,6 +533,43 @@
 			} : null;
 			clear();
 			cb.commit(text);
+		}
+		/**
+		* 注目文節までを確定し、**残りを候補選択状態のまま残す**（v0.21.0+）。
+		*
+		* フリック等のタッチ入力では、候補をタップした時点でその文節が確定して次の文節へ
+		* 進むのが作法（iOS / Android の日本語入力と同じ）。全体確定しか無いと、タップの
+		* たびに「まだ確定していない」状態が積み上がってしまう。
+		*
+		* 注目が最後の文節なら全体確定（= commit）と同じ。候補選択中でなければ false。
+		* **確定アンドゥの対象外**にしてある —— 戻す先が「確定した前半」と「残った後半」に
+		* 割れていて、片方だけ戻すと文書とセッションが食い違うため。
+		*/
+		function commitFocused() {
+			if (!active || !segs) return false;
+			const cur = segs;
+			if (focus >= cur.length - 1) {
+				commit(joined());
+				return true;
+			}
+			const head = cur.slice(0, focus + 1);
+			const tail = cur.slice(focus + 1);
+			const text = head.map((s, i) => segText(s, i)).join("");
+			if (cb.learn && !eiji) try {
+				cb.learn(head.map((s, i) => ({
+					key: s.key,
+					value: segText(s, i)
+				})));
+			} catch {}
+			segs = tail;
+			focus = 0;
+			kana = tail.map((s) => s.key).join("");
+			lastCommit = null;
+			genId++;
+			resetAddl();
+			cb.commit(text);
+			render();
+			return true;
 		}
 		async function reconvert(surface) {
 			if (!active || !cb.reconvert || segs || composing()) return false;
@@ -781,9 +886,13 @@
 			}
 			return false;
 		}
-		function feed(e) {
-			if (!active) return false;
-			if (engine) return engineDown(e);
+		/**
+		* 機能キー（Ctrl+BS / Enter / Escape / BS / Space / 矢印）の内蔵処理。
+		*
+		* feed（配列エンジン未注入のとき）と **feedDirect（注入の有無に関わらず）** の共通部分。
+		* 戻り値 null = 機能キーではない（呼び元が印字キーとして続ける）。
+		*/
+		function builtinNav(e) {
 			if (e.key === "Backspace" && e.ctrlKey && !e.altKey && !e.metaKey && !composing()) return undoCommit() ? true : false;
 			if (e.ctrlKey || e.altKey || e.metaKey) return false;
 			const k = e.key;
@@ -837,6 +946,14 @@
 				else candPrev();
 				return true;
 			}
+			return null;
+		}
+		function feed(e) {
+			if (!active) return false;
+			if (engine) return engineDown(e);
+			const nav = builtinNav(e);
+			if (nav !== null) return nav;
+			const k = e.key;
 			if (k.length === 1 && k >= " " && k <= "~") {
 				if (/[a-zA-Z]/.test(k) && e.shiftKey) {
 					if (segs) commit(joined());
@@ -906,6 +1023,20 @@
 			feed,
 			feedUp(e) {
 				return engine ? engineUp(e) : false;
+			},
+			feedDirect(e) {
+				if (!active) return false;
+				const nav = builtinNav(e);
+				return nav === null ? false : nav;
+			},
+			commitFocused,
+			commitSuggestion,
+			setSuggest(on) {
+				const next = !!on;
+				if (suggestOn === next) return;
+				suggestOn = next;
+				if (!suggestOn) clearSuggest();
+				else maybeSuggest();
 			},
 			setEngine(eng, keyOf) {
 				if (engine && engine !== eng) {

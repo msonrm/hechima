@@ -204,7 +204,7 @@
 		ownKeys(grid, ["rows", "cols"], `${where}.grid`);
 		const rows = optInt(grid, "rows", 1, `${where}.grid`);
 		const cols = optInt(grid, "cols", 1, `${where}.grid`);
-		if (rows === void 0 || cols === void 0 || rows > 8 || cols > 8) fail(`${where}.grid は rows/cols 1〜8 であるべき`);
+		if (rows === void 0 || cols === void 0 || rows > 12 || cols > 24) fail(`${where}.grid は rows 1〜12 / cols 1〜24 であるべき`);
 		const output = optStr(raw, "output", where) ?? mapOutput;
 		if (output !== "kana" && output !== "romaji" && output !== "direct") fail(`${where}.output "${output}" は未知（kana / romaji / direct）`);
 		if (!Array.isArray(raw.keys) || raw.keys.length === 0) fail(`${where}.keys が空`);
@@ -609,7 +609,6 @@
 		function onMove(e) {
 			if (!press || e.pointerId !== press.pointerId) return;
 			const g = classifyGesture(e.clientX - press.startX, e.clientY - press.startY, press.cellW, map.threshold);
-			if (g.kind === "flick" && !press.petal && Object.keys(press.key.flick).length > 0) showPetal();
 			highlightPetal(g.kind === "flick" ? g.dir : null);
 			if (g.kind === "flick" && press.repeatTimer !== null && !press.repeatFired) {
 				clearTimeout(press.repeatTimer);
@@ -681,7 +680,7 @@
 	}
 	//#endregion
 	//#region src/flick/version.ts
-	const FLICK_ENGINE_VERSION = "1.2.0";
+	const FLICK_ENGINE_VERSION = "1.4.0";
 	//#endregion
 	exports.DEFAULT_POST_MODIFY_CYCLES = DEFAULT_POST_MODIFY_CYCLES;
 	exports.classifyGesture = classifyGesture;

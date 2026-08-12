@@ -1,4 +1,4 @@
-// Hechima v0.20.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// Hechima v0.22.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 2.0.0（keymap v2。配列は roles で役を宣言し、物理キーへの割当は
 // layouts + ホストの roleOverrides で決まる。**v1 のキーマップは読めない**）。
 // v0.19.0 は engine の局面問い合わせ（InputEngine.hostPhase）を配線する。
@@ -113,6 +113,14 @@ export interface SessionCallbacks {
    */
   learn?(segments: { key: string; value: string }[]): void;
   /**
+   * よみ入力中の候補（v0.22.0+、省略可）。**打ちながら並べる候補**で、タッチ入力の
+   * 候補バーが使う。よみが変わるたびに呼ばれ、空配列 = 出すものが無い（消す）。
+   * 選ぶのは FepSession.commitSuggestion(index)。
+   * **これを渡さない限りサジェストの取得自体を行わない**（渡すと打鍵のたびに
+   * cb.convert が走る）。既存ホストは無変更で従来どおり動く。
+   */
+  suggest?(candidates: string[]): void;
+  /**
    * 再変換（v0.10.0+、省略可）。確定済みの表記から逆変換でよみを求め、変換結果（keys がよみ）を返す。
    * null/省略/失敗 = 再変換不能。FepSession.reconvert() が使う。
    */
@@ -183,6 +191,35 @@ export interface FepSession {
   feed(e: KeyTap): boolean;
   /** keyup を消費する（SandS の単打 convert が発火する）。内蔵ローマ字経路は常に false */
   feedUp(e: KeyTap): boolean;
+  /**
+   * サジェストの取得を止める / 再開する（v0.22.0+）。既定 = 有効（cb.suggest がある場合）。
+   * **打鍵のたびに cb.convert を呼ぶ**ので、候補バーを出していない間はホストが切ってよい。
+   */
+  setSuggest(on: boolean): void;
+  /**
+   * サジェスト（よみ入力中の候補）の n 番目を選んで確定する（v0.22.0+）。
+   * cb.suggest で受け取った配列の添字を渡す。**保持した結果を候補選択状態へ昇格させて
+   * から部分確定する**ので、変換は走り直さない。選んだ語がよみ全体を覆っていなければ、
+   * 残りは候補選択状態で続く（cb.commit → cb.show の順）。
+   * cb.suggest 未提供・候補選択中・範囲外・よみが動いた後は false。
+   */
+  commitSuggestion(index: number): boolean;
+  /**
+   * 非キーボード入力フロント（フリック等）からの機能キー（v0.21.0+）。
+   * **配列エンジンを通さない**ぶんが feed との違い。フリックの「変換」は
+   * `{key:" ", code:"Space"}` として届くので、chord 配列（薙刀式は Space = holder1）を
+   * 挿していると feed 経由では役に食われて変換できない。印字キーは扱わない
+   * （かなは insertKana）。戻り値の意味は feed と同じ（false = ホストの編集操作へ）。
+   */
+  feedDirect(e: KeyTap): boolean;
+  /**
+   * 注目文節までを確定し、**残りを候補選択状態のまま残す**（v0.21.0+）。
+   * 候補をタップで選ぶ入力フロント（フリック等）の作法 —— iOS / Android の日本語入力と
+   * 同じく、タップした時点でその文節が確定して次の文節へ進む。
+   * 最後の文節なら全体確定と同じ。候補選択中でなければ false。
+   * cb.commit → cb.show（残り）の順で呼ばれる。**確定アンドゥの対象外**。
+   */
+  commitFocused(): boolean;
   /**
    * 配列エンジン（KeymapEngine の InputEngine）を注入する。null = 内蔵ローマ字。
    * engine.onStateChange → fep.pumpEngine() の配線はホスト側で行うこと。

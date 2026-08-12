@@ -1040,6 +1040,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     // キーボード上部の候補バーへ出す
     if (flickKbd) {
       popupEl.hidden = true;
+      lastFlickSegments = segments;
       renderFlickCandBar(segments);
       return;
     }
@@ -1249,8 +1250,18 @@ export function initLabPage(config: LabPageConfig = {}): void {
   // フリック postModify（゛゜小トグル）の対象特定用: 合成表示テキストを控える
   // （更新は renderComposition の先頭で一元的に行う）
   let flickComposingText = "";
+  // よみ入力中の候補（サジェスト、hechima v0.22.0）と、直近の未確定表示。
+  // サジェストは候補バーの**もう 1 つの段**として出すので、届いたら描き直す
+  let flickSuggest: string[] = [];
+  let lastFlickSegments: Hechima.SegmentView[] = [];
 
   const fep = Hechima.createFep({
+    // よみが変わるたびに届く。**候補バーが受け皿**なので、フリック中だけ有効にする
+    // （setSuggest。打鍵のたびに cb.convert が走るため）
+    suggest: (items) => {
+      flickSuggest = items;
+      if (flickKbd) renderFlickCandBar(lastFlickSegments);
+    },
     show: (segments) => {
       config.recordSink?.show?.(segments);
       renderComposition(segments);
@@ -1293,6 +1304,9 @@ export function initLabPage(config: LabPageConfig = {}): void {
     },
     ...conn.callbacks(),
   }, foldParams ? { fold: foldOptionsOf(foldParams) } : undefined);
+  // **サジェストは既定で切っておく。** cb.suggest を渡してあるので既定は有効だが、
+  // 打鍵のたびに変換が走る。受け皿（フリックの候補バー）を出したときだけ ON にする
+  fep.setSuggest(false);
   fep.setActive(true);
 
   // ---- 配列（keymap-format JSON。セレクタはページ config 次第） ----
@@ -1758,10 +1772,15 @@ export function initLabPage(config: LabPageConfig = {}): void {
       getComposingTail: () => flickComposingText,
       onOp(op) {
         if (op.type === "kana") fep.insertKana(op.text, op.replace);
-        else if (op.type === "key") { if (!fep.feed(op.tap)) applyFlickHostKey(op.tap); }
+        // **配列エンジンを通さない**（hechima v0.21.0 の feedDirect）。フリックの「変換」は
+        // code:"Space" で届くので、feed に流すと薙刀式では holder1（相互シフト）に食われて
+        // **変換が一切効かない**（Obsidian の実機で判明。/flick/ は romaji 固定なので
+        // ここでは踏んでいなかった）
+        else if (op.type === "key") { if (!fep.feedDirect(op.tap)) applyFlickHostKey(op.tap); }
         else if (op.type === "text") { snapshot(); insertTextAtCaret(op.text); afterEdit(); }
       },
     });
+    fep.setSuggest(true); // 打ちながら候補を出す（候補バーが受け皿になる）
     flickPanel.hidden = false;
     document.body.classList.add("flick-on");
     editorEl.setAttribute("inputmode", "none");
@@ -1771,8 +1790,10 @@ export function initLabPage(config: LabPageConfig = {}): void {
 
   function disableFlick(): void {
     if (!flickKbd) return;
+    fep.setSuggest(false); // 打鍵ごとの変換を止める
     flickKbd.destroy();
     flickKbd = null;
+    flickSuggest = [];
     flickCandsEl.replaceChildren();
     flickPanel.hidden = true;
     document.body.classList.remove("flick-on");
@@ -1808,7 +1829,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     const idx = seg?.candidateIndex;
     const additional = seg?.additional ?? [];
     if (!seg || !cands || idx === undefined || (cands.length < 2 && additional.length === 0)) {
-      flickCandsEl.replaceChildren();
+      renderFlickSuggest(); // 変換前なら「打ちながら出る候補」を出す段に切り替える
       return;
     }
     const inAdditional = seg.additionalIndex !== undefined;
@@ -1829,6 +1850,25 @@ export function initLabPage(config: LabPageConfig = {}): void {
     });
     flickCandsEl.replaceChildren(...items);
     flickCandsEl.querySelector(".selected")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    flickCandsEl.dataset.phase = "candidates";
+  }
+
+  /**
+   * よみ入力中の候補（サジェスト、hechima v0.22.0）。**「変換」を押す前から並べる**のが
+   * タッチ入力の作法で、押してから出るのでは打鍵が 1 つ増える。
+   * 選択中の印は付けない —— まだ何も選んでいない。
+   */
+  function renderFlickSuggest(): void {
+    const items = flickSuggest.map((text, i) => {
+      const item = document.createElement("span");
+      item.className = "fcand";
+      item.textContent = text;
+      item.dataset.idx = String(i);
+      return item;
+    });
+    flickCandsEl.replaceChildren(...items);
+    flickCandsEl.dataset.phase = "suggest";
+    flickCandsEl.scrollLeft = 0;
   }
 
   let flickCandPress: { x: number; y: number; idx: number } | null = null;
@@ -1843,7 +1883,14 @@ export function initLabPage(config: LabPageConfig = {}): void {
     const moved = Math.hypot(e.clientX - flickCandPress.x, e.clientY - flickCandPress.y);
     const idx = flickCandPress.idx;
     flickCandPress = null;
-    if (moved < 8) fep.selectCandidate(idx);
+    // **タップした文節はその場で確定**し、残りがあれば候補選択のまま続く
+    // （hechima v0.21.0 の commitFocused。iOS / Android の日本語入力と同じ作法）。
+    // 物理キーボードの候補窓クリックは選ぶだけ = 意図的な差
+    if (moved < 8) {
+      // どちらの段をタップしたか（よみ入力中のサジェスト / 変換中の文節候補）
+      if (flickCandsEl.dataset.phase === "suggest") fep.commitSuggestion(idx);
+      else if (fep.selectCandidate(idx)) fep.commitFocused();
+    }
   });
   // 候補バーをマウスで押してもエディタのフォーカスを奪わない（PC でフリックを試すとき用。
   // タッチは panel の touchend 抑止が担う）

@@ -169,6 +169,11 @@ fep.setEngine(null);                                // null で内蔵ローマ�
   いるが `singleTapAction` の宣言が無い Space。どちらも実機で踏んだもの）
 - `hechima` v0.13.0+ → KeymapEngine >= 1.4.0（上の条件を満たしていれば自動的に満たされます）
 - `flick-engine` / `gamepad-engine` → **hechima >= 0.13.0**（`insertKana`）必須
+- タッチ入力フロントの作法（**打ちながら候補 / 候補タップで文節確定 / 配列を通さない機能キー**）を
+  使うなら **hechima >= 0.22.0**。それ未満だと `cb.suggest` / `commitSuggestion` /
+  `commitFocused` / `feedDirect` / `setSuggest` が無く、**chord 系の配列を選んだページでは
+  フリックの「変換」がシフト役に食われて変換できません**（薙刀式の Space = holder1）。
+  **追加のみなので、使わないページは差し替えるだけで無変更です**
 - `hechima-worker` → `hechima-wasm` v0.7.1 とセット推奨（学習は v0.4.0+。旧 wasm では
   文節伸縮・学習が機能検出で段階的に無効化される）
 - **候補の二層化**（v0.14.0 の `createFep(cb, { fold })`）を使う場合のみ、変換コストを返す
