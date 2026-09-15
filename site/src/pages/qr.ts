@@ -332,7 +332,15 @@ function grab(): boolean {
   const minGap = few ? 0 : (roundMs || 100) / 2;
   if (tNow - lastGrabAt < minGap) return false;
   lastGrabAt = tNow;
-  if (bank.length >= BANK_MAX) return false;
+  /* ★★★**溜まりすぎたら、古い方を捨てる**（2026-09-15・実機の「終了の判定条件を
+     1 枚分間違えていませんよね？」から）—— 判定自体は正しかったが、**捨てる向きが逆**だった。
+     残り 1 枚のときは間引きを止めるので**毎フレーム溜まり**、デコード（86ms）より
+     撮影（33ms）の方が速いので bank が上限まで膨れる。そこで**新しい方を捨てていた**ので、
+     ★探している最新の枚が読まれるまで 64 枚ぶん ＝ 5 秒以上待たされていた。
+     ★**古いフレームは既に読んだ枚ばかり**なので、捨てるならそちら。
+     ★★残りが少ないときは**上限も小さく** —— 1 枚を捕まえるのに 60 枚は要らない。 */
+  const cap = few ? 12 : BANK_MAX;
+  while (bank.length >= cap) bank.shift();
   bank.push(toGray(ctx.getImageData(0, 0, SCAN_SIDE, SCAN_SIDE)));
   /* ★★★**やめどきは「機体が 1 周するまで」**（2026-09-15 に直した）——
      それまでは「要る枚数の 2 倍」で切っていて、17 枚のとき **0.8 秒＝ 1 周の半分**しか
