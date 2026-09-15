@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 import jsQR from "jsqr";
 
-import { Collector, crc32, readSheet } from "../src/qr/format.ts";
+import { Collector, crc32, isReaderUrl, pagesFromUrl, readSheet } from "../src/qr/format.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const V = JSON.parse(readFileSync(join(HERE, "../src/qr/vectors.json"), "utf8"));
@@ -133,6 +133,51 @@ for (const c of V.cases) {
     ng(c.name, "jsQR 経由だと枚の読み分けが変わる");
   /* ★`data`（文字列）で代用すると **plain は通って multi4 だけ落ちる** ――
      「短い本文では動くのに長い本文で黙って落ちる」の実物。2026-09-15 に壊して確かめた。 */
+}
+
+/* ---- ★★読み取りページの URL（機体が段 1 に出すもの）を、本文として受けないこと ----
+   ★2026-09-15 に事故った箇所 —— `?n=5` を足した日にクエリを許し忘れ、段 1 の QR が
+   **本文として受け取られて 1 枚で「揃った」**になった（表示されるのは URL そのもの）。
+   ★判定がテストの無いページ側に置いてあったので検査に引っかからなかった。移した。
+   ★ベクタは**機体が実際に出す文字列**（`main.c` の QR_URL ＋ `?n=%d`）。 */
+for (const u of V.reader_urls ?? []) {
+  const bytes = hex(u.hex);
+  if (!isReaderUrl(bytes)) {
+    ng("url", `本文として受けてしまう: ${u.text}`);
+    continue;
+  }
+  /* ★★**Collector が自分で弾くこと**（呼ぶ側が忘れても事故らない ＝ 今回の事故の直し） */
+  const c = new Collector();
+  const r = c.add(bytes);
+  if (r.kind !== "url") ng("url", `Collector が url と言わない（${r.kind}）: ${u.text}`);
+  if (c.ready) ng("url", `Collector が「揃った」と言う: ${u.text}`);
+  if (!c.empty) ng("url", `Collector が URL を溜め込んだ: ${u.text}`);
+  /* ★総枚数が読めること（`?n=` が無いものは 0） */
+  const want = /\?n=(\d+)/.exec(u.text);
+  const n = pagesFromUrl(u.text);
+  const expect = want && Number(want[1]) > 1 ? Number(want[1]) : 0;
+  if (n !== expect) ng("url", `総枚数が違う（${n} ≠ ${expect}）: ${u.text}`);
+  /* ★盤面からも同じ結論になること（jsQR 経由） */
+  const { size, bits } = u.board;
+  const packed = Buffer.from(bits, "base64");
+  const q = 4, side = size + q * 2;
+  const rgba = new Uint8ClampedArray(side * side * 4).fill(255);
+  for (let r = 0; r < size; r++)
+    for (let k = 0; k < size; k++) {
+      const i = r * size + k;
+      if (!((packed[i >> 3] >> (7 - (i & 7))) & 1)) continue;
+      const o = ((r + q) * side + (k + q)) * 4;
+      rgba[o] = rgba[o + 1] = rgba[o + 2] = 0;
+    }
+  const got = jsQR(rgba, side, side, { inversionAttempts: "dontInvert" });
+  if (!got || !got.binaryData) ng("url", `jsQR が読めない: ${u.text}`);
+  else if (!isReaderUrl(Uint8Array.from(got.binaryData)))
+    ng("url", `jsQR 経由だと本文として受けてしまう: ${u.text}`);
+}
+
+/* ★**本文が URL に似ていても、本文として受ける**（弾きすぎない） */
+for (const t of ["https://example.com/qr/ に書いた", "これは https://luffa-lang-labo.dev/qr/ の話"]) {
+  if (isReaderUrl(new TextEncoder().encode(t))) ng("url", `本文を弾いてしまう: ${t}`);
 }
 
 if (bad) {

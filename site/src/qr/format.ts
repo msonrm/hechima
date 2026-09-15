@@ -36,6 +36,32 @@ function ascii(b: Uint8Array, max: number): string {
   return s;
 }
 
+/* ★★**読み取りページの URL そのもの**（機体が段 1 に出すもの）。
+ *   `https://…/qr/` と、**総枚数が付いた `https://…/qr/?n=5`** の両方。
+ * ★★**クエリを許すのを一度忘れて事故った**（2026-09-15）—— `?n=` を足した日に
+ *   この正規表現を直し忘れ、段 1 の QR が**本文として受け取られて**即「揃った」に
+ *   なった（表示されるのは URL そのもの）。★**自分で足した機能が、自分で書いた
+ *   防御をすり抜けた** —— しかもこの判定は**テストの無いページ側**に置いてあったので、
+ *   検査に引っかからなかった。だからここへ移した。 */
+const READER_URL = /^https?:\/\/[^\s?#]+\/qr\/?(?:\?[^\s#]*)?(?:#[^\s]*)?$/;
+
+/** その枚は「読み取りページの URL」か（＝ 本文ではない）。 */
+export function isReaderUrl(bytes: Uint8Array): boolean {
+  if (bytes.length > 160) return false;
+  try {
+    return READER_URL.test(new TextDecoder("utf-8", { fatal: true }).decode(bytes).trim());
+  } catch {
+    return false; /* UTF-8 として読めない ＝ 圧縮された枚 */
+  }
+}
+
+/** URL に載っている総枚数（`?n=5`）。0 = 無い／読めない。 */
+export function pagesFromUrl(url: string): number {
+  const m = /[?&]n=(\d+)/.exec(url);
+  const n = m ? Number(m[1]) : 0;
+  return Number.isInteger(n) && n > 1 && n <= 64 ? n : 0;
+}
+
 /** 枚を読み分ける。★書式に完全一致したときだけ「割れた枚」と見なす。 */
 export function readSheet(bytes: Uint8Array): Sheet {
   const m = HDR.exec(ascii(bytes, 48));
@@ -77,7 +103,8 @@ export type AddResult =
   | { kind: "new"; seq: number }        /* 新しい枚が入った */
   | { kind: "dup"; seq: number }        /* もう持っている枚 */
   | { kind: "other" }                   /* 別の文書の枚（見出しが違う） */
-  | { kind: "plain" };                  /* 生の本文 1 枚（これだけで完結） */
+  | { kind: "plain" }                   /* 生の本文 1 枚（これだけで完結） */
+  | { kind: "url"; pages: number };     /* 読み取りページの URL（★本文ではない） */
 
 /**
  * 枚を集める。★**集めている途中の姿がそのまま画面になる**ので、
@@ -89,6 +116,14 @@ export class Collector {
   private plain: Uint8Array | null = null;
 
   add(bytes: Uint8Array): AddResult {
+    /* ★★**読み取りページの URL は、ここで弾く** —— 機体は段 1 にそれを出すので、
+       集めている最中に**必ず視界へ入る**。★2026-09-15 に、この防御を*呼ぶ側*に
+       置いていて、`?n=` を足した日にすり抜けた（URL が本文になった）。
+       **呼ぶ側が忘れても事故らないよう、内側に移した。** */
+    if (isReaderUrl(bytes)) {
+      const n = pagesFromUrl(new TextDecoder().decode(bytes));
+      return { kind: "url", pages: n };
+    }
     const s = readSheet(bytes);
     if (!s.head) {
       /* ★生の 1 枚は、それだけで本文。既に割れたものを集めていたら別の文書とみなす。 */

@@ -7,7 +7,8 @@
   "★**形式（EDQ1 ヘッダ / deflate-raw）を変えたら、これも作り直す** ――",
   "  これは「出す側が出したもの」のスナップショットなので、腐ると実機でだけ落ちる。",
   "pages は各枚の中身を 16 進にしたもの（ヘッダ ＋ payload）。text は戻るべき本文。",
-  "board は最初の 1 枚の盤面（1 模様 1 ビット・行優先・base64）。★読み取り側（jsQR）が実際に読めるかを、画像ファイルを経由せずに確かめるため。"
+  "board は最初の 1 枚の盤面（1 模様 1 ビット・行優先・base64）。★読み取り側（jsQR）が実際に読めるかを、画像ファイルを経由せずに確かめるため。",
+  "reader_urls は機体が段 1 に出す「読み取りページの URL」。★本文ではないので、読む側はこれを本文として受けてはいけない（2026-09-15 に ?n= を足した日、クエリを許し忘れて本文として受け、1 枚で「揃った」になった）。"
  ],
  "generated": "2026-09-15 / editor-mock 9732d07",
  "cases": [
@@ -94,6 +95,32 @@
    "packed": true,
    "crc": 800072525,
    "total": 71
+  }
+ ],
+ "reader_urls": [
+  {
+   "text": "https://luffa-lang-labo.dev/qr/?n=5",
+   "hex": "68747470733a2f2f6c756666612d6c616e672d6c61626f2e6465762f71722f3f6e3d35",
+   "board": {
+    "size": 45,
+    "bits": "/rf5jsv8FnZn7JBupxmbBLt1o2ZzNdulO/kzrsFLbHMBB/qqqqqv4ACPEbEAzm9foMF4JJH3klUJ/7E38qSwhzM2w4uuExOdvoIvM3ZHXho7ExCRdytzP1KhNhgxXYVGwn8MWtoUxkzA1rwpyMzYHUn85Pxi+sRp3Em0VutEqmeqkRGNEX0aT89PpM/ZxJHntqE3l7OX0aRRVwY204byk5ucfxxbOnZFjRn7RRDn+ilzn15J7pguWKYGpn+IXl6C4ExA1FzwKPnYGHmh5Pxi+4B11Em0Z/iEqmfqkFaNE1Eauu9fpv+d0pFzmEWul7Gy8yEFlyw2+I/uk8udXoA="
+   }
+  },
+  {
+   "text": "https://luffa-lang-labo.dev/qr/?n=1",
+   "hex": "68747470733a2f2f6c756666612d6c616e672d6c61626f2e6465762f71722f3f6e3d31",
+   "board": {
+    "size": 45,
+    "bits": "/rf5jsv8FnZn7JBurxmbBLt1A2ZzNdulu/kzrsFDbHMBB/qqqqqv4ACPEbEAzm9foMF4TJH3klUrp7E38qSwRzM2w4CokxOdvtovM3ZHXhobExCRdJhzP1KhOhgxXYVGpn8MWtoGpkzA1rwpyMzYHUX75Pxi+vxB3Em0VitEqmeqkRCNEX0aT89PpM/ZxJHntqEXj7OX0aRRVwY204Msk5ucf0irOnZFjQv7RRDn/Clzn15J7pguWKYGpn+IXl6C+ExA1FzwqPnYGHm95Pxi+4B11Em0Z/iEqmfqkFaNE1Eauu9fpv+d0pFzmEWun7G28yEFVyw2+I/uk8udXoA="
+   }
+  },
+  {
+   "text": "https://luffa-lang-labo.dev/qr/",
+   "hex": "68747470733a2f2f6c756666612d6c616e672d6c61626f2e6465762f71722f",
+   "board": {
+    "size": 45,
+    "bits": "/rf5jsv8FnZn7JButxmbBLt1U2ZzNdunO/kzrsFDbHMBB/qqqqqv4AGPEbEAzm9foMF4KJH3klUo57E38qUwhzM2w4CokxOdvrIHM3ZHXhobExCRcplzP1KhP5gxXYVGrn8MWtoXrkzBVrwpCMzYHUn65Pxi+qxJ3Em0VqtkqmeqlxKNEX0aT89PoM/ZxJHnpqE3n7OXUaVRlwY2047mk5ucf0RLOnZFjZv7RRDn/Clzn55J7pguXqYGpn+IXl6C6ExAVFzwKPnYGHmj5Pxi+gBF1Em0Z/iEqmfqkFaNEVEauu9foP+d0pFzqEVul7G3cyEFVyw2+I/uk8udXoA="
+   }
   }
  ]
 }

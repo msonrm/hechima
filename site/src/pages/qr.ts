@@ -8,7 +8,7 @@
  */
 import jsQR from "jsqr";
 
-import { Collector } from "../qr/format";
+import { Collector, pagesFromUrl } from "../qr/format";
 
 const video = document.getElementById("qr-video") as HTMLVideoElement;
 const statusEl = document.getElementById("qr-status") as HTMLParagraphElement;
@@ -72,20 +72,6 @@ let bank: ImageData[] = [];
 let bankT0 = 0;
 let draining = false;
 
-/* ★★出す側は**このページの URL を先に出す**（機体のメニュー → QRコード の 1 枚目）ので、
-   集めている最中に必ず視界へ入る。本文として受けると「https://…/qr/」が本文になってしまう。
-   ★弾くだけでなく**次に何を押すかを言う** —— その QR を撮った人は、たいてい
-   「読んだのに何も起きない」と思っている。 */
-const SELF_URL = /^https?:\/\/[^\s]+\/qr\/?$/;
-
-function isSelfUrl(bytes: Uint8Array): boolean {
-  if (bytes.length > 120) return false;
-  try {
-    return SELF_URL.test(new TextDecoder("utf-8", { fatal: true }).decode(bytes).trim());
-  } catch {
-    return false; /* UTF-8 でない ＝ 圧縮された枚 */
-  }
-}
 
 function say(msg: string): void {
   statusEl.textContent = msg;
@@ -134,12 +120,21 @@ async function finish(): Promise<void> {
 }
 
 function handle(bytes: Uint8Array): void {
-  if (isSelfUrl(bytes)) {
-    if (col.empty) say("読み取り先の QR です。機体で → を押すと本文の QR に変わります。");
-    return;
-  }
   const before = col.pages;
   const r = col.add(bytes);
+  /* ★★段 1（読み取りページの URL）—— **本文ではない**ので Collector が弾いて返す。
+     ★弾くだけでなく**次に何を押すかを言う**（その QR を撮った人は、たいてい
+     「読んだのに何も起きない」と思っている）。★ついでに `?n=` を拾う。 */
+  if (r.kind === "url") {
+    if (r.pages && !need) need = r.pages;
+    if (col.empty)
+      say(
+        r.pages
+          ? `全部で ${r.pages} 枚あります。機体で → を押すと本文の QR に変わります。`
+          : "読み取り先の QR です。機体で → を押すと本文の QR に変わります。",
+      );
+    return;
+  }
   if (r.kind === "other") {
     say("別の文書の QR のようです。集め直すなら「集め直す」を押してください。");
     return;
@@ -311,8 +306,8 @@ function again(): void {
 /* ★★機体の段 1 の QR は `…/qr/?n=5` —— **それを読んでこのページが開く**ので、
    総枚数が最初から手元にある（ブックマークから開いた人には無いが、そのときは従来どおり）。 */
 {
-  const n = Number(new URLSearchParams(location.search).get("n"));
-  if (Number.isInteger(n) && n > 1 && n <= 64) {
+  const n = pagesFromUrl(location.search);
+  if (n) {
     need = n;
     say(`全部で ${n} 枚あります。カメラを使うと読み取りが始まります。`);
   }
