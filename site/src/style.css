@@ -739,6 +739,8 @@ table.km-roles td.note { font-size: 0.8rem; }
 }
 
 /* ---- /qr/（QR で受け取る） ---- */
+/* ★カメラをすぐ触れるよう、タイトルは 1 行だけ置いて本題へ渡す */
+.qr-title { margin: 0 0 0.6rem; }
 .qr-stage {
   position: relative;
   max-width: 520px;
