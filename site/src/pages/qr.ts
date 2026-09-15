@@ -59,6 +59,19 @@ let scanT0 = 0;
    密な型番（枚数は少ないが読みにくい）のどちらが良いか決められない。 */
 let firstAt = 0;
 
+/* ★★**溜めてから、まとめて読む**（2026-09-15・本人の案）—— デコードは 1 回 60ms
+ *   かかるので、**その間に来たフレームを取りこぼす**。機体の切り替えが速いほど損が大きい。
+ * ★★**総枚数が分かっていれば、撮る側は「1 周ぶん撮る」だけでよく、どのフレームが
+ *   何枚目かは*あとで*分かればいい。** 総枚数は機体が段 1 の URL に `?n=5` として
+ *   載せてくるので、**1 枚もデコードしないうちに**分かる。
+ * ★異同判定（24×24 に落として比べる）は 1ms なので、溜める間はほぼカメラ任せで回る。
+ * ★足りなければ次の周回でまた溜める（枚は順不同で受けるので、何周かかっても構わない）。 */
+const BANK_MAX = 24;              /* 溜める上限（720×720×4 ＝ 2MB/枚） */
+let need = 0;                     /* 総枚数（0 = まだ分からない ＝ 従来どおり 1 枚ずつ読む） */
+let bank: ImageData[] = [];
+let bankT0 = 0;
+let draining = false;
+
 /* ★★出す側は**このページの URL を先に出す**（機体のメニュー → QRコード の 1 枚目）ので、
    集めている最中に必ず視界へ入る。本文として受けると「https://…/qr/」が本文になってしまう。
    ★弾くだけでなく**次に何を押すかを言う** —— その QR を撮った人は、たいてい
@@ -137,6 +150,7 @@ function handle(bytes: Uint8Array): void {
   }
   buzz(30);
   if (!firstAt) firstAt = performance.now();
+  if (col.pages > 1) need = col.pages;   /* ★ヘッダの方が確か（`?n=` は古いことがある） */
   drawSheets();
   if (col.ready) {
     void finish();
@@ -164,9 +178,42 @@ function sameAsLast(): boolean {
   return diff / (now.length / 4) < 2;   /* 平均 2/255 未満なら「動いていない」 */
 }
 
+/* 1 枚デコードして Collector に渡す。★`binaryData` を使う（`data` は文字列で、
+   圧縮した中身は文字にならない）。 */
+function decodeOne(img: ImageData): void {
+  const got = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+  if (got && got.binaryData && got.binaryData.length) handle(Uint8Array.from(got.binaryData));
+  scans++;
+  const now = performance.now();
+  if (now - scanT0 >= 1000) {
+    meterEl.textContent = `${Math.round((scans * 1000) / (now - scanT0))} 回/秒`;
+    scans = 0;
+    scanT0 = now;
+  }
+}
+
+/* 溜めたぶんを読み切ったか。★**1 フレームに 1 枚だけ**読む —— まとめて回すと
+   その間プレビューが固まり、撮っている人は「止まった」と思う。 */
+function drainStep(): void {
+  const img = bank.shift();
+  if (img) decodeOne(img);
+  if (!bank.length) {
+    draining = false;
+    lastTiny = null;                     /* ★次の周回は「前の絵」を持たずに始める */
+    bankT0 = performance.now();
+    if (!done) say(col.empty ? "QR を枠に収めてください。" : `あと ${col.missing.length} 枚。`);
+  } else {
+    say(`読み取り中… 残り ${bank.length}`);
+  }
+}
+
 function scan(): void {
   raf = requestAnimationFrame(scan);
   if (done || video.readyState < video.HAVE_CURRENT_DATA || !ctx) return;
+  if (draining) {
+    drainStep();
+    return;
+  }
   const w = video.videoWidth;
   const h = video.videoHeight;
   if (!w || !h) return;
@@ -174,18 +221,20 @@ function scan(): void {
      カメラが何 px を返そうと、デコードにかかる時間が一定になる。 */
   const side = Math.min(w, h);
   ctx.drawImage(video, (w - side) / 2, (h - side) / 2, side, side, 0, 0, SCAN_SIDE, SCAN_SIDE);
-  if (sameAsLast()) return;
+  if (sameAsLast()) return;              /* ★動いていない ＝ 撮る意味がない（1ms） */
   const img = ctx.getImageData(0, 0, SCAN_SIDE, SCAN_SIDE);
-  const got = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
-  /* ★**binaryData を使う**（`data` は文字列で、圧縮した中身は文字にならない）。 */
-  if (got && got.binaryData && got.binaryData.length) handle(Uint8Array.from(got.binaryData));
-  /* ★**速さを画面に出す** —— 「遅い」を数字にしないと、機体側の間隔を決められない。 */
-  scans++;
-  const now = performance.now();
-  if (now - scanT0 >= 1000) {
-    meterEl.textContent = `${Math.round((scans * 1000) / (now - scanT0))} 回/秒`;
-    scans = 0;
-    scanT0 = now;
+
+  if (!need) {                           /* 総枚数が分からない ＝ 1 枚ずつ読む（従来） */
+    decodeOne(img);
+    return;
+  }
+  bank.push(img);
+  /* ★★**やめどき** —— 「要る枚数より多く撮れた」か「1 周ぶんの時間が過ぎた」。
+     手ブレでも絵は変わるので、**枚数だけを当てにしない**（時間の側でも切る）。 */
+  const want = Math.max(1, col.empty ? need : col.missing.length);
+  if (bank.length >= Math.min(BANK_MAX, want * 2 + 2) || performance.now() - bankT0 > 2500) {
+    draining = true;
+    say(`読み取り中… 残り ${bank.length}`);
   }
 }
 
@@ -235,8 +284,11 @@ async function start(): Promise<void> {
   await video.play();
   void keepAwake();
   lastTiny = null;
+  bank = [];
+  draining = false;
   scans = 0;
   scanT0 = performance.now();
+  bankT0 = performance.now();
   startBtn.hidden = true;
   stopBtn.hidden = false;
   say(col.empty ? "QR を枠に収めてください。" : `あと ${col.missing.length} 枚。`);
@@ -246,12 +298,24 @@ async function start(): Promise<void> {
 function again(): void {
   col.reset();
   firstAt = 0;
+  bank = [];
+  draining = false;
   done = false;
   resultEl.hidden = true;
   againBtn.hidden = true;
   textEl.value = "";
   drawSheets();
   void start();
+}
+
+/* ★★機体の段 1 の QR は `…/qr/?n=5` —— **それを読んでこのページが開く**ので、
+   総枚数が最初から手元にある（ブックマークから開いた人には無いが、そのときは従来どおり）。 */
+{
+  const n = Number(new URLSearchParams(location.search).get("n"));
+  if (Number.isInteger(n) && n > 1 && n <= 64) {
+    need = n;
+    say(`全部で ${n} 枚あります。カメラを使うと読み取りが始まります。`);
+  }
 }
 
 startBtn.addEventListener("click", () => void start());
