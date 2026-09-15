@@ -28,6 +28,22 @@ const ctx = canvas.getContext("2d", { willReadFrequently: true });
 let stream: MediaStream | null = null;
 let raf = 0;
 let done = false;
+let wake: WakeLockSentinel | null = null;
+
+/* ★★出す側は**このページの URL を先に出す**（機体のメニュー → QRコード の 1 枚目）ので、
+   集めている最中に必ず視界へ入る。本文として受けると「https://…/qr/」が本文になってしまう。
+   ★弾くだけでなく**次に何を押すかを言う** —— その QR を撮った人は、たいてい
+   「読んだのに何も起きない」と思っている。 */
+const SELF_URL = /^https?:\/\/[^\s]+\/qr\/?$/;
+
+function isSelfUrl(bytes: Uint8Array): boolean {
+  if (bytes.length > 120) return false;
+  try {
+    return SELF_URL.test(new TextDecoder("utf-8", { fatal: true }).decode(bytes).trim());
+  } catch {
+    return false; /* UTF-8 でない ＝ 圧縮された枚 */
+  }
+}
 
 function say(msg: string): void {
   statusEl.textContent = msg;
@@ -74,6 +90,10 @@ async function finish(): Promise<void> {
 }
 
 function handle(bytes: Uint8Array): void {
+  if (isSelfUrl(bytes)) {
+    if (col.empty) say("読み取り先の QR です。機体で → を押すと本文の QR に変わります。");
+    return;
+  }
   const before = col.pages;
   const r = col.add(bytes);
   if (r.kind === "other") {
@@ -122,8 +142,20 @@ function stop(): void {
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
   video.srcObject = null;
+  void wake?.release();
+  wake = null;
   startBtn.hidden = done;
   stopBtn.hidden = true;
+}
+
+/* ★機体が 1 秒ごとに送ってくるので、**待っている時間が長い** ——
+   その間に画面が消えると読み取りが止まる。使えない環境では黙って諦める。 */
+async function keepAwake(): Promise<void> {
+  try {
+    wake = (await navigator.wakeLock?.request("screen")) ?? null;
+  } catch {
+    wake = null;
+  }
 }
 
 async function start(): Promise<void> {
@@ -146,6 +178,7 @@ async function start(): Promise<void> {
   }
   video.srcObject = stream;
   await video.play();
+  void keepAwake();
   startBtn.hidden = true;
   stopBtn.hidden = false;
   say(col.empty ? "QR を枠に収めてください。" : `あと ${col.missing.length} 枚。`);
