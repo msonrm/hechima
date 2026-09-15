@@ -54,6 +54,12 @@ let done = false;
 let wake: WakeLockSentinel | null = null;
 let scans = 0;
 let scanT0 = 0;
+/* ★★**撮れているフレーム数**（2026-09-15）—— 機体の間隔は「1 枚あたり何フレーム
+ *   撮れるか」で決めているのに、**その fps を測っていなかった**（30fps と仮定していた）。
+ *   ★溜めているあいだは jsQR を呼ばないので、デコード回数のメーターでは見えない。 */
+let grabs = 0;
+let grabT0 = 0;
+let fps = 0;
 /* ★**1 枚目が入ってから揃うまで**の時間。機体側の型番と間隔を比べるための唯一の数
    —— 「速くなった気がする」では、粗い型番（枚数は増えるが 1 枚が読みやすい）と
    密な型番（枚数は少ないが読みにくい）のどちらが良いか決められない。 */
@@ -84,6 +90,18 @@ const rgbaBuf = new Uint8ClampedArray(SCAN_SIDE * SCAN_SIDE * 4).fill(255);
 
 function say(msg: string): void {
   statusEl.textContent = msg;
+}
+
+/* ★**1 枚あたり何フレーム撮れているか**を出す —— 機体の間隔はこの数から決める。
+   `?ms=` で間隔を教わっているので、そのまま割り算できる。 */
+function showMeter(): void {
+  if (!fps) {
+    meterEl.textContent = "";
+    return;
+  }
+  const perSheet = roundMs ? (fps * roundMs) / 1000 : 0;
+  meterEl.textContent =
+    `カメラ ${fps} 枚/秒` + (perSheet ? ` ／ QR 1 枚あたり ${perSheet.toFixed(1)} 枚` : "");
 }
 
 /** 集まった枚をマス目で出す。★「あと何枚」が一目で分かることが、この画面の仕事。 */
@@ -199,12 +217,7 @@ function decodeGray(g: Uint8Array): void {
   const got = jsQR(rgbaBuf, SCAN_SIDE, SCAN_SIDE, { inversionAttempts: "dontInvert" });
   if (got && got.binaryData && got.binaryData.length) handle(Uint8Array.from(got.binaryData));
   scans++;
-  const now = performance.now();
-  if (now - scanT0 >= 1000) {
-    meterEl.textContent = `${Math.round((scans * 1000) / (now - scanT0))} 回/秒`;
-    scans = 0;
-    scanT0 = now;
-  }
+  void scanT0;
 }
 
 /* 溜めたぶんを読み切ったか。★**1 フレームに 1 枚だけ**読む —— まとめて回すと
@@ -236,6 +249,16 @@ function scan(): void {
      カメラが何 px を返そうと、デコードにかかる時間が一定になる。 */
   const side = Math.min(w, h);
   ctx.drawImage(video, (w - side) / 2, (h - side) / 2, side, side, 0, 0, SCAN_SIDE, SCAN_SIDE);
+  /* ★★**撮れた数はここで数える**（同じ絵を弾く前）—— カメラが何 fps で回っているかは、
+     弾いたあとの数では分からない。 */
+  grabs++;
+  const tNow = performance.now();
+  if (tNow - grabT0 >= 1000) {
+    fps = Math.round((grabs * 1000) / (tNow - grabT0));
+    grabs = 0;
+    grabT0 = tNow;
+    showMeter();
+  }
   if (sameAsLast()) return;              /* ★動いていない ＝ 撮る意味がない（1ms） */
   const img = ctx.getImageData(0, 0, SCAN_SIDE, SCAN_SIDE);
 
@@ -307,6 +330,9 @@ async function start(): Promise<void> {
   draining = false;
   scans = 0;
   scanT0 = performance.now();
+  grabs = 0;
+  grabT0 = performance.now();
+  fps = 0;
   bankT0 = performance.now();
   startBtn.hidden = true;
   stopBtn.hidden = false;
