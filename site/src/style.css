@@ -765,6 +765,8 @@ table.km-roles td.note { font-size: 0.8rem; }
 .qr-status { min-height: 1.4em; font-size: 0.9rem; }
 /* ★読み取りの速さ。機体側の切り替え間隔を決めるための数なので、小さく常時出す */
 .qr-meter { min-height: 1.2em; margin: 0.1rem 0 0; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* ★数字の行は折り返す（「暗いかもしれません」が付くと長くなる） */
+.qr-meter { line-height: 1.5; }
 /* 集まった枚。★数が少ないので、進捗バーではなく**枚そのもの**を並べる */
 .qr-sheets {
   display: flex;

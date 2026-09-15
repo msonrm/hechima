@@ -100,8 +100,13 @@ function showMeter(): void {
     return;
   }
   const perSheet = roundMs ? (fps * roundMs) / 1000 : 0;
-  meterEl.textContent =
-    `カメラ ${fps} 枚/秒` + (perSheet ? ` ／ QR 1 枚あたり ${perSheet.toFixed(1)} 枚` : "");
+  let t = `カメラ ${fps} 枚/秒`;
+  if (perSheet) t += ` ／ QR 1 枚あたり ${perSheet.toFixed(1)} 枚`;
+  /* ★★**遅いときは理由を言う** —— 「なぜか読めない」で終わらせない。
+     カメラは暗いと露光を延ばすので fps が落ち、1 枚あたりのフレーム数が足りなくなる。 */
+  if (perSheet && perSheet < 2) t += "　★暗いかもしれません（明るい所だと速くなります）";
+  else if (fps < 20) t += "　★カメラが遅めです";
+  meterEl.textContent = t;
 }
 
 /** 集まった枚をマス目で出す。★「あと何枚」が一目で分かることが、この画面の仕事。 */
@@ -315,6 +320,12 @@ async function start(): Promise<void> {
         /* ★見るのは 720×720 なので、これ以上貰っても捨てるだけ（帯域と電池の無駄）。 */
         width: { ideal: 1280 },
         height: { ideal: 720 },
+        /* ★★★**暗いと fps が落ちる**（2026-09-15・実機で 9〜14 枚/秒しか出なかった）——
+           カメラは暗いと露光を延ばすので、フレームレートが下がる。機体の切り替え間隔は
+           「1 枚あたり何フレーム撮れるか」で決めているので、ここが半分になると
+           **設計ごとずれる**。★`ideal` で要求しておく（強制はしない ―― `min` にすると
+           満たせない端末でカメラが開かなくなる）。 */
+        frameRate: { ideal: 30 },
       },
       audio: false,
     });
