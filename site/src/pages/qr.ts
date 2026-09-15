@@ -83,6 +83,7 @@ let need = 0;                     /* 総枚数（0 = まだ分からない ＝ �
 let roundMs = 0;                  /* 機体の 1 周（ミリ秒）。0 = 分からない */
 let bank: Uint8Array[] = [];
 let bankT0 = 0;
+let lastGrabAt = 0;
 let draining = false;
 /* jsQR へ渡すときだけ RGBA に展開する。★1 枚ぶんを使い回す（毎回確保しない） */
 const rgbaBuf = new Uint8ClampedArray(SCAN_SIDE * SCAN_SIDE * 4).fill(255);
@@ -107,6 +108,7 @@ function showMeter(): void {
   if (perSheet && perSheet < 2) t += "　★暗いかもしれません（明るい所だと速くなります）";
   else if (fps < 20) t += "　★カメラが遅めです";
   meterEl.textContent = t;
+  void scans;
 }
 
 /** 集まった枚をマス目で出す。★「あと何枚」が一目で分かることが、この画面の仕事。 */
@@ -234,6 +236,7 @@ function drainStep(): void {
     draining = false;
     lastTiny = null;                     /* ★次の周回は「前の絵」を持たずに始める */
     bankT0 = performance.now();
+    lastGrabAt = 0;
     if (!done) say(col.empty ? "QR を枠に収めてください。" : `あと ${col.missing.length} 枚。`);
   } else {
     say(`読み取り中… 残り ${bank.length}`);
@@ -265,20 +268,30 @@ function scan(): void {
     showMeter();
   }
   if (sameAsLast()) return;              /* ★動いていない ＝ 撮る意味がない（1ms） */
-  const img = ctx.getImageData(0, 0, SCAN_SIDE, SCAN_SIDE);
 
   if (!need) {                           /* 総枚数が分からない ＝ 1 枚ずつ読む（従来） */
-    decodeGray(toGray(img));
+    decodeGray(toGray(ctx.getImageData(0, 0, SCAN_SIDE, SCAN_SIDE)));
     return;
   }
-  bank.push(toGray(img));
+
+  /* ★★★**同じ枚を何枚も溜めない**（2026-09-15・iPad で 30fps 出ても速くならなかった）——
+     6 枚を 1 周ぶん（0.72 秒）撮ると 30fps では **22 フレーム**溜まるが、そこに写っている
+     *違う枚* はせいぜい 7 枚。**15 フレームは同じ枚の撮り直し**で、それを全部デコード
+     していた（22 × 86ms ＝ 1.9 秒 ＝ 1 巡の 73%）。
+     ★★**律速は fps ではなくデコードだった** —— だから fps を上げても変わらなかった。
+     ★機体の切り替え（`?ms=`）の**半分の間隔**で 1 枚だけ拾う ＝ 1 枚につき 2 フレーム。
+     切り替えの瞬間に当たった 1 枚が壊れていても、もう 1 枚が残る。 */
+  const minGap = (roundMs || 100) / 2;
+  if (tNow - lastGrabAt < minGap) return;
+  lastGrabAt = tNow;
+  bank.push(toGray(ctx.getImageData(0, 0, SCAN_SIDE, SCAN_SIDE)));
   /* ★★★**やめどきは「機体が 1 周するまで」**（2026-09-15 に直した）——
      それまでは「要る枚数の 2 倍」で切っていて、17 枚のとき **0.8 秒＝ 1 周の半分**しか
      見ていなかった。★機体が `&ms=` で間隔を教えてくるので、**1 周 ＋ 2 割**撮る。
      ★間隔が分からないときだけ、枚数から見当をつける（0.1 秒とみなす）。 */
   const want = Math.max(1, col.empty ? need : col.missing.length);
   const oneRound = (roundMs || 100) * need * 1.2;
-  if (bank.length >= BANK_MAX || performance.now() - bankT0 > Math.min(4000, oneRound)) {
+  if (bank.length >= BANK_MAX || tNow - bankT0 > Math.min(4000, oneRound)) {
     draining = true;
     say(`読み取り中… 残り ${bank.length}`);
   }
@@ -317,9 +330,15 @@ async function start(): Promise<void> {
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: "environment" },
-        /* ★見るのは 720×720 なので、これ以上貰っても捨てるだけ（帯域と電池の無駄）。 */
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        /* ★★★**カメラは高い方を貰う**（2026-09-15 に戻した）—— 一度
+           「見るのは 720×720 だから 1280×720 で足りる」と落としたが、**それは別物**:
+             1280×720 で撮る … 中央の正方形が **720×720（等倍）** ＝ v30 の 1 模様 3.5px
+             1920×1080 で撮る … 中央 1080×1080 を **720 に縮小** ＝ 元の情報が 1.5 倍あり、
+                                 縮小で平滑化されるぶん二値化が効く
+           ★**「見る解像度」は 720 で足りても、「カメラの解像度」は高い方がいい。**
+           ★私の測定は理想画像（すでに二値）だったので、この差が出なかった。 */
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
         /* ★★★**暗いと fps が落ちる**（2026-09-15・実機で 9〜14 枚/秒しか出なかった）——
            カメラは暗いと露光を延ばすので、フレームレートが下がる。機体の切り替え間隔は
            「1 枚あたり何フレーム撮れるか」で決めているので、ここが半分になると
@@ -345,6 +364,7 @@ async function start(): Promise<void> {
   grabT0 = performance.now();
   fps = 0;
   bankT0 = performance.now();
+  lastGrabAt = 0;
   startBtn.hidden = true;
   stopBtn.hidden = false;
   say(col.empty ? "QR を枠に収めてください。" : `あと ${col.missing.length} 枚。`);
