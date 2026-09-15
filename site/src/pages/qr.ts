@@ -264,7 +264,6 @@ function drainStep(): void {
     draining = false;
     lastTiny = null;                     /* ★次の周回は「前の絵」を持たずに始める */
     bankT0 = performance.now();
-    lastGrabAt = 0;
     if (!done) say(col.empty ? "QR を枠に収めてください。" : `あと ${col.missing.length} 枚。`);
   } else {
     say(`読み取り中… 残り ${bank.length}`);
@@ -274,13 +273,22 @@ function drainStep(): void {
 function scan(): void {
   raf = requestAnimationFrame(scan);
   if (done || video.readyState < video.HAVE_CURRENT_DATA || !ctx) return;
-  if (draining) {
-    drainStep();
-    return;
-  }
+  /* ★★★**読んでいるあいだも撮る**（2026-09-15・実機の「根本的に間違っている気がする」から）——
+     それまでは `draining` のあいだ**カメラから一切撮っていなかった**。
+     撮る 0.72 秒 → 読む 1.2 秒 → また撮る、で **撮っている時間は全体の 37%**。
+     読んでいる 1.2 秒で機体は 12 枚ぶん空回りし、そこで出た枚は**次の巡まで待たされる**。
+     ★「最初は速く、だんだん遅く、最後の 1〜2 枚がとことん遅い」の、待ちの側の正体。
+     ★1 スレッドなのでデコードが律速なのは変わらないが、**その合間に撮れるようになる**。 */
+  grab();                                /* ★読んでいる最中でも撮る */
+  if (draining) drainStep();
+}
+
+/** 1 フレーム撮って、必要なら溜める。戻り値 = 溜めたか。 */
+function grab(): boolean {
+  if (!ctx) return false;
   const w = video.videoWidth;
   const h = video.videoHeight;
-  if (!w || !h) return;
+  if (!w || !h) return false;
   /* ★**中央の正方形を、決まった大きさに落として見る**（画面のガイド枠と同じ範囲）。
      カメラが何 px を返そうと、デコードにかかる時間が一定になる。 */
   const side = Math.min(w, h);
@@ -295,11 +303,11 @@ function scan(): void {
     grabT0 = tNow;
     showMeter();
   }
-  if (sameAsLast()) return;              /* ★動いていない ＝ 撮る意味がない（1ms） */
+  if (sameAsLast()) return false;        /* ★動いていない ＝ 撮る意味がない（1ms） */
 
   if (!need) {                           /* 総枚数が分からない ＝ 1 枚ずつ読む（従来） */
     decodeGray(toGray(ctx.getImageData(0, 0, SCAN_SIDE, SCAN_SIDE)));
-    return;
+    return false;
   }
 
   /* ★★★**同じ枚を何枚も溜めない**（2026-09-15・iPad で 30fps 出ても速くならなかった）——
@@ -322,8 +330,9 @@ function scan(): void {
      どれも「2 フレームに 1 回」になる）。**効かないと分かったものは入れない。** */
   const few = !col.empty && col.missing.length <= 2;
   const minGap = few ? 0 : (roundMs || 100) / 2;
-  if (tNow - lastGrabAt < minGap) return;
+  if (tNow - lastGrabAt < minGap) return false;
   lastGrabAt = tNow;
+  if (bank.length >= BANK_MAX) return false;
   bank.push(toGray(ctx.getImageData(0, 0, SCAN_SIDE, SCAN_SIDE)));
   /* ★★★**やめどきは「機体が 1 周するまで」**（2026-09-15 に直した）——
      それまでは「要る枚数の 2 倍」で切っていて、17 枚のとき **0.8 秒＝ 1 周の半分**しか
@@ -331,11 +340,12 @@ function scan(): void {
      ★間隔が分からないときだけ、枚数から見当をつける（0.1 秒とみなす）。 */
   const want = Math.max(1, col.empty ? need : col.missing.length);
   const oneRound = (roundMs || 100) * need * 1.2;
-  if (bank.length >= BANK_MAX || tNow - bankT0 > Math.min(4000, oneRound)) {
+  if (!draining && (bank.length >= BANK_MAX || tNow - bankT0 > Math.min(4000, oneRound))) {
     draining = true;
     say(`読み取り中… 残り ${bank.length}`);
   }
   void want;
+  return true;
 }
 
 function stop(): void {
