@@ -48,6 +48,7 @@ const tiny = document.createElement("canvas");
 tiny.width = tiny.height = 24;
 const tctx = tiny.getContext("2d", { willReadFrequently: true });
 let lastTiny: Uint8ClampedArray | null = null;
+let lastFp: Uint8Array | null = null;    /* いまデコードしている絵の指紋 */
 let stream: MediaStream | null = null;
 let raf = 0;
 let done = false;
@@ -94,7 +95,18 @@ let firstAt = 0;
 const BANK_MAX = 64;
 let need = 0;                     /* 総枚数（0 = まだ分からない ＝ 従来どおり 1 枚ずつ読む） */
 let roundMs = 0;                  /* 機体の 1 周（ミリ秒）。0 = 分からない */
-let bank: Uint8Array[] = [];
+/* ★★★**既に読めた枚の「指紋」**（24×24 の縮小・2026-09-15）——
+ *   **何枚目かはデコードしないと分からない**ので、既に持っている枚にも毎回 86ms 払っていた。
+ *   残り 1 枚のとき、溜めた 12 枚のうち探している枚は 2〜3 枚で、**残りは既読**。
+ *   それを全部デコードするので 1 秒かかり、その間に機体は 1.7 周する ――
+ *   ★**探している枚が何度も通り過ぎているのに、古い既読フレームを読んでいた**。
+ *   ★指紋どうしの比較は 0.01ms。違う枚の平均差は 16.55/255（実測）なので判別できる。
+ *   ★★**誤って「既読」と判定すると読み逃す**ので、閾値は厳しめ（似ていると確信できる時だけ）。
+ *   ★指紋は「そのときの見え方」なので、距離や角度が変われば一致しない ＝
+ *     **安全側（デコードする方）に倒れる**。 */
+const FP_N = 24;
+const known: Uint8Array[] = [];
+let bank: { g: Uint8Array; fp: Uint8Array }[] = [];
 let bankT0 = 0;
 let lastGrabAt = 0;
 let draining = false;
@@ -211,6 +223,28 @@ function handle(bytes: Uint8Array): void {
   }
 }
 
+/** いまの canvas から指紋を取る（24×24 のグレー）。 */
+function fingerprint(): Uint8Array {
+  const out = new Uint8Array(FP_N * FP_N);
+  if (!tctx) return out;
+  tctx.drawImage(canvas, 0, 0, FP_N, FP_N);
+  const d = tctx.getImageData(0, 0, FP_N, FP_N).data;
+  for (let i = 0, o = 0; i < out.length; i++, o += 4) out[i] = d[o];
+  return out;
+}
+
+function fpDiff(a: Uint8Array, b: Uint8Array): number {
+  let s = 0;
+  for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]);
+  return s / a.length;
+}
+
+/** その絵は、もう読めている枚か。★似ていると確信できるときだけ true。 */
+function alreadyKnown(fp: Uint8Array): boolean {
+  for (const k of known) if (fpDiff(k, fp) < 6) return true;
+  return false;
+}
+
 /* ★機体は 1 枚を何百ミリ秒も出しっぱなしにするので、**同じ絵を何度もデコードする**。
    24×24 に落として見比べ、動いていなければ丸ごと飛ばす（1ms ＋ 節約 88ms）。
    ★閾値は低め —— **切り替わりを見逃すほうが、無駄に 1 回デコードするより高くつく**。
@@ -250,7 +284,13 @@ function decodeGray(g: Uint8Array): void {
     tryZoom();
     showMeter();
   }
-  if (got && got.binaryData && got.binaryData.length) handle(Uint8Array.from(got.binaryData));
+  if (got && got.binaryData && got.binaryData.length) {
+    const before = col.have.length;
+    handle(Uint8Array.from(got.binaryData));
+    /* ★★**新しい枚が入ったときだけ指紋を覚える** —— 読めなかった絵を覚えると、
+       その枚を永久に飛ばすことになる。 */
+    if (lastFp && col.have.length > before) known.push(lastFp);
+  }
   scans++;
   void scanT0;
 }
@@ -258,8 +298,11 @@ function decodeGray(g: Uint8Array): void {
 /* 溜めたぶんを読み切ったか。★**1 フレームに 1 枚だけ**読む —— まとめて回すと
    その間プレビューが固まり、撮っている人は「止まった」と思う。 */
 function drainStep(): void {
-  const g = bank.shift();
-  if (g) decodeGray(g);
+  const item = bank.shift();
+  if (item) {
+    lastFp = item.fp;
+    decodeGray(item.g);
+  }
   if (!bank.length) {
     draining = false;
     lastTiny = null;                     /* ★次の周回は「前の絵」を持たずに始める */
@@ -339,9 +382,12 @@ function grab(): boolean {
      ★探している最新の枚が読まれるまで 64 枚ぶん ＝ 5 秒以上待たされていた。
      ★**古いフレームは既に読んだ枚ばかり**なので、捨てるならそちら。
      ★★残りが少ないときは**上限も小さく** —— 1 枚を捕まえるのに 60 枚は要らない。 */
+  /* ★★**既に読めた枚なら、デコードせずに捨てる**（0.01ms で 86ms を省く） */
+  const fp = fingerprint();
+  if (alreadyKnown(fp)) return false;
   const cap = few ? 12 : BANK_MAX;
   while (bank.length >= cap) bank.shift();
-  bank.push(toGray(ctx.getImageData(0, 0, SCAN_SIDE, SCAN_SIDE)));
+  bank.push({ g: toGray(ctx.getImageData(0, 0, SCAN_SIDE, SCAN_SIDE)), fp });
   /* ★★★**やめどきは「機体が 1 周するまで」**（2026-09-15 に直した）——
      それまでは「要る枚数の 2 倍」で切っていて、17 枚のとき **0.8 秒＝ 1 周の半分**しか
      見ていなかった。★機体が `&ms=` で間隔を教えてくるので、**1 周 ＋ 2 割**撮る。
@@ -445,6 +491,7 @@ async function start(): Promise<void> {
     zoomCap = null;
   }
   lastTiny = null;
+  known.length = 0;
   bank = [];
   draining = false;
   scans = 0;
@@ -465,6 +512,7 @@ async function start(): Promise<void> {
 function again(): void {
   col.reset();
   firstAt = 0;
+  known.length = 0;
   bank = [];
   draining = false;
   done = false;
