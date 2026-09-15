@@ -65,6 +65,14 @@ let fps = 0;
  *   jsQR は 4 隅の座標を返すので、そのまま測れる。 */
 let qrFill = 0;
 let decMs = 0;
+/* ★★★**小さく写っていたら、カメラ側で寄る**（2026-09-15・実機で判明）——
+ *   Pixel は枠の 73%（v30 の 1 模様 3.6px）で読めるが、**iPad は 40%（2.0px）**しかなく、
+ *   **こちらの測定では 2.5px で読めなくなる**限界より下だった。★端末が大きいほど
+ *   機体に近づけにくいので、**人に「近づけて」と頼むより、カメラを寄らせる方が確実**。
+ *   ★対応していない端末（多くの iOS Safari）では案内だけ出す。 */
+let zoomCap: { min: number; max: number; step: number } | null = null;
+let zoomNow = 1;
+let zoomTriedAt = 0;
 /* ★**1 枚目が入ってから揃うまで**の時間。機体側の型番と間隔を比べるための唯一の数
    —— 「速くなった気がする」では、粗い型番（枚数は増えるが 1 枚が読みやすい）と
    密な型番（枚数は少ないが読みにくい）のどちらが良いか決められない。 */
@@ -112,6 +120,9 @@ function showMeter(): void {
      （v30 は 1 模様 3.5px しかないので、小さく写ると一気に落ちる）。 */
   if (qrFill) t += ` ／ QR は枠の ${qrFill}%`;
   if (decMs) t += `・1 回 ${decMs}ms`;
+  if (zoomNow > 1.05) t += `・${zoomNow.toFixed(1)}倍`;
+  /* ★★**小さいと読めない**のは、遅さの中でいちばん効く要因なので、はっきり言う。 */
+  if (qrFill && qrFill < 55) t += "　★QR が小さいです（もっと近づけてください）";
   /* ★★**遅いときは理由を言う** —— 「なぜか読めない」で終わらせない。
      カメラは暗いと露光を延ばすので fps が落ち、1 枚あたりのフレーム数が足りなくなる。 */
   if (perSheet && perSheet < 2) t += "　★暗いかもしれません（明るい所だと速くなります）";
@@ -236,6 +247,7 @@ function decodeGray(g: Uint8Array): void {
   if (got?.location) {
     const { topLeftCorner: tl, topRightCorner: tr } = got.location;
     qrFill = Math.round((Math.hypot(tr.x - tl.x, tr.y - tl.y) / SCAN_SIDE) * 100);
+    tryZoom();
     showMeter();
   }
   if (got && got.binaryData && got.binaryData.length) handle(Uint8Array.from(got.binaryData));
@@ -339,6 +351,27 @@ function stop(): void {
   stopBtn.hidden = true;
 }
 
+/* 小さく写っているならカメラを寄らせる。★**読めた QR の大きさからしか判断できない**ので、
+   1 枚読めてから効く（40% でも読めてはいる ―― 遅いだけ）。
+   ★寄りすぎるとピントが外れるので、**目標は 70% 前後**まで。 */
+function tryZoom(): void {
+  if (!zoomCap || !qrFill || qrFill >= 62) return;
+  const now = performance.now();
+  if (now - zoomTriedAt < 700) return;   /* ★効くまで待つ（連打しない） */
+  zoomTriedAt = now;
+  const want = Math.min(zoomCap.max, zoomNow * Math.min(1.6, 70 / qrFill));
+  if (want <= zoomNow * 1.05) return;
+  const track = stream?.getVideoTracks()[0];
+  if (!track) return;
+  zoomNow = want;
+  /* ★型に無い制約なので any 経由で渡す（対応していなければ黙って失敗する） */
+  void track
+    .applyConstraints({ advanced: [{ zoom: want }] } as unknown as MediaTrackConstraints)
+    .catch(() => {
+      zoomCap = null;                    /* ★1 度でも弾かれたら、もう試さない */
+    });
+}
+
 /* ★機体が 1 秒ごとに送ってくるので、**待っている時間が長い** ——
    その間に画面が消えると読み取りが止まる。使えない環境では黙って諦める。 */
 async function keepAwake(): Promise<void> {
@@ -383,6 +416,16 @@ async function start(): Promise<void> {
   video.srcObject = stream;
   await video.play();
   void keepAwake();
+  /* ★ズームできる端末か見ておく（多くの iOS Safari は返さない） */
+  try {
+    const caps = stream.getVideoTracks()[0]?.getCapabilities?.() as
+      | { zoom?: { min: number; max: number; step: number } }
+      | undefined;
+    zoomCap = caps?.zoom && caps.zoom.max > 1 ? caps.zoom : null;
+    zoomNow = 1;
+  } catch {
+    zoomCap = null;
+  }
   lastTiny = null;
   bank = [];
   draining = false;
