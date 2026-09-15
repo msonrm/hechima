@@ -54,6 +54,10 @@ let done = false;
 let wake: WakeLockSentinel | null = null;
 let scans = 0;
 let scanT0 = 0;
+/* ★**1 枚目が入ってから揃うまで**の時間。機体側の型番と間隔を比べるための唯一の数
+   —— 「速くなった気がする」では、粗い型番（枚数は増えるが 1 枚が読みやすい）と
+   密な型番（枚数は少ないが読みにくい）のどちらが良いか決められない。 */
+let firstAt = 0;
 
 /* ★★出す側は**このページの URL を先に出す**（機体のメニュー → QRコード の 1 枚目）ので、
    集めている最中に必ず視界へ入る。本文として受けると「https://…/qr/」が本文になってしまう。
@@ -103,7 +107,9 @@ async function finish(): Promise<void> {
   try {
     const text = await col.restore();
     textEl.value = text;
-    countEl.textContent = `${[...text].length} 字`;
+    const secs = firstAt ? (performance.now() - firstAt) / 1000 : 0;
+    countEl.textContent =
+      `${[...text].length} 字` + (col.pages > 1 ? ` ／ ${col.pages} 枚を ${secs.toFixed(1)} 秒で` : "");
     resultEl.hidden = false;
     say("そろいました。");
     buzz(120);
@@ -130,6 +136,7 @@ function handle(bytes: Uint8Array): void {
     return;
   }
   buzz(30);
+  if (!firstAt) firstAt = performance.now();
   drawSheets();
   if (col.ready) {
     void finish();
@@ -238,6 +245,7 @@ async function start(): Promise<void> {
 
 function again(): void {
   col.reset();
+  firstAt = 0;
   done = false;
   resultEl.hidden = true;
   againBtn.hidden = true;
