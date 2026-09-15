@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QR で受け取る — へちま言語ラボ</title>
+    <meta name="description" content="へちまエディタ（PortMaster）が出す QR コードを、カメラで続けて読んで 1 つの本文に戻します。長い文章は複数枚に割れて出るので、順不同で撮って集めます。" />
+    <meta property="og:title" content="QR で受け取る — へちま言語ラボ" />
+    <meta property="og:description" content="ゲーム機で書いた文章を、ケーブルもクラウドも通さずに持ち出す。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://luffa-lang-labo.dev/qr/" />
+    <meta property="og:site_name" content="へちま言語ラボ" />
+    <meta name="twitter:card" content="summary" />
+    <script>
+      /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
+         app.js 自体が読めないケースがあるため、外部取得に依存しないインラインに置く */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; QR で受け取る</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>QR で受け取る</h2>
+        <p>ゲーム機（PortMaster）で動く<b>へちまエディタ</b>が出す QR コードを、このページのカメラで読んで
+          本文に戻します。ケーブルも、クラウドも、アカウントも要りません。<b>画面を写すだけ</b>です。</p>
+        <p>短い文章なら QR は 1 枚で、それはスマホの標準のカメラでもそのまま読めます。
+          長くなると圧縮して複数枚に割れるので、そこからがこのページの仕事です。
+          <b>撮る順番は問いません</b>。全部そろうと本文が出ます。</p>
+      </section>
+
+      <section class="qr-scan">
+        <div class="qr-stage">
+          <video id="qr-video" playsinline muted></video>
+          <div class="qr-guide" aria-hidden="true"></div>
+        </div>
+        <p id="qr-status" class="qr-status">カメラを使うと読み取りが始まります。</p>
+        <ol id="qr-sheets" class="qr-sheets" aria-label="集まった枚"></ol>
+        <div class="qr-controls">
+          <button id="qr-start" type="button">カメラを使う</button>
+          <button id="qr-stop" type="button" hidden>止める</button>
+          <button id="qr-again" type="button" hidden>集め直す</button>
+        </div>
+      </section>
+
+      <section id="qr-result" class="qr-result" hidden>
+        <h3>受け取った本文 <span id="qr-count" class="qr-count"></span></h3>
+        <textarea id="qr-text" readonly rows="12"></textarea>
+        <div class="qr-controls">
+          <button id="qr-copy" type="button">コピー</button>
+          <button id="qr-save" type="button">.txt で保存</button>
+        </div>
+      </section>
+
+      <section class="intro">
+        <h3>仕組み</h3>
+        <p>1 枚に入らない本文は、deflate で圧縮してから割られます。枚の頭には
+          <code>EDQ1 2/4 3f9a1c2b 5278</code> のような行が入っていて、<b>何枚目か・全部で何枚か・
+          繋いだものが正しいか</b>が、どの 1 枚を見ても分かるようになっています。
+          だから 1 枚目を撮り逃しても平気です。</p>
+        <p>このページは読み取ったものをどこにも送りません。復元は全部この端末の中で終わります。</p>
+      </section>
+    </main>
+
+    <script type="module" src="/src/pages/qr.ts"></script>
+  </body>
+</html>

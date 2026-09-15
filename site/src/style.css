@@ -737,3 +737,68 @@ table.km-roles td.note { font-size: 0.8rem; }
   --rk-key-on: var(--accent);
   --rk-key-on-fg: var(--bg);
 }
+
+/* ---- /qr/（QR で受け取る） ---- */
+.qr-stage {
+  position: relative;
+  max-width: 520px;
+  margin: 0 auto 0.8rem;
+  aspect-ratio: 1 / 1;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+#qr-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* ★ガイド枠は**実際に見ている範囲**（中央の正方形）と同じ —— 枠の中に収めれば読める、を
+   絵で言う。枠と読み取り範囲がずれると「入れているのに読めない」になる。 */
+.qr-guide {
+  position: absolute;
+  inset: 8%;
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 0.8;
+}
+.qr-status { min-height: 1.4em; font-size: 0.9rem; }
+/* 集まった枚。★数が少ないので、進捗バーではなく**枚そのもの**を並べる */
+.qr-sheets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0.8rem;
+  padding: 0;
+  list-style: none;
+}
+.qr-sheets li {
+  min-width: 2rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.qr-sheets li.got { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.qr-sheets li.yet { color: var(--muted); border-style: dashed; }
+.qr-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.qr-controls button {
+  font: inherit;
+  padding: 0.25rem 0.8rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.qr-result textarea {
+  width: 100%;
+  font: inherit;
+  line-height: 1.7;
+  padding: 0.6rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  resize: vertical;
+}
+.qr-count { font-size: 0.85rem; font-weight: normal; color: var(--muted); }

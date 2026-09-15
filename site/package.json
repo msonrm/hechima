@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-versions.mjs && node scripts/check-keymap-script.mjs && tsc --noEmit && vite build && node scripts/gzip-dict.mjs",
+    "build": "node scripts/check-versions.mjs && node scripts/check-keymap-script.mjs && node scripts/check-qr.mjs && tsc --noEmit && vite build && node scripts/gzip-dict.mjs",
     "check": "node scripts/check-versions.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {
     "typescript": "^5.8.0",
     "vite": "^7.0.0"
+  },
+  "dependencies": {
+    "jsqr": "^1.4.0"
   }
 }

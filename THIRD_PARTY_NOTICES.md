@@ -9,6 +9,8 @@
 自作部分（サイトと、`hechima` / `hechima-keymap` / `flick-engine` / `gamepad-engine` の
 各バンドル）のライセンスは [LICENSE](LICENSE)（MIT、Copyright (c) 2026 msonrm）です。
 
+`/qr/`（QR で受け取る）のページには **jsQR** を同梱しています（下記）。
+
 ## Mozc（変換エンジン本体・wasm バイナリのコード部分）
 
 - **Repository:** https://github.com/google/mozc
@@ -141,4 +143,29 @@ Files: src/data/dictionary*
 Public Domain Dataです。使用・変更・配布に関しては一切の制限をつけません。
 商品などに組み込むことも自由に行なってください。すでにいくつかの辞書には沖縄辞書が採用されています。
 勝手ながら、沖縄辞書に寄贈された辞書も in the Public Domain' 扱いとさせていただきます。
+```
+
+## jsQR（`/qr/` の QR 読み取り）
+
+`/qr/` のページに、カメラ画像から QR コードを読むために同梱しています
+（npm の `jsqr`。ビルド時にページのバンドルへ取り込まれます）。
+
+- **Repository:** https://github.com/cozmo/jsQR
+- **License:** Apache-2.0
+- **Version:** 1.4.0
+
+```
+Copyright 2018 Cosmo Wolfe
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 ```

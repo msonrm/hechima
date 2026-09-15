@@ -25,6 +25,7 @@ export default defineConfig({
         gamepad: fileURLToPath(new URL("./gamepad/index.html", import.meta.url)),
         candlayer: fileURLToPath(new URL("./candlayer/index.html", import.meta.url)),
         replay: fileURLToPath(new URL("./replay/index.html", import.meta.url)),
+        qr: fileURLToPath(new URL("./qr/index.html", import.meta.url)),
         coiTest: fileURLToPath(new URL("./coi-test/index.html", import.meta.url)),
         theme: fileURLToPath(new URL("./theme/index.html", import.meta.url)),
         obsidian: fileURLToPath(new URL("./obsidian/index.html", import.meta.url)),

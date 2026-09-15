@@ -53,7 +53,9 @@ L.L.L. は生まれ故郷の logical-layout-labo と同じ）: **[https://luffa-
 | [/replay/](https://luffa-lang-labo.dev/replay/) 入力のリプレイ | 打っていく過程を記録して再生する。キーボード図に押したキーと指が重なる（記録は端末内だけ） |
 | [/obsidian/](https://luffa-lang-labo.dev/obsidian/) Obsidian で使う | ラボの外の話（下記） |
 
-ほかに `/coi-test/`（環境診断）を隠しページとして置いてある。
+ほかに `/coi-test/`（環境診断）と `/qr/`（**QR で受け取る** —— PortMaster で動く
+へちまエディタが出す QR を、カメラで続けて読んで本文に戻す。長い本文は圧縮して
+複数枚に割れるので、順不同で集める）を隠しページとして置いてある。
 
 ## ラボの外へ — Obsidian で使う
 
