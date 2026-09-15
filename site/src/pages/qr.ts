@@ -105,6 +105,13 @@ let roundMs = 0;                  /* 機体の 1 周（ミリ秒）。0 = 分か
  *     **安全側（デコードする方）に倒れる**。 */
 const FP_N = 24;
 const known: Uint8Array[] = [];
+/* ★★★**弾き続けているのに枚が増えないなら、指紋が誤っている**（2026-09-15・実機の
+ *   「最後の 2 枚が決まって遅くなる」から）—— 探している枚がたまたま既読の枚と似て
+ *   見えると弾かれ、**次も同じ判定なので永久に読めない**。残り 2 枚のときに効くのは、
+ *   そこまでに指紋が 15 枚も溜まっていて**誤判定の機会がいちばん多い**から。
+ *   ★一定回数むだに弾いたら**指紋を捨てて総当たりに戻す**（2 秒で回復する）。
+ *   ★★測った値で枝刈りするなら、**枝刈りが外れたときに戻る道**が要る。 */
+let skipped = 0;
 let bank: { g: Uint8Array; fp: Uint8Array }[] = [];
 let bankT0 = 0;
 let lastGrabAt = 0;
@@ -237,7 +244,9 @@ function fpDiff(a: Uint8Array, b: Uint8Array): number {
   return s / a.length;
 }
 
-/** その絵は、もう読めている枚か。★似ていると確信できるときだけ true。 */
+/** その絵は、もう読めている枚か。★似ていると確信できるときだけ true。
+    ★★閾値 6 は、違う枚どうしの実測（平均差 16.55/255）にだいぶ余裕を見た数。
+    それでも角度やブレで似て見えることはあるので、上の安全弁とセットで使う。 */
 function alreadyKnown(fp: Uint8Array): boolean {
   for (const k of known) if (fpDiff(k, fp) < 6) return true;
   return false;
@@ -286,7 +295,10 @@ function decodeGray(g: Uint8Array): void {
     handle(Uint8Array.from(got.binaryData));
     /* ★★**新しい枚が入ったときだけ指紋を覚える** —— 読めなかった絵を覚えると、
        その枚を永久に飛ばすことになる。 */
-    if (lastFp && col.have.length > before) known.push(lastFp);
+    if (lastFp && col.have.length > before) {
+      known.push(lastFp);
+      skipped = 0;                       /* ★進んだので、弾きの数え直し */
+    }
   }
   scans++;
   void scanT0;
@@ -381,7 +393,13 @@ function grab(): boolean {
      ★★残りが少ないときは**上限も小さく** —— 1 枚を捕まえるのに 60 枚は要らない。 */
   /* ★★**既に読めた枚なら、デコードせずに捨てる**（0.01ms で 86ms を省く） */
   const fp = fingerprint();
-  if (alreadyKnown(fp)) return false;
+  if (alreadyKnown(fp)) {
+    if (++skipped > 60) {                /* ★2 秒ぶん弾き続けた ＝ 誤判定の疑い */
+      known.length = 0;
+      skipped = 0;
+    }
+    return false;
+  }
   const cap = few ? 12 : BANK_MAX;
   while (bank.length >= cap) bank.shift();
   bank.push({ g: toGray(ctx.getImageData(0, 0, SCAN_SIDE, SCAN_SIDE)), fp });
@@ -458,6 +476,7 @@ async function start(): Promise<void> {
   void keepAwake();
   lastTiny = null;
   known.length = 0;
+  skipped = 0;
   bank = [];
   draining = false;
   scans = 0;
@@ -479,6 +498,7 @@ function again(): void {
   col.reset();
   firstAt = 0;
   known.length = 0;
+  skipped = 0;
   bank = [];
   draining = false;
   done = false;
