@@ -80,6 +80,33 @@ for (const c of V.cases) {
   }
 }
 
+/* ---- ★★★配っている型番を、1 つ残らず jsQR に食わせる ----
+   ★2026-09-15 に **v23 が jsQR で読めない**ことに気づけなかったのは、ここが
+   v7 と v30 の 2 件しか無かったから（符号は規格どおりで、`qr_verify.py` の 300 件も
+   通っていた）。★★**符号として正しいことと、読めることは別**。
+   ★ベクタは出す側（C）が梯子の各段を実際に出したもの。**段が増減したらここも動く**。 */
+for (const b of V.ladder ?? []) {
+  const { size, bits, hex: want } = b;
+  const packed = Buffer.from(bits, "base64");
+  const q = 4, side = size + q * 2;
+  const rgba = new Uint8ClampedArray(side * side * 4).fill(255);
+  for (let r = 0; r < size; r++)
+    for (let k = 0; k < size; k++) {
+      const i = r * size + k;
+      if (!((packed[i >> 3] >> (7 - (i & 7))) & 1)) continue;
+      const o = ((r + q) * side + (k + q)) * 4;
+      rgba[o] = rgba[o + 1] = rgba[o + 2] = 0;
+    }
+  const got = jsQR(rgba, side, side, { inversionAttempts: "dontInvert" });
+  const v = (size - 17) / 4;
+  if (!got || !got.binaryData) {
+    ng("ladder", `★v${v} を jsQR が読めない（配っているのに読めない型番がある）`);
+    continue;
+  }
+  const mine = Buffer.from(got.binaryData);
+  if (!mine.equals(hex(want))) ng("ladder", `v${v} の中身が違う（${mine.length}B）`);
+}
+
 /* ★生の 1 枚は、ヘッダを持たない ＝ readSheet が seq 0 を返す */
 {
   const plain = V.cases.find((c) => !c.packed);

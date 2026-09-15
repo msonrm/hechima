@@ -66,11 +66,20 @@ let firstAt = 0;
  *   載せてくるので、**1 枚もデコードしないうちに**分かる。
  * ★異同判定（24×24 に落として比べる）は 1ms なので、溜める間はほぼカメラ任せで回る。
  * ★足りなければ次の周回でまた溜める（枚は順不同で受けるので、何周かかっても構わない）。 */
-const BANK_MAX = 24;              /* 溜める上限（720×720×4 ＝ 2MB/枚） */
+/* ★★★**溜めるのはグレースケール**（1 バイト/画素 ＝ 518KB）。
+ *   RGBA のまま持つと 1 枚 2MB で、**1 周ぶん撮ると 100MB を超える**。
+ * ★★**上限 24 では足りなかった**（2026-09-15・実機 17 枚で 15〜20 秒）——
+ *   30fps で 24 フレームは **0.8 秒**しかなく、機体の 1 周（17 枚 × 0.1 ＝ 1.7 秒）の
+ *   半分しか見ていなかった。**「最後の数枚が埋まらない」の正体**がこれ。
+ *   ★**1 巡で全枚が視界に入る**だけ溜める（64 フレーム ＝ 2.1 秒 ＝ 33MB）。 */
+const BANK_MAX = 64;
 let need = 0;                     /* 総枚数（0 = まだ分からない ＝ 従来どおり 1 枚ずつ読む） */
-let bank: ImageData[] = [];
+let roundMs = 0;                  /* 機体の 1 周（ミリ秒）。0 = 分からない */
+let bank: Uint8Array[] = [];
 let bankT0 = 0;
 let draining = false;
+/* jsQR へ渡すときだけ RGBA に展開する。★1 枚ぶんを使い回す（毎回確保しない） */
+const rgbaBuf = new Uint8ClampedArray(SCAN_SIDE * SCAN_SIDE * 4).fill(255);
 
 
 function say(msg: string): void {
@@ -173,10 +182,21 @@ function sameAsLast(): boolean {
   return diff / (now.length / 4) < 2;   /* 平均 2/255 未満なら「動いていない」 */
 }
 
+/** ImageData から輝度だけを取り出す（溜めるため）。 */
+function toGray(img: ImageData): Uint8Array {
+  const d = img.data;
+  const g = new Uint8Array(SCAN_SIDE * SCAN_SIDE);
+  for (let i = 0, o = 0; i < g.length; i++, o += 4)
+    g[i] = (d[o] * 77 + d[o + 1] * 150 + d[o + 2] * 29) >> 8;
+  return g;
+}
+
 /* 1 枚デコードして Collector に渡す。★`binaryData` を使う（`data` は文字列で、
    圧縮した中身は文字にならない）。 */
-function decodeOne(img: ImageData): void {
-  const got = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+function decodeGray(g: Uint8Array): void {
+  for (let i = 0, o = 0; i < g.length; i++, o += 4)
+    rgbaBuf[o] = rgbaBuf[o + 1] = rgbaBuf[o + 2] = g[i];
+  const got = jsQR(rgbaBuf, SCAN_SIDE, SCAN_SIDE, { inversionAttempts: "dontInvert" });
   if (got && got.binaryData && got.binaryData.length) handle(Uint8Array.from(got.binaryData));
   scans++;
   const now = performance.now();
@@ -190,8 +210,8 @@ function decodeOne(img: ImageData): void {
 /* 溜めたぶんを読み切ったか。★**1 フレームに 1 枚だけ**読む —— まとめて回すと
    その間プレビューが固まり、撮っている人は「止まった」と思う。 */
 function drainStep(): void {
-  const img = bank.shift();
-  if (img) decodeOne(img);
+  const g = bank.shift();
+  if (g) decodeGray(g);
   if (!bank.length) {
     draining = false;
     lastTiny = null;                     /* ★次の周回は「前の絵」を持たずに始める */
@@ -220,17 +240,21 @@ function scan(): void {
   const img = ctx.getImageData(0, 0, SCAN_SIDE, SCAN_SIDE);
 
   if (!need) {                           /* 総枚数が分からない ＝ 1 枚ずつ読む（従来） */
-    decodeOne(img);
+    decodeGray(toGray(img));
     return;
   }
-  bank.push(img);
-  /* ★★**やめどき** —— 「要る枚数より多く撮れた」か「1 周ぶんの時間が過ぎた」。
-     手ブレでも絵は変わるので、**枚数だけを当てにしない**（時間の側でも切る）。 */
+  bank.push(toGray(img));
+  /* ★★★**やめどきは「機体が 1 周するまで」**（2026-09-15 に直した）——
+     それまでは「要る枚数の 2 倍」で切っていて、17 枚のとき **0.8 秒＝ 1 周の半分**しか
+     見ていなかった。★機体が `&ms=` で間隔を教えてくるので、**1 周 ＋ 2 割**撮る。
+     ★間隔が分からないときだけ、枚数から見当をつける（0.1 秒とみなす）。 */
   const want = Math.max(1, col.empty ? need : col.missing.length);
-  if (bank.length >= Math.min(BANK_MAX, want * 2 + 2) || performance.now() - bankT0 > 2500) {
+  const oneRound = (roundMs || 100) * need * 1.2;
+  if (bank.length >= BANK_MAX || performance.now() - bankT0 > Math.min(4000, oneRound)) {
     draining = true;
     say(`読み取り中… 残り ${bank.length}`);
   }
+  void want;
 }
 
 function stop(): void {
@@ -307,6 +331,8 @@ function again(): void {
    総枚数が最初から手元にある（ブックマークから開いた人には無いが、そのときは従来どおり）。 */
 {
   const n = pagesFromUrl(location.search);
+  const ms = Number(new URLSearchParams(location.search).get("ms"));
+  if (Number.isInteger(ms) && ms > 0 && ms <= 2000) roundMs = ms;
   if (n) {
     need = n;
     say(`全部で ${n} 枚あります。カメラを使うと読み取りが始まります。`);
