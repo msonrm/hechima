@@ -60,6 +60,11 @@ let scanT0 = 0;
 let grabs = 0;
 let grabT0 = 0;
 let fps = 0;
+/* ★★**読めた QR が枠の何割を占めていたか**（2026-09-15）—— iPad の方が遅い理由を
+ *   絞るため。★端末が大きいと機体に近づけにくく、**小さく写っている**かもしれない。
+ *   jsQR は 4 隅の座標を返すので、そのまま測れる。 */
+let qrFill = 0;
+let decMs = 0;
 /* ★**1 枚目が入ってから揃うまで**の時間。機体側の型番と間隔を比べるための唯一の数
    —— 「速くなった気がする」では、粗い型番（枚数は増えるが 1 枚が読みやすい）と
    密な型番（枚数は少ないが読みにくい）のどちらが良いか決められない。 */
@@ -103,6 +108,10 @@ function showMeter(): void {
   const perSheet = roundMs ? (fps * roundMs) / 1000 : 0;
   let t = `カメラ ${fps} 枚/秒`;
   if (perSheet) t += ` ／ QR 1 枚あたり ${perSheet.toFixed(1)} 枚`;
+  /* ★★**枠に対する QR の大きさ**が、読めるかどうかをいちばん左右する
+     （v30 は 1 模様 3.5px しかないので、小さく写ると一気に落ちる）。 */
+  if (qrFill) t += ` ／ QR は枠の ${qrFill}%`;
+  if (decMs) t += `・1 回 ${decMs}ms`;
   /* ★★**遅いときは理由を言う** —— 「なぜか読めない」で終わらせない。
      カメラは暗いと露光を延ばすので fps が落ち、1 枚あたりのフレーム数が足りなくなる。 */
   if (perSheet && perSheet < 2) t += "　★暗いかもしれません（明るい所だと速くなります）";
@@ -221,7 +230,14 @@ function toGray(img: ImageData): Uint8Array {
 function decodeGray(g: Uint8Array): void {
   for (let i = 0, o = 0; i < g.length; i++, o += 4)
     rgbaBuf[o] = rgbaBuf[o + 1] = rgbaBuf[o + 2] = g[i];
+  const t0 = performance.now();
   const got = jsQR(rgbaBuf, SCAN_SIDE, SCAN_SIDE, { inversionAttempts: "dontInvert" });
+  decMs = Math.round(performance.now() - t0);
+  if (got?.location) {
+    const { topLeftCorner: tl, topRightCorner: tr } = got.location;
+    qrFill = Math.round((Math.hypot(tr.x - tl.x, tr.y - tl.y) / SCAN_SIDE) * 100);
+    showMeter();
+  }
   if (got && got.binaryData && got.binaryData.length) handle(Uint8Array.from(got.binaryData));
   scans++;
   void scanT0;
@@ -375,6 +391,8 @@ async function start(): Promise<void> {
   grabs = 0;
   grabT0 = performance.now();
   fps = 0;
+  qrFill = 0;
+  decMs = 0;
   bankT0 = performance.now();
   lastGrabAt = 0;
   startBtn.hidden = true;
