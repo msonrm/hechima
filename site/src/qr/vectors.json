@@ -8,10 +8,10 @@
   "  これは「出す側が出したもの」のスナップショットなので、腐ると実機でだけ落ちる。",
   "pages は各枚の中身を 16 進にしたもの（ヘッダ ＋ payload）。text は戻るべき本文。",
   "board は最初の 1 枚の盤面（1 模様 1 ビット・行優先・base64）。★読み取り側（jsQR）が実際に読めるかを、画像ファイルを経由せずに確かめるため。",
-  "reader_urls は機体が段 1 に出す「読み取りページの URL」。★本文ではないので、読む側はこれを本文として受けてはいけない（2026-09-15 に ?n= を足した日、クエリを許し忘れて本文として受け、1 枚で「揃った」になった）。",
+  "reader_urls は機体が段 1 に出す「読み取りページの URL」。★本文ではないので、読む側はこれを本文として受けてはいけない（2026-09-15 に ?n= を足した日、クエリを許し忘れて本文として受け、1 枚で「揃った」になった）。★末尾の 1 件は **?n=5&ms=100 ＝ 2026-09-16 まで機体が出していた旧形式** ―― 間隔が 0.05 秒に確定して &ms= を外したあとも、読む側は付いていれば従うので残してある。",
   "ladder は梯子の各段を容量いっぱいで出した盤面。★配っている型番を 1 つ残らず jsQR に食わせるため（2026-09-15 に v23 が読めないことに気づけなかった）。"
  ],
- "generated": "2026-09-15 / editor-mock 9732d07",
+ "generated": "2026-09-16 / editor-mock fc43755",
  "cases": [
   {
    "name": "plain",
@@ -100,27 +100,27 @@
  ],
  "reader_urls": [
   {
-   "text": "https://luffa-lang-labo.dev/qr/?n=17&ms=100",
-   "hex": "68747470733a2f2f6c756666612d6c616e672d6c61626f2e6465762f71722f3f6e3d3137266d733d313030",
+   "text": "https://luffa-lang-labo.dev/qr/?n=17",
+   "hex": "68747470733a2f2f6c756666612d6c616e672d6c61626f2e6465762f71722f3f6e3d3137",
    "board": {
     "size": 45,
-    "bits": "/rf59sv8FnZk7JBurxmbBLt1s2ZzNduku/kzrsFHbHMBB/qqqqqv4AOPELEAzm9foMF4BJH30lU7t7E/8qUwRzM2w4KtExOdvtI3M3ZHXhobExCRcrtzMFKhMxgxdYVGjn8PmtoWxkzY1rypyMzYHUP45Pxi+vxR3Em0VisEqmeqlxGNEn0aT89P9M/ZxJHndqEHj7OD0aTRlwY204Yok5ucf1LrOnZFjb/7RRDn/hlznl5J7pguQKYGpn+I3l6C+ExC1FzwqPnYGHmn5Pxi+wBV1Em0Z/iEqmfqkFaNEFEauu9fpv+d0pFzmEWuj7G28yEFlyw2+I/ok8udXoA="
+    "bits": "/qom9ov8FomZLpBupOZm1Lt1zY2MtdumZv7LrsFwlF3hB/qqqqqv4ApxH7IAzjAv2MF5Cf8MUlYHjkzB8r0RiMzYDUg8ZMxiwpAN3Mm4l09kzGfnGriMwVGiro9MpYVdTpH3mtk4r7E21qXJpzM204//k/ud/rxLNHZEXitbaxDq4xFzH38Zn7g/3N/Ern+Idl4QyExB1FyKKPnYGEY95GRieywV3Im1hBmEuGfHmz6MY19KNy9RoLkfI5Hn3qGCp7OS0aTyVwY204mik/uc/oBrPHZEb/l7KxDq8FlzHFEZuvgvxv+F03+MmMaugE7G9TkF6MLYCE/t5DRi2oA="
    }
   },
   {
-   "text": "https://luffa-lang-labo.dev/qr/?n=5&ms=100",
-   "hex": "68747470733a2f2f6c756666612d6c616e672d6c61626f2e6465762f71722f3f6e3d35266d733d313030",
+   "text": "https://luffa-lang-labo.dev/qr/?n=5",
+   "hex": "68747470733a2f2f6c756666612d6c616e672d6c61626f2e6465762f71722f3f6e3d35",
    "board": {
     "size": 45,
-    "bits": "/qom9ov8FYmYLpBupOZm1Lt1fY2MtdukZv7LrsF4lF3hB/qqqqqv4ApxELIAzjAv4MF5bf8PklYnpkzZ8r0RiMzYDUo/5MxiwrA13Mm4lw9EzGfnGzqMwFGir49M5YVdYpH32tkrv7Em1qTJJzM204r6E/ud/sxDNHZEXmsbaxDq5RNzHH8Zn7g/1N/Ern+Itl4gyExB1F0KaPnYGEiz5GRiew7l3Im1hP2EuGfHn76MYl9KNy9RsLkfI5HnXqGCv7OS0aTyFwY205mmk/uc/wB7PHZEb/l7KxDq8FlzHlEZuvgvxv+F03+MmMaugE7C9TkFqMLYCE/p5DRi2oA="
+    "bits": "/rf5jsv8FnZn7JBupxmbBLt1o2ZzNdulO/kzrsFLbHMBB/qqqqqv4ACPEbEAzm9foMF4JJH3klUJ/7E38qSwhzM2w4uuExOdvoIvM3ZHXho7ExCRdytzP1KhNhgxXYVGwn8MWtoUxkzA1rwpyMzYHUn85Pxi+sRp3Em0VutEqmeqkRGNEX0aT89PpM/ZxJHntqE3l7OX0aRRVwY204byk5ucfxxbOnZFjRn7RRDn+ilzn15J7pguWKYGpn+IXl6C4ExA1FzwKPnYGHmh5Pxi+4B11Em0Z/iEqmfqkFaNE1Eauu9fpv+d0pFzmEWul7Gy8yEFlyw2+I/uk8udXoA="
    }
   },
   {
-   "text": "https://luffa-lang-labo.dev/qr/?n=1&ms=100",
-   "hex": "68747470733a2f2f6c756666612d6c616e672d6c61626f2e6465762f71722f3f6e3d31266d733d313030",
+   "text": "https://luffa-lang-labo.dev/qr/?n=1",
+   "hex": "68747470733a2f2f6c756666612d6c616e672d6c61626f2e6465762f71722f3f6e3d31",
    "board": {
     "size": 45,
-    "bits": "/qom9ov8FYmYLpBurOZm1Lt13Y2Mtduk5v7LrsFwlF3hB/qqqqqv4ApxELIAzjAv4MF5Bf8PklYF/kzZ8r0RSMzYDUE5ZMxiwug13Mm4lw9kzGfnGImMwFGio49M5YVdBpH32tk537Em1qTJJzM204b9E/ud/vRrNHZEXqsbaxDq5RJzHH8Zn7g/1N/Ern+Itl4A0ExB1F0KaPnYGE1t5GRie1oV3Im1hO+EuGfHmb6MYl9KNy9RsLkfI5HnXqGCp7OS0aTylwY205m6k/uc/wB7PHZEb/l7KxDq8FlzHlEZuvgvxv+F03+MmMauiE7G9TkFaMLYCE/p5DRi2oA="
+    "bits": "/rf5jsv8FnZn7JBurxmbBLt1A2ZzNdulu/kzrsFDbHMBB/qqqqqv4ACPEbEAzm9foMF4TJH3klUrp7E38qSwRzM2w4CokxOdvtovM3ZHXhobExCRdJhzP1KhOhgxXYVGpn8MWtoGpkzA1rwpyMzYHUX75Pxi+vxB3Em0VitEqmeqkRCNEX0aT89PpM/ZxJHntqEXj7OX0aRRVwY204Msk5ucf0irOnZFjQv7RRDn/Clzn15J7pguWKYGpn+IXl6C+ExA1FzwqPnYGHm95Pxi+4B11Em0Z/iEqmfqkFaNE1Eauu9fpv+d0pFzmEWun7G28yEFVyw2+I/uk8udXoA="
    }
   },
   {
@@ -129,6 +129,14 @@
    "board": {
     "size": 45,
     "bits": "/rf5jsv8FnZn7JButxmbBLt1U2ZzNdunO/kzrsFDbHMBB/qqqqqv4AGPEbEAzm9foMF4KJH3klUo57E38qUwhzM2w4CokxOdvrIHM3ZHXhobExCRcplzP1KhP5gxXYVGrn8MWtoXrkzBVrwpCMzYHUn65Pxi+qxJ3Em0VqtkqmeqlxKNEX0aT89PoM/ZxJHnpqE3n7OXUaVRlwY2047mk5ucf0RLOnZFjZv7RRDn/Clzn55J7pguXqYGpn+IXl6C6ExAVFzwKPnYGHmj5Pxi+gBF1Em0Z/iEqmfqkFaNEVEauu9foP+d0pFzqEVul7G3cyEFVyw2+I/uk8udXoA="
+   }
+  },
+  {
+   "text": "https://luffa-lang-labo.dev/qr/?n=5&ms=100",
+   "hex": "68747470733a2f2f6c756666612d6c616e672d6c61626f2e6465762f71722f3f6e3d35266d733d313030",
+   "board": {
+    "size": 45,
+    "bits": "/qom9ov8FYmYLpBupOZm1Lt1fY2MtdukZv7LrsF4lF3hB/qqqqqv4ApxELIAzjAv4MF5bf8PklYnpkzZ8r0RiMzYDUo/5MxiwrA13Mm4lw9EzGfnGzqMwFGir49M5YVdYpH32tkrv7Em1qTJJzM204r6E/ud/sxDNHZEXmsbaxDq5RNzHH8Zn7g/1N/Ern+Itl4gyExB1F0KaPnYGEiz5GRiew7l3Im1hP2EuGfHn76MYl9KNy9RsLkfI5HnXqGCv7OS0aTyFwY205mmk/uc/wB7PHZEb/l7KxDq8FlzHlEZuvgvxv+F03+MmMaugE7C9TkFqMLYCE/p5DRi2oA="
    }
   }
  ],

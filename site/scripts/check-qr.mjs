@@ -200,6 +200,13 @@ for (const u of V.reader_urls ?? []) {
   if (!got || !got.binaryData) ng("url", `jsQR が読めない: ${u.text}`);
   else if (!isReaderUrl(Uint8Array.from(got.binaryData)))
     ng("url", `jsQR 経由だと本文として受けてしまう: ${u.text}`);
+  /* ★★**盤面と text が同じものを指していること**（2026-09-16 に足した）—— ここは
+     「読めるか」と「本文として受けないか」しか見ていなかったので、**盤面だけ古い**まま
+     緑になる（機体が `&ms=` を外した日に、まさにこの 2 つが離れうると分かった）。
+     ★cases 側は最初からバイト列を突き合わせている ―― **同じ検査の中で守り方が
+     揃っていなかった。** */
+  else if (new TextDecoder().decode(Uint8Array.from(got.binaryData)) !== u.text)
+    ng("url", `盤面が text と違うものを指している: ${u.text}`);
 }
 
 /* ★**本文が URL に似ていても、本文として受ける**（弾きすぎない） */
