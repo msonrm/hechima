@@ -826,93 +826,54 @@ table.km-roles td.note { font-size: 0.8rem; }
 
 /* ---- 経路コンポーザ（/composer/ 実験ページ） ---- */
 
-/* ★**高さは固定**（docs/composer.md §2.1 の最重要決定）。内容で伸縮させない。
-   3 文が 6 行を超えるのは 2.4% だが、可変にすると 100% の場面で「どこまで覆うか」が
-   読めなくなる。溢れは高さではなく窓（.cmp-rect の overflow）で処理する */
-.cmp-block {
-  --cmp-cols: 40;
-  --cmp-lines: 6;
-  --cmp-lh: 1.6;
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 50;
-  /* 等幅（全角 1em / 半角 0.5em）でないと 40 字の幅が出ない */
-  font-family: "Noto Sans Mono CJK JP", "Noto Sans JP", "Hiragino Kaku Gothic ProN", "MS Gothic", monospace;
-  font-size: 16px;
-  line-height: var(--cmp-lh);
-  /* 16px 等幅で約 640px（§2.1）。左右の余白は幅の外に置いて 40 字を崩さない */
-  width: calc(var(--cmp-cols) * 1em + 1.2em);
-  padding: 0.4em 0.6em;
-  color: var(--fg);
-  /* 案 B は本文を覆うので、地は不透明にする */
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  box-shadow: 0 2px 10px rgb(0 0 0 / 0.18);
-  transition: opacity 0.12s ease-out;
+/* ★オーバーレイを持たない（docs/composer.md §2.1）。未確定表示はホストの本文の中に
+   インラインで出る。矩形オーバーレイ案は 2026-09-22 に捨てた（§2.8）ので、
+   寸法・固定高・配置・隠す操作の CSS は一緒に落ちている */
+
+/* 三層は場所ではなく状態（§2.2）。見た目で分ける */
+
+/* 打鍵中の文 — ひらがな。破線下線は標準 IME の未確定表示と同じ語彙 */
+.cmp-typing {
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-underline-offset: 4px;
 }
 
-/* 隠す操作（§2.6）: 表示だけを消す。バッファは生きたまま */
-.cmp-dimmed { opacity: 0.12; }
-
-/* 矩形 = 「読解」。通常の左→右。6 行の窓で、内容は上詰め（§2.3） */
-.cmp-rect {
-  height: calc(var(--cmp-lines) * var(--cmp-lh) * 1em);
-  overflow: hidden;
-}
-.cmp-line { margin: 0; overflow-wrap: anywhere; }
-
-/* 1行欄 = 「監視」。右端キャレット固定で左へ流れる（§2.1）。
-   flex-end はみ出しが左側に出る性質をそのまま窓に使っている */
-.cmp-tail {
-  display: flex;
-  justify-content: flex-end;
-  align-items: baseline;
-  height: calc(var(--cmp-lh) * 1em);
-  overflow: hidden;
-  white-space: pre;
-  margin-top: 0.3em;
-  padding-top: 0.3em;
-  border-top: 1px solid var(--line);
-}
-.cmp-tail-text { flex: 0 0 auto; }
-.cmp-caret {
-  flex: 0 0 auto;
-  width: 2px;
-  height: 1.1em;
-  margin-left: 1px;
-  background: var(--accent);
-  animation: cmp-blink 1.1s step-end infinite;
-}
-@keyframes cmp-blink { 50% { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) {
-  .cmp-caret { animation: none; }
+/* 未確定の文 — 変換済み。書き換わらないので下線を実線にして打鍵中と分ける。
+   マーク（§2.4）はこの層に乗るが、まだ実装していない */
+.cmp-unconfirmed {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
 }
 
-/* ページ側: ホスト（流れた文の着地先）と操作パネル */
+/* 変換が届くまでの数ミリ秒だけ、かなのまま出ている状態 */
+.cmp-pending { color: var(--muted); }
+
+/* ページ側: ホスト（本文）と計測パネル */
 .cmp-status { min-height: 1.4em; margin: 0 0 0.6rem; font-size: 0.9rem; color: var(--muted); }
 .cmp-host {
-  min-height: 9rem;
-  padding: 0.8rem;
+  min-height: 11rem;
+  padding: 0.9rem;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--bg);
   font-size: var(--editor-size);
-  line-height: 1.9;
+  line-height: 2;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .cmp-host:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-.cmp-note { margin: 0.4rem 0 1rem; font-size: 0.85rem; color: var(--muted); }
 .cmp-panel {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem 1rem;
   align-items: center;
+  margin-top: 1rem;
   padding: 0.7rem 0.8rem;
   border: 1px solid var(--line);
   border-radius: 4px;
   font-size: 0.9rem;
 }
-.cmp-stats { color: var(--muted); font-variant-numeric: tabular-nums; }
+.cmp-stats { color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1.6; }

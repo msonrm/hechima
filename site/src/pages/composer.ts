@@ -1,28 +1,19 @@
-// 経路コンポーザ 実験ページ: 区切りの異なる変換候補を並列に提案できる UI の「器」。
+// 経路コンポーザ 実験ページ（インライン版）。
 //
-// この版で見るのは **配置（§2.6 / §4.4）** —— 案 A（画面中央固定）と案 B（キャレット追従）を
-// 切り替えて、実際に打ちながら比べるためのページ。マーク（§2.4）と候補の提示（§2.5）は
-// まだ無い。中身のレイアウトはどちらの案でも同じなので、配置だけを先に測れる。
+// 打っているものが**本文の中に直接**出る。打鍵中はひらがな、句点でその文だけが変換され、
+// 4 文目を打ち始めると最も古い文が確定して通常の本文に戻る。
 //
+// この版にマーク（§2.4）と候補の提示（§2.5）はまだ無い。
 // 仕様と測定: hechima/docs/composer.md
 import { mountComposer, type ComposerStats } from "../composer/index";
-import type { Placement } from "../composer/placement";
 
 const app = document.getElementById("app");
 if (!app) throw new Error("#app がありません");
 
 app.innerHTML = `
   <p class="cmp-status" id="cmp-status">変換エンジンを準備中…</p>
-  <div class="cmp-host" id="cmp-host" contenteditable="plaintext-only" spellcheck="false"></div>
-  <p class="cmp-note">↑ ここが「ホスト」。矩形から押し出された文（4 文目に入った時点で最も古い 1 文）が落ちてきます。</p>
+  <div class="cmp-host" id="cmp-host" contenteditable="true" spellcheck="false"></div>
   <div class="cmp-panel">
-    <label>配置:
-      <select id="cmp-placement">
-        <option value="center">案 A — 画面中央固定</option>
-        <option value="caret">案 B — キャレット追従</option>
-      </select>
-    </label>
-    <label><input type="checkbox" id="cmp-hover" checked> ホバーで半透明にする</label>
     <button type="button" id="cmp-reset">計測をリセット</button>
     <span class="cmp-stats" id="cmp-stats"></span>
   </div>
@@ -30,8 +21,6 @@ app.innerHTML = `
 
 const statusEl = document.getElementById("cmp-status") as HTMLParagraphElement;
 const hostEl = document.getElementById("cmp-host") as HTMLDivElement;
-const placementEl = document.getElementById("cmp-placement") as HTMLSelectElement;
-const hoverEl = document.getElementById("cmp-hover") as HTMLInputElement;
 const resetEl = document.getElementById("cmp-reset") as HTMLButtonElement;
 const statsEl = document.getElementById("cmp-stats") as HTMLSpanElement;
 
@@ -43,24 +32,20 @@ const composer = mountComposer({
 });
 
 function renderStats(s: ComposerStats): void {
-  // §4.4 が見たいのは「隠す操作をどれだけ使うか」。配置で本文を覆う頻度が変わるので、
-  // 隠す操作の必要性そのものが配置の従属変数になる
-  statsEl.textContent = `打鍵 ${s.keys} ／ 隠した回数 ${s.hides}（計 ${(s.hideMs / 1000).toFixed(1)} 秒）`;
+  // 「文を区切る」にどの入口が使われたかを数える（§2.6）。
+  // 変換キーは覚えた人の道、Space 2 連打は覚えていない人の道で、割合がそのまま学習の進み具合になる。
+  // Enter の段（§2.3）も数える —— 二段目が多ければ「ひらがなのまま流れた」が起きている
+  const b = s.breaks;
+  const e = s.enters;
+  statsEl.textContent =
+    `打鍵 ${s.keys}／区切り: 句点 ${b.punct}・変換キー ${b.key}・Space2連打 ${b["double-space"]}`
+    + `／Enter: 未確定を確定 ${e.settled}・ひらがなで確定 ${e.typing}・改行 ${e.newline}`;
 }
 renderStats(composer.stats);
 
-placementEl.addEventListener("change", () => {
-  composer.setPlacement(placementEl.value as Placement);
-  hostEl.focus();
-});
-hoverEl.addEventListener("change", () => {
-  composer.setHideOnHover(hoverEl.checked);
-  hostEl.focus();
-});
 resetEl.addEventListener("click", () => {
   composer.resetStats();
   hostEl.focus();
 });
 
-composer.setPlacement(placementEl.value as Placement);
 hostEl.focus();
