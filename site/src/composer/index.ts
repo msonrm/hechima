@@ -164,6 +164,12 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     convertSettled(kana);
     stats.breaks[source]++;
     bump();
+    // ★**エンジンから取り上げたかなを flow 側にも反映する。** ここで pump を通さないと
+    // flow は古い打鍵中の文を持ったままになり、変換済みの文の後ろに**同じ内容のひらがなが
+    // 二重に出る**（次の打鍵で pump が走って初めて消える）。句点は pump の中で切り出している
+    // ので無事だったが、変換キー / 右 Alt は pump を通らない経路だった。
+    // setCurrent("", "") では不足 —— ローマ字の途中（pendingDisplay）が残ることがある
+    pump();
     return true;
   }
 
@@ -204,19 +210,19 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
   let altTap = false;
 
   window.addEventListener("keydown", (e) => {
-    if (e.metaKey || e.ctrlKey) return; // OS/ブラウザのショートカットは奪わない
-    if (document.activeElement !== host) return;
-    if (!engine) return;
+    if (document.activeElement !== host || !engine) return;
 
-    // 右 Alt の単押し判定: 押している間に他のキーが来たら取り消す
-    altTap = e.code === "AltRight" && !e.repeat;
+    // 右 Alt の単押し判定: 押している間に他のキーが来たら取り消す。
+    // **Ctrl / Meta の判定より先に置く** —— AltGr が Ctrl+Alt を生む環境で
+    // 取り消しが漏れ、あとから無関係な右 Alt の keyup で区切ってしまうため
+    altTap = e.code === "AltRight" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+    if (e.metaKey || e.ctrlKey) return; // OS/ブラウザのショートカットは奪わない
     if (e.code === "AltRight") return;
     if (e.altKey) return;
 
     if (e.code === "Convert") { // JIS の変換キー
       e.preventDefault();
-      breakSentence("key");
-      render();
+      breakSentence("key"); // 描画は breakSentence の pump が行う
       return;
     }
     if (PASS_THROUGH.has(e.key) || /^F\d+$/.test(e.key)) return;
@@ -249,7 +255,6 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       if (altTap) { // 単押しだった = 「文を区切る」
         altTap = false;
         breakSentence("key");
-        render();
       }
       return;
     }
