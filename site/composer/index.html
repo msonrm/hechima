@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>経路コンポーザ（配置の比較） — へちま言語ラボ</title>
+    <meta name="description" content="変換中のテキストを、キャレットの行ではなく固定サイズの矩形の中で見せる入力UIの実験。矩形を画面中央に固定する案と、キャレットに追従させる案を切り替えて比べます。" />
+    <meta property="og:title" content="経路コンポーザ（配置の比較） — へちま言語ラボ" />
+    <meta property="og:description" content="打っている最中のテキストを、1行欄と6行の矩形に分けて見せる。その矩形をどこに置くかを、実際に打ちながら比べる実験です。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://luffa-lang-labo.dev/composer/" />
+    <meta property="og:site_name" content="へちま言語ラボ" />
+    <meta name="twitter:card" content="summary" />
+    <script>
+      /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
+         app.js 自体が読めないケースがあるため、外部取得に依存しないインラインに置く */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/keymap-engine/keymap-engine.js"></script>
+    <script src="/vendor/hechima/hechima.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; 経路コンポーザ（配置の比較）</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>経路コンポーザ（配置の比較）</h2>
+        <p>ふつうの日本語入力は、変換中のテキストを<b>本文のその行</b>に出します。このページでは、
+          変換中のテキストを本文から切り離して、<b>固定サイズの矩形</b>の中で見せます。
+          矩形は打っても大きさが変わりません。</p>
+        <p>作りかけのページです。<b>いまは「矩形をどこに置くか」だけを比べています</b>
+          （区切り違いの提案そのものは、まだ入っていません）。</p>
+      </section>
+
+      <section class="layers">
+        <div class="stack" role="img" aria-label="入力 から キーマップ、変換、表示 へ。表示の箱を差し替えた">
+          <span class="blk">入力</span><span class="arw">→</span>
+          <span class="blk">キーマップ</span><span class="arw">→</span>
+          <span class="blk">変換</span><span class="arw">→</span>
+          <span class="blk swap">表示</span>
+        </div>
+        <p><b>差し替えた層：表示</b> ／ <span class="kept">据え置き：入力・キーマップ・変換</span></p>
+        <p class="src">このページ固有のソース：<a href="https://github.com/msonrm/hechima/blob/main/site/src/composer/" rel="noopener"><code>site/src/composer/</code></a>
+          ／ 仕様と測定：<a href="https://github.com/msonrm/hechima/blob/main/docs/composer.md" rel="noopener"><code>docs/composer.md</code></a></p>
+      </section>
+
+      <div id="app"></div>
+
+      <section class="hints">
+        <p>ローマ字で打ってください（OS側の日本語IMEはオフで）。<b>変換キーも確定キーもありません。</b>
+          打った分はそのまま流れていきます。</p>
+        <ul>
+          <li><b>下の1行</b>＝ひらがなのまま。右端にキャレットが止まり、文字は左へ流れます。
+            打ち間違いの確認はここでします（<b>ここは変換されません</b>）</li>
+          <li><b>上の6行</b>＝変換済みのテキスト。1行欄の左端からあふれた分が、変換されてここへ入ります</li>
+          <li><b>句点（。）の次の1文字</b>を打つと、句点までが一気に上へ移ります。
+            句点を打った直後に手を止めれば、打ったばかりのひらがなが下に残って見えます</li>
+          <li>矩形が持つのは<b>最新3文</b>まで。4文目に入ると、いちばん古い文が下のホスト欄へ落ちます</li>
+          <li><b>矩形にマウスポインタを重ねる</b>と半透明になります（下が見たいときに）。
+            消えるのは表示だけで、中身は残っています</li>
+        </ul>
+        <p><b>比べてほしいのはここです。</b>「配置」を切り替えて、同じ文章を打ってみてください。</p>
+        <ul>
+          <li><b>案 A（画面中央固定）</b>：矩形がいつも同じ場所にあります。視線が動かない代わりに、
+            本文のキャレットからは離れます</li>
+          <li><b>案 B（キャレット追従）</b>：矩形がキャレットのすぐ上に出ます。ふつうのIMEに近い代わりに、
+            場所が毎回変わり、本文を覆います</li>
+        </ul>
+        <p>「隠した回数」を数えています。<b>本文を覆う頻度は配置で変わる</b>ので、
+          隠す操作がどれだけ要るかは配置の側の問題でもあります。どちらの案でどれだけ隠したくなったかが、
+          そのまま比較の材料になります。</p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/composer.ts"></script>
+  </body>
+</html>
