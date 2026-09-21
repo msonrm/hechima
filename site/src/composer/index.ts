@@ -1,20 +1,18 @@
-// 経路コンポーザ本体の配線（docs/composer.md §2）。
+// 経路コンポーザ（インライン版）の配線（docs/composer.md §2）。
 //
-// この版で実装したのは **§2.1 寸法 / §2.2 三層モデル / §2.3 テキストの流れ /
-// §2.6 配置と隠す操作** まで。マーク（§2.4）と候補の提示（§2.5）はまだ無い
-// —— §4.4 の配置比較（案 A / 案 B）を先に回すための一区切りなので、
-// 「打ってみて視線がどう動くか」に要るものだけを入れてある。
+// この版で実装したのは **§2.1 全体の形 / §2.2 三層モデル / §2.3 テキストの流れ /
+// §2.6 キーの割り当て**（§7 の 4a''）。マーク（§2.4）と候補の提示（§2.5）はまだ無い。
 //
-// 三層モデル（§2.2）の受け持ち:
-//   1行欄       … ひらがな。**変換しない**（打鍵フィードバックのセーフガード）
-//   現在の文     … 変換済み・都度書き換わる（区切りも含め再検討される）
-//   確定した文   … 変換済み・書き換えない
+// 三層モデル（§2.2）は「場所」ではなく「状態」なので、この版が持つ層は見た目で分かれる:
+//   打鍵中の文   … 破線下線。ひらがな。**変換しない**（打鍵フィードバックのセーフガード）
+//   未確定の文   … 別の下線。句点で 1 回だけ変換され、以後書き換えない
+//   確定した文   … 通常の本文。ホストのもの
 //
-// 確定操作は持たない（§2.3）。Enter は改行のままで、編集可能な窓が後ろへ滑っていく。
+// キーは四つの役だけ（§2.6）。ここで実装しているのは三つ（マーク走査は 4b）:
+//   空白 = Space / 文を区切る = 変換キー・Space 2 連打 / 確定 = Enter
 
-import { Flow, sentenceBreakAt, type Segment } from "./flow";
-import { Block } from "./block";
-import { applyPlacement, type CaretSource, type Placement } from "./placement";
+import { Flow, canBreak, endsWithSpace, sentenceBreakAt, type Segment } from "./flow";
+import { Inline } from "./inline";
 
 declare const KeymapEngine: {
   version: string;
@@ -25,37 +23,35 @@ declare const KeymapEngine: {
 
 /**
  * InputEngine のうちコンポーザが使う分。`hechima.d.ts` の InputEngineLike に
- * `appendDirectKana` / `replaceDirectKana` を足したもの（かなの持ち主がセッション層では
- * なくエンジンなので、文の切り出しでかなを詰め直すのに要る）。
+ * かなを足し引きする口を加えたもの（打鍵中のかなの持ち主がエンジンなので、
+ * 文の切り出しと Space 2 連打でかなを詰め直すのに要る）。
  */
 interface EngineLike extends Hechima.InputEngineLike {
-  /** このエンジン自身が合成中か（よみ or ローマ字バッファを保持している） */
   readonly isComposing: boolean;
   appendDirectKana(kana: string): unknown;
   replaceDirectKana(kana: string, replaceCount: number): unknown;
 }
 
+/** 「文を区切る」がどの入口から来たか（§2.6。どちらの道が使われるかを見る） */
+export type BreakSource = "punct" | "key" | "double-space";
+
 export interface ComposerStats {
-  /** 打鍵数（配列エンジンが飲んだ分だけ） */
   keys: number;
-  /** 隠した回数（ホバーで半透明にした回数。§2.6 / §4.4） */
-  hides: number;
-  /** 隠していた合計ミリ秒 */
-  hideMs: number;
+  /** 区切りの入口ごとの回数 */
+  breaks: Record<BreakSource, number>;
+  /** Enter が進めた段ごとの回数（§2.3 の表） */
+  enters: { settled: number; typing: number; newline: number };
 }
 
 export interface ComposerOptions {
-  /** 流れた文が着地する先（contenteditable の平文） */
+  /** 確定した文の着地先（contenteditable の平文）。未確定表示もこの中に描く */
   host: HTMLElement;
-  /** 配列（`/vendor/keymaps/<id>.json`）。既定 "romaji" */
   keymap?: string;
   status?(text: string): void;
   onStats?(stats: ComposerStats): void;
 }
 
 export interface ComposerHandle {
-  setPlacement(mode: Placement): void;
-  setHideOnHover(on: boolean): void;
   readonly stats: ComposerStats;
   resetStats(): void;
 }
@@ -63,69 +59,23 @@ export interface ComposerHandle {
 export function mountComposer(opts: ComposerOptions): ComposerHandle {
   const setStatus = opts.status ?? (() => {});
   const host = opts.host;
+  const inline = new Inline(host);
+  const flow = new Flow((text) => inline.flush(text));
 
-  const block = new Block();
-  document.body.appendChild(block.el);
-
-  let placement: Placement = "center";
-  let hideOnHover = true;
-  const stats: ComposerStats = { keys: 0, hides: 0, hideMs: 0 };
-
-  // ---- ホスト（流れた文の着地先）とキャレット ----
-
-  const caretSource: CaretSource = {
-    caretRect(): DOMRect | null {
-      const sel = window.getSelection();
-      const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
-      if (!range || !host.contains(range.startContainer)) return hostHead();
-      const rect = range.getBoundingClientRect();
-      // 折り畳んだ Range は 0×0 を返すことがある（空のホスト・テキストノードの端など）。
-      // ホストが空ならその左上で足りる。DOM に目印を挿すのは中身があるときだけにする
-      if (rect.width || rect.height || rect.top || rect.left) return rect;
-      if (!host.firstChild) return hostHead();
-      const probe = document.createElement("span");
-      probe.textContent = "\u200b";
-      const probeRange = range.cloneRange();
-      probeRange.collapse(true);
-      probeRange.insertNode(probe);
-      const measured = probe.getBoundingClientRect();
-      probe.remove();
-      host.normalize();
-      return measured;
-    },
+  const stats: ComposerStats = {
+    keys: 0,
+    breaks: { punct: 0, key: 0, "double-space": 0 },
+    enters: { settled: 0, typing: 0, newline: 0 },
   };
-
-  /** キャレットが取れないときの代役: ホスト枠の書き出し位置 */
-  function hostHead(): DOMRect {
-    const r = host.getBoundingClientRect();
-    const line = parseFloat(getComputedStyle(host).lineHeight) || 24;
-    return new DOMRect(r.left + 12, r.top + 12, 0, line);
-  }
-
-  function insertToHost(text: string): void {
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0 && host.contains(sel.getRangeAt(0).startContainer)) {
-      const range = sel.getRangeAt(0);
-      range.deleteContents();
-      const node = document.createTextNode(text);
-      range.insertNode(node);
-      range.setStartAfter(node);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } else {
-      host.appendChild(document.createTextNode(text));
-    }
-  }
+  const bump = (): void => opts.onStats?.(stats);
 
   // ---- 変換エンジン ----
 
-  const flow = new Flow(insertToHost);
   const worker = new Worker(`/vendor/hechima/hechima-worker.js?t=${Date.now()}`);
   worker.addEventListener("error", (e) =>
     setStatus(`エンジン worker の読み込みに失敗: ${e.message || "スクリプトを取得できません"}`));
   const conn = Hechima.connectWorker(worker, {
-    // 候補は出さない（§2.5 は次の一区切り）ので、1 文節 1 件で足りる
+    // 候補は出さない（§2.5 は 4c）ので 1 文節 1 件で足りる
     maxCands: 1,
     onProgress: (loaded, total) =>
       setStatus(total > 0
@@ -137,18 +87,14 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     .then((info) => setStatus(`準備完了 — Mozc 実変換（hechima v${info.version}）`))
     .catch((e: Error) => setStatus(`エンジン初期化失敗: ${e.message}`));
 
-  let lastConvertKana: string | null = null;
-  function scheduleConvert(kana: string): void {
-    // keyup とチョード窓の満了でも pump が走るので、同じかなを二度投げない
-    if (!kana || kana === lastConvertKana) return;
-    lastConvertKana = kana;
+  /**
+   * 変換は**区切ったときに 1 回だけ**走る（§2.2「ライブ変換を持たない」）。
+   * 打鍵のたびには呼ばない —— 打鍵中の文は変換されない層である。
+   */
+  function convertSettled(kana: string): void {
     void conn.convert(kana).then((segs) => {
       if (!segs) return;
       const out: Segment[] = segs.map((s) => ({ key: s.key, value: s.candidates?.[0] ?? s.key }));
-      // ★**世代で捨ててはいけない。** 句点の次の 1 字で文が切り出されると、直前に投げた
-      // 「句点までのかな」の結果は最新世代ではなくなるが、**それこそが確定した文を埋める
-      // 結果**である。どのかなに対する結果かは flow 側が文字列で照合するので、届いた分は
-      // すべて渡してよい（古い同一かなの結果が来ても中身が同じなので無害）
       flow.applyConversion(kana, out);
       render();
     }).catch(() => {});
@@ -170,17 +116,15 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     }
     const e = new KeymapEngine.InputEngine(KeymapEngine.decodeKeymap(await res.json()));
     e.onStateChange = () => pump();
-    // 配列エンジンは「合成中」の Space / Enter を変換キー・確定キーとして routing する
-    // （keymap-engine の routeStandardControlKey）。**コンポーザにはどちらも無い**（§2.3）ので
-    // ここで横取りする。戻り値 true = エンジンの既定動作を止める
+    // 配列エンジンは合成中の Space を convert に、Enter を confirm に routing する
+    // （keymap-engine の routeStandardControlKey）。**コンポーザにはどちらも無い**ので横取りする
     e.onHostAction = (action: { type: string }): boolean => {
-      if (action.type === "convert") {
-        // Space は文字を産むキー（§2.6）。変換キーではないので、そのまま空白を入れる
-        e.appendDirectKana("\u3000");
+      if (action.type === "convert" || action.type === "insertSpace") {
+        handleSpace();
         return true;
       }
       if (action.type === "confirm") {
-        // Enter は改行（§2.3）。確定操作ではない。handleEnter() が pump の外で処理する
+        handleEnter();
         return true;
       }
       return false;
@@ -189,71 +133,98 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
   }
   void loadKeymap(opts.keymap ?? "romaji");
 
+  // ---- 三つの役（§2.6） ----
+
   /**
-   * エンジンの状態を読み、文の切り出しと変換要求を出して描画する。
-   *
-   * **かなの持ち主はエンジン**（composingKana）のままにしてある。ホスト側へ引き取ると
-   * エンジンが常に idle 判定になり、chord 配列の合成中 routing が変わってしまうため。
-   * 文の切り出しだけは replaceDirectKana で詰め直す。
+   * Space。**空白を入れる。変換はしない**（§2.6。Space 本来の意味）。
+   * ただし**空白が二つ並んだら 1 つ目を消して「文を区切る」**（壊した反射の受け皿）。
+   * 判定は時間ではなく位置で、空白しか無いときは発火しない（Markdown のハード改行）。
    */
-  function pump(): void {
+  function handleSpace(): void {
     if (!engine) return;
-    const confirmed = engine.takeConfirmedText();
-    if (confirmed) {
-      // 英数モードの確定はコンポーザを通さずホストへ（変換の対象ではない）。
-      // **inputMode だけでは足りない**: switchToEnglish は confirmComposition() を先に
-      // 呼ぶので、モードを切り替えた瞬間だけ「英数モードなのに中身はかな」になる。
-      // ASCII かどうかも見て分ける
-      if (engine.getState().inputMode === "english" && /^[\x20-\x7e]*$/.test(confirmed)) {
-        insertToHost(confirmed);
-      } else {
-        // 何かの拍子に確定へ落ちたかなは現在の文へ戻す。コンポーザに確定操作は無い（§2.3）
-        engine.appendDirectKana(confirmed);
-      }
+    const kana = engine.getState().composingKana;
+    if (endsWithSpace(kana) && canBreak(kana)) {
+      engine.replaceDirectKana("", 1); // 1 打目の空白を消す
+      breakSentence("double-space");
+      return;
     }
+    engine.appendDirectKana("　");
+  }
 
-    // 句点の**次の1文字**で、句点までが一気に矩形へ（§2.3）。句点で即座に流さないので、
-    // 打った直後に手を止めれば打ったばかりのひらがなが1行欄に残って見える
-    let st = engine.getState();
-    const p = sentenceBreakAt(st.composingKana);
-    if (p >= 0) {
-      const head = st.composingKana.slice(0, p + 1);
-      engine.replaceDirectKana(st.composingKana.slice(p + 1), st.composingKana.length);
-      flow.settle(head);
-      lastConvertKana = null;
-      st = engine.getState();
+  /**
+   * 「文を区切る」（§2.3）。句点・変換キー・Space 2 連打の入口が、すべてここへ落ちる。
+   * 変換はこのときに 1 回だけ走る。
+   */
+  function breakSentence(source: BreakSource): boolean {
+    if (!engine) return false;
+    const kana = engine.getState().composingKana;
+    if (!canBreak(kana)) return false; // 空白しか無い / 空
+    engine.replaceDirectKana("", kana.length);
+    flow.settle(kana);
+    convertSettled(kana);
+    stats.breaks[source]++;
+    bump();
+    // ★**エンジンから取り上げたかなを flow 側にも反映する。** ここで pump を通さないと
+    // flow は古い打鍵中の文を持ったままになり、変換済みの文の後ろに**同じ内容のひらがなが
+    // 二重に出る**（次の打鍵で pump が走って初めて消える）。句点は pump の中で切り出している
+    // ので無事だったが、変換キー / 右 Alt は pump を通らない経路だった。
+    // setCurrent("", "") では不足 —— ローマ字の途中（pendingDisplay）が残ることがある
+    pump();
+    return true;
+  }
+
+  /** Enter。**一段ずつ剥がす**（§2.3 の表） */
+  function handleEnter(): void {
+    const result = flow.enter();
+    if (result === "typing" && engine) {
+      // 打鍵中のかなはエンジンが持っているので、こちらも捨てる
+      engine.reset();
     }
-
-    flow.setCurrent(st.composingKana, st.pendingDisplay);
-    scheduleConvert(st.composingKana);
+    if (result === "newline") inline.flush("\n");
+    stats.enters[result]++;
+    bump();
     render();
   }
+
+  // 貼り付けは平文に剥がす（`contenteditable="true"` を使うので自前で持つ。app.ts と同じ方針。
+  // `plaintext-only` にしないのは、未確定表示の span が剥がされる環境があるため）
+  host.addEventListener("paste", (e) => {
+    e.preventDefault();
+    const text = e.clipboardData?.getData("text/plain");
+    if (text) inline.flush(text);
+  });
 
   // ---- 打鍵 ----
 
   /**
-   * コンポーザが飲まないキー。**ホストの編集操作としてそのまま通す。**
-   * 案 B はホストのキャレットに追従するので、キャレットを動かせないと比較にならない
-   * （keyEventFromBrowser は矢印にも HID コードを返すため、素通しはこちらで決める）。
+   * コンポーザが飲まないキー。ホストの編集操作としてそのまま通す。
+   * マーク走査（§2.4）が入るまで矢印はここに居る —— 走査先が無いので飲む意味がない。
    */
   const PASS_THROUGH = new Set([
     "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
     "Home", "End", "PageUp", "PageDown", "Tab", "Escape", "Delete", "Insert",
   ]);
 
-  /** Enter は改行（§2.3）。確定操作ではないので、溜まっている分を先にホストへ出して順序を保つ */
-  function handleEnter(): void {
-    flow.drain();
-    engine?.reset();
-    lastConvertKana = null;
-    insertToHost("\n");
-    render();
-  }
+  // 「文を区切る」の既定キー（§2.6）。JIS は変換キー、US は右 Alt の単押し。
+  // **本来は役として配列側に持たせるもの**で、ここに直書きしているのは 4a'' の仮置きである
+  let altTap = false;
 
   window.addEventListener("keydown", (e) => {
-    if (e.metaKey || e.ctrlKey || e.altKey) return; // OS/ブラウザのショートカットは奪わない
-    if (document.activeElement !== host) return;    // パネルの select / checkbox は素通し
-    if (!engine) return;
+    if (document.activeElement !== host || !engine) return;
+
+    // 右 Alt の単押し判定: 押している間に他のキーが来たら取り消す。
+    // **Ctrl / Meta の判定より先に置く** —— AltGr が Ctrl+Alt を生む環境で
+    // 取り消しが漏れ、あとから無関係な右 Alt の keyup で区切ってしまうため
+    altTap = e.code === "AltRight" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+    if (e.metaKey || e.ctrlKey) return; // OS/ブラウザのショートカットは奪わない
+    if (e.code === "AltRight") return;
+    if (e.altKey) return;
+
+    if (e.code === "Convert") { // JIS の変換キー
+      e.preventDefault();
+      breakSentence("key"); // 描画は breakSentence の pump が行う
+      return;
+    }
     if (PASS_THROUGH.has(e.key) || /^F\d+$/.test(e.key)) return;
     if (e.key === "Enter") {
       e.preventDefault();
@@ -262,88 +233,92 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     }
     const ev = KeymapEngine.keyEventFromBrowser(e);
     if (!ev) return;
-    // Backspace は composingKana を持っているエンジンが消す。空なら飲まずにホストへ渡す
-    if (e.key === "Backspace" && !engine.isComposing) return;
+    if (e.key === "Backspace" && !engine.isComposing) {
+      // エンジンが消すものを持っていない。**未確定の文を抱えているなら飲む** ——
+      // ブラウザに任せると未確定表示の span の中身を直接削って、flow の状態と食い違う
+      // （次の描画で戻るので壊れはしないが、押しても戻らないように見える）。
+      // 確定済み未確定の文への Backspace が何をすべきかは §2 が決めていない。
+      // マーク走査（§2.4 = 4b）と一緒に決める
+      if (flow.holding) e.preventDefault();
+      return;
+    }
     e.preventDefault();
     stats.keys++;
     engine.processKey(ev);
     pump();
-    opts.onStats?.(stats);
+    bump();
   });
 
   window.addEventListener("keyup", (e) => {
     if (!engine || document.activeElement !== host) return;
+    if (e.code === "AltRight") {
+      if (altTap) { // 単押しだった = 「文を区切る」
+        altTap = false;
+        breakSentence("key");
+      }
+      return;
+    }
     const ev = KeymapEngine.keyEventFromBrowser(e);
     if (!ev) return;
     engine.processKeyUp(ev); // chord 配列の同時打鍵判定。逐次配列では何も起きない
     pump();
   });
 
-  // ---- 隠す操作（§2.6）: 既定はポインタホバーで半透明化 ----
-  //
-  // キーを一つも消費せず、閾値も要らず、「重なっているところを見に行く」という動作
-  // そのものが隠す操作になっている。ブロックは pointer-events: none なので :hover が
-  // 効かない（ホストをクリックできるほうを優先した）。座標で判定する
-
-  let dimmed = false;
-  let dimStart = 0;
-  window.addEventListener("mousemove", (e) => {
-    if (!hideOnHover) return;
-    const r = block.el.getBoundingClientRect();
-    const over = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-    setDimmed(over);
-  });
-  document.addEventListener("mouseleave", () => setDimmed(false));
-
-  function setDimmed(on: boolean): void {
-    if (on === dimmed) return;
-    dimmed = on;
-    block.setDimmed(on);
-    if (on) {
-      dimStart = performance.now();
-      stats.hides++;
-    } else {
-      stats.hideMs += performance.now() - dimStart;
+  /**
+   * エンジンの状態を読み、句点で切り出して描画する。
+   *
+   * **かなの持ち主はエンジン**（composingKana）のままにしてある。ホスト側へ引き取ると
+   * エンジンが常に idle 判定になり、chord 配列の合成中 routing が変わってしまうため。
+   */
+  function pump(): void {
+    if (!engine) return;
+    const confirmed = engine.takeConfirmedText();
+    if (confirmed) {
+      // 英数モードの確定はコンポーザを通さずホストへ。**inputMode だけでは足りない**:
+      // switchToEnglish は confirmComposition() を先に呼ぶので、切り替えた瞬間だけ
+      // 「英数モードなのに中身はかな」になる。ASCII かどうかも見て分ける
+      if (engine.getState().inputMode === "english" && /^[\x20-\x7e]*$/.test(confirmed)) {
+        inline.flush(confirmed);
+      } else {
+        // 何かの拍子に確定へ落ちたかなは打鍵中の文へ戻す
+        engine.appendDirectKana(confirmed);
+      }
     }
-    opts.onStats?.(stats);
-  }
 
-  // ---- 描画と配置 ----
+    // 句点は「区切りの合図」を兼ねている文字なので、変換キーと同じ口へ落とす（§2.3）。
+    // 貼り付け等で複数の句点が一度に来ることがあるので回す
+    for (;;) {
+      const st = engine.getState();
+      const p = sentenceBreakAt(st.composingKana);
+      if (p < 0) break;
+      const head = st.composingKana.slice(0, p + 1);
+      const rest = st.composingKana.slice(p + 1);
+      engine.replaceDirectKana(rest, st.composingKana.length);
+      if (canBreak(head)) {
+        flow.settle(head);
+        convertSettled(head);
+        stats.breaks.punct++;
+      }
+    }
+
+    const st = engine.getState();
+    flow.setCurrent(st.composingKana, st.pendingDisplay);
+    render();
+  }
 
   function render(): void {
-    block.render(flow.view());
-    reposition();
+    inline.render(flow.view());
   }
-
-  /** 中身を作り直さずに座標だけ合わせる（スクロール・リサイズ・キャレット移動） */
-  function reposition(): void {
-    applyPlacement(block.el, placement, caretSource);
-  }
-
-  window.addEventListener("resize", reposition);
-  window.addEventListener("scroll", reposition, true);
-  document.addEventListener("selectionchange", () => {
-    if (placement === "caret") reposition();
-  });
 
   render();
 
   return {
-    setPlacement(mode: Placement): void {
-      placement = mode;
-      block.el.classList.toggle("cmp-caret-mode", mode === "caret");
-      render();
-    },
-    setHideOnHover(on: boolean): void {
-      hideOnHover = on;
-      if (!on) setDimmed(false);
-    },
     stats,
     resetStats(): void {
       stats.keys = 0;
-      stats.hides = 0;
-      stats.hideMs = 0;
-      opts.onStats?.(stats);
+      stats.breaks = { punct: 0, key: 0, "double-space": 0 };
+      stats.enters = { settled: 0, typing: 0, newline: 0 };
+      bump();
     },
   };
 }

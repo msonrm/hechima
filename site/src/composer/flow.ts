@@ -1,141 +1,159 @@
 // 経路コンポーザ: テキストの流れ（docs/composer.md §2.2 三層モデル / §2.3 テキストの流れ）。
 //
-// DOM を持たない状態機械。描画は block.ts、配置は placement.ts、配線は index.ts。
-// ここが持つのは「かなをどこで切り、どこまでを矩形へ送るか」だけ。
+// DOM を持たない状態機械。描画は inline.ts、配線は index.ts。
 //
-// 現在の文のかなは**このクラスではなく配列エンジン（InputEngine.composingKana）が持つ**。
-// エンジンに持たせたままにすると Backspace とキー routing（chord 配列の合成中判定）が
-// そのまま効くので、index.ts が毎打鍵 setCurrent() で写しているだけの関係になっている。
+// 三層が分けているのは**場所ではなく状態**である（§2.2）。ここが持つのは
+//
+//   settled … 変換済み未確定の文（最大 2）。書き換えない。マークが付く層
+//   kana    … 打鍵中の文。ひらがなのまま。**変換しない**
+//
+// の二つだけで、確定した文はホストのものなので持たない。
+// 打鍵中のかなの実体は配列エンジンの composingKana で、ここにあるのはその写しである
+// （エンジンに持たせたままにすると Backspace とキー routing がそのまま効く）。
 
-/** 1行欄の幅 = 40 かな（§2.1。矩形の幅 40 字と揃える） */
-export const TAIL_KANA = 40;
-
-/** 保持する文の数（§2.3）。**表示の窓（6 行）とは別物**（§2.3「バッファと窓は別物」） */
+/** アプリが持つ文の数 = 打鍵中 1 ＋ 変換済み未確定 2（§2.3） */
 export const BUFFER_SENTENCES = 3;
 
-/** 句点。「次の文の1文字目」がトリガーなので、ここに挙げた字の**次に1字来たとき**に流れる */
+/** 句点。**これは合図を兼ねている文字であって、トリガーの本体ではない**（§2.3） */
 const SENTENCE_END = /[。！？]/;
+
+/** 空白（半角・全角）。Space 2 連打の判定と「空白しか無いとき」の判定に使う */
+const SPACE_ONLY = /^[\s　]*$/;
 
 export interface Segment {
   key: string;
   value: string;
 }
 
-/** 矩形に上詰めで並べる 1 文 */
-export interface Line {
+export interface SettledView {
   text: string;
-  /** true = 確定した文（書き換えない・マークの対象）/ false = 現在の文（都度書き換わる） */
-  settled: boolean;
-}
-
-export interface FlowView {
-  lines: Line[];
-  /** 1行欄（右端キャレット固定）。矩形へまだ流れていないかな + 合成中のローマ字 */
-  tail: string;
-}
-
-interface Settled {
-  /** 表記。変換が間に合わなかったときだけ一時的にかなが入り、届いた時点で 1 度だけ埋まる */
-  text: string;
-  kana: string;
+  /** false = 変換がまだ届いておらず、かなを見せている */
   filled: boolean;
 }
 
-/** かな列の中で「句点の次に 1 字以上ある」最初の句点の位置。無ければ -1 */
+export interface FlowView {
+  /** 変換済み未確定の文（古い順） */
+  settled: SettledView[];
+  /** 打鍵中の文（ひらがな ＋ ローマ字の途中） */
+  typing: string;
+}
+
+/** Enter が実際に行った段（§2.3 の表） */
+export type EnterResult = "settled" | "typing" | "newline";
+
+interface Settled {
+  kana: string;
+  text: string;
+  filled: boolean;
+}
+
+/**
+ * かなの中で最初の句点の位置。無ければ -1。
+ *
+ * 旧案（矩形）は「句点の**次の 1 文字**」がトリガーだったが、インライン模型では
+ * **句点そのもの**で切る（§2.3。判断基準は同じで、注意の在りかが違うので結論が反転した）。
+ */
 export function sentenceBreakAt(kana: string): number {
-  for (let i = 0; i < kana.length - 1; i++) {
+  for (let i = 0; i < kana.length; i++) {
     if (SENTENCE_END.test(kana[i]!)) return i;
   }
   return -1;
+}
+
+/** 区切る対象になるか（空白しか無いときは区切らない。§2.6 の Markdown ハード改行） */
+export function canBreak(kana: string): boolean {
+  return !SPACE_ONLY.test(kana);
+}
+
+/** 末尾が空白か（Space 2 連打の判定。**時間ではなく位置で見る**。§2.6） */
+export function endsWithSpace(kana: string): boolean {
+  return /[\s　]$/.test(kana);
 }
 
 export class Flow {
   private settled: Settled[] = [];
   private kana = "";
   private inflight = "";
-  private segments: Segment[] = [];
-  /** segments がどのかなに対する結果か（古い変換結果を捨てるための照合） */
-  private segmentsFor = "";
-  /** 確定した文の表記を凍結するために直近の変換結果を控えておく */
+  /** 区切った文の変換結果を凍結するための控え */
   private cache = new Map<string, Segment[]>();
 
-  /** 4 文目に入って押し出された文をホストへ送る（§2.3 FIFO） */
+  /** FIFO で押し出された文をホストへ渡す（§2.3） */
   constructor(private readonly onFlush: (text: string) => void) {}
 
-  /** 現在の文（エンジンが持つかな + 合成中のローマ字）を写す */
+  /** 打鍵中の文（エンジンが持つかな ＋ 合成中のローマ字）を写す */
   setCurrent(kana: string, inflight: string): void {
     this.kana = kana;
     this.inflight = inflight;
   }
 
-  /** 句点までを確定した文として矩形へ送る（§2.3。呼ぶ前にエンジン側のかなを詰め直すこと） */
+  /**
+   * 「文を区切る」（§2.3）。句点でも変換キーでも Space 2 連打でも、入口は違えどここへ落ちる。
+   * 呼ぶ前にエンジン側のかなを詰め直しておくこと。
+   */
   settle(kana: string): void {
     const segs = this.cache.get(kana);
-    this.settled.push(
-      segs
-        ? { text: join(segs), kana, filled: true }
-        : { text: kana, kana, filled: false },
-    );
-    // 現在の文を入れて BUFFER_SENTENCES を超えた分だけ押し出す
-    while (this.settled.length + 1 > BUFFER_SENTENCES) {
-      this.onFlush(this.settled.shift()!.text);
-    }
-    this.segments = [];
-    this.segmentsFor = "";
+    this.settled.push(segs
+      ? { kana, text: join(segs), filled: true }
+      : { kana, text: kana, filled: false });
+    this.drainFifo();
   }
 
-  /** 変換結果が届いた。現在の文なら差し替え、確定した文なら 1 度だけ埋める */
+  /** 変換結果が届いた。確定した文を 1 度だけ埋める（**二度目は書き換えない**。§2.2） */
   applyConversion(kana: string, segments: Segment[]): void {
     this.cache.set(kana, segments);
-    // 控えは「直前の句点までのかな」が拾えれば足りるので、増えすぎたら古い順に捨てる
     if (this.cache.size > 16) this.cache.delete(this.cache.keys().next().value as string);
-    if (kana === this.kana) {
-      this.segments = segments;
-      this.segmentsFor = kana;
-    }
     for (const s of this.settled) {
       if (!s.filled && s.kana === kana) {
         s.text = join(segments);
         s.filled = true;
       }
     }
+    this.drainFifo();
   }
 
-  /** 残っているものを全部ホストへ出す（ページを離れるとき等） */
-  drain(): void {
-    for (const s of this.settled) this.onFlush(s.text);
-    this.settled = [];
-    const segs = this.segmentsFor === this.kana ? this.segments : [];
-    const text = segs.length ? join(segs) : this.kana;
-    if (text) this.onFlush(text);
-    this.kana = "";
-    this.inflight = "";
-    this.segments = [];
-    this.segmentsFor = "";
+  /**
+   * Enter（§2.3 の表）。**上から順に一段だけ**進める。
+   * 戻り値 "typing" のとき、呼び出し側はエンジンのかなを捨てること。
+   */
+  enter(): EnterResult {
+    if (this.settled.length > 0) {
+      // 変換済み未確定の文を、その時の状態のままホストへ。**打鍵中の文は何も変わらない**
+      for (const s of this.settled) this.onFlush(s.text);
+      this.settled = [];
+      return "settled";
+    }
+    if (this.kana || this.inflight) {
+      // 「ここで Enter を押した」= 本人の中では確定していた = ひらがなで書きたかった
+      this.onFlush(this.kana + this.inflight);
+      this.kana = "";
+      this.inflight = "";
+      return "typing";
+    }
+    return "newline";
   }
 
   view(): FlowView {
-    const lines: Line[] = this.settled.map((s) => ({ text: s.text, settled: true }));
-    const segs = this.segmentsFor === this.kana ? this.segments : [];
+    return {
+      settled: this.settled.map((s) => ({ text: s.text, filled: s.filled })),
+      typing: this.kana + this.inflight,
+    };
+  }
 
-    // 1行欄に残すのは末尾 40 かな。矩形へ送るのは「左端に到達した」= 窓から出た分だけ（§2.3）。
-    //
-    // ★切れ目は文節境界に取る（半分だけ変換した表示は作れないため）。つまり
-    // **先頭文節を出すと 1行欄が 40 かなを割る間は、まだ出さない。** その間の数かな
-    // （最大で文節長 - 1）は 1行欄の左側でクリップされて一時的に見えないが、文節が出きった
-    // 時点で矩形に現れる。文節を「またがったまま」出すと矩形と1行欄に同じかなが二重に出る。
-    // 境界は scripts/check-composer-flow.mjs が固定している。
-    let cut = 0;
-    let acc = 0;
-    for (const s of segs) {
-      const next = acc + s.key.length;
-      if (this.kana.length - next + this.inflight.length < TAIL_KANA) break;
-      acc = next;
-      cut++;
+  /** アプリが何か抱えているか（キーを飲むかどうかの判定に使う） */
+  get holding(): boolean {
+    return this.settled.length > 0 || this.kana !== "" || this.inflight !== "";
+  }
+
+  /**
+   * 打鍵中の文を入れて BUFFER_SENTENCES を超えた分を押し出す（§2.3 の FIFO）。
+   *
+   * **変換が届いていない文は押し出さない。** かなのままホストへ出てしまうため。
+   * 変換は 1〜5ms なので 2 文ぶんの猶予がある実際の入力ではまず待たない。
+   */
+  private drainFifo(): void {
+    while (this.settled.length + 1 > BUFFER_SENTENCES && this.settled[0]!.filled) {
+      this.onFlush(this.settled.shift()!.text);
     }
-    if (cut > 0) lines.push({ text: join(segs.slice(0, cut)), settled: false });
-
-    return { lines, tail: this.kana.slice(acc) + this.inflight };
   }
 }
 
