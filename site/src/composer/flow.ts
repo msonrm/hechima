@@ -31,11 +31,19 @@ export interface SettledView {
   filled: boolean;
 }
 
+/** かなの中の区間（コードポイント単位、end は含まない。配列エンジンの KanaRange と同じ形） */
+export interface KanaRange {
+  start: number;
+  end: number;
+}
+
 export interface FlowView {
   /** 変換済み未確定の文（古い順） */
   settled: SettledView[];
   /** 打鍵中の文（ひらがな ＋ ローマ字の途中） */
   typing: string;
+  /** 打鍵中の文に付いた誤打マーク（§2.4(a)。句点で踏みとどまったときだけ） */
+  typingMarks: KanaRange[];
 }
 
 /** Enter が実際に行った段（§2.3 の表） */
@@ -70,10 +78,53 @@ export function endsWithSpace(kana: string): boolean {
   return /[\s　]$/.test(kana);
 }
 
+/** 末尾が句点か */
+function endsWithSentenceEnd(kana: string): boolean {
+  return kana !== "" && SENTENCE_END.test(kana[kana.length - 1]!);
+}
+
+/** 文（head）の中に掛かっている誤打の区間だけを残す。ranges はかな全体に対する位置 */
+export function residueWithin(ranges: KanaRange[], head: string): KanaRange[] {
+  const n = [...head].length;
+  return ranges
+    .filter((r) => r.start < n)
+    .map((r) => ({ start: r.start, end: Math.min(r.end, n) }));
+}
+
+/**
+ * 句点で踏みとどまった文（§2.4(a)）に、**次の打鍵**が何をしたか。
+ * タイマーは使わず、**止めたときのかなと今のかなの関係だけ**で決める（§2.6 の方針）。
+ *
+ *   keep  … 何も足されていない。まだ止まっている
+ *   clear … 止めた文そのものが削られた（BS で句点を消した等）。止めるのをやめ、改めて判定する
+ *   pass  … 後ろに何か足された。**止めた文を誤打ごと流す**（settle を変換へ、rest は新しい文）
+ *           again = 足されたのが句点 = 句点 2 回（誤打ではなかった・直さないの意思）
+ */
+export type StopOutcome =
+  | { kind: "keep" }
+  | { kind: "clear" }
+  | { kind: "pass"; settle: string; rest: string; again: boolean };
+
+export function afterStop(stopped: string, kana: string): StopOutcome {
+  if (!kana.startsWith(stopped)) return { kind: "clear" };
+  if (kana.length === stopped.length) return { kind: "keep" };
+  let settle = stopped;
+  let rest = kana.slice(stopped.length);
+  const again = SENTENCE_END.test(rest[0]!);
+  if (again) {
+    // 句点で止めた文なら 2 つ目の句点は入れない（句点は 1 つしか入らない）。
+    // 「文を区切る」役で止めた文（句点なし）なら、その句点が文の終わりになる
+    if (!endsWithSentenceEnd(stopped)) settle += rest[0]!;
+    rest = rest.slice(1);
+  }
+  return { kind: "pass", settle, rest, again };
+}
+
 export class Flow {
   private settled: Settled[] = [];
   private kana = "";
   private inflight = "";
+  private marks: KanaRange[] = [];
   /** 区切った文の変換結果を凍結するための控え */
   private cache = new Map<string, Segment[]>();
 
@@ -81,9 +132,10 @@ export class Flow {
   constructor(private readonly onFlush: (text: string) => void) {}
 
   /** 打鍵中の文（エンジンが持つかな ＋ 合成中のローマ字）を写す */
-  setCurrent(kana: string, inflight: string): void {
+  setCurrent(kana: string, inflight: string, marks: KanaRange[] = []): void {
     this.kana = kana;
     this.inflight = inflight;
+    this.marks = marks;
   }
 
   /**
@@ -127,6 +179,7 @@ export class Flow {
       this.onFlush(this.kana + this.inflight);
       this.kana = "";
       this.inflight = "";
+      this.marks = [];
       return "typing";
     }
     return "newline";
@@ -136,6 +189,7 @@ export class Flow {
     return {
       settled: this.settled.map((s) => ({ text: s.text, filled: s.filled })),
       typing: this.kana + this.inflight,
+      typingMarks: this.marks,
     };
   }
 

@@ -1,7 +1,9 @@
 // 経路コンポーザ（インライン版）の配線（docs/composer.md §2）。
 //
 // この版で実装したのは **§2.1 全体の形 / §2.2 三層モデル / §2.3 テキストの流れ /
-// §2.6 キーの割り当て**（§7 の 4a''）。マーク（§2.4）と候補の提示（§2.5）はまだ無い。
+// §2.6 キーの割り当て**（§7 の 4a''）と、**§2.4(a) 句点で踏みとどまる**（4b-1）。
+// ← で誤打へ吸い付く走査はかなカーソルの 2 段目待ち。変換の不確実性マーク（§2.4(b)）と
+// 候補の提示（§2.5）はまだ無い。
 //
 // 三層モデル（§2.2）は「場所」ではなく「状態」なので、この版が持つ層は見た目で分かれる:
 //   打鍵中の文   … 破線下線。ひらがな。**変換しない**（打鍵フィードバックのセーフガード）
@@ -11,7 +13,10 @@
 // キーは四つの役だけ（§2.6）。ここで実装しているのは三つ（マーク走査は 4b）:
 //   空白 = Space / 文を区切る = 変換キー・Space 2 連打 / 確定 = Enter
 
-import { Flow, canBreak, endsWithSpace, sentenceBreakAt, type Segment } from "./flow";
+import {
+  Flow, afterStop, canBreak, endsWithSpace, residueWithin, sentenceBreakAt,
+  type KanaRange, type Segment,
+} from "./flow";
 import { Inline } from "./inline";
 
 declare const KeymapEngine: {
@@ -30,6 +35,10 @@ interface EngineLike extends Hechima.InputEngineLike {
   readonly isComposing: boolean;
   appendDirectKana(kana: string): unknown;
   replaceDirectKana(kana: string, replaceCount: number): unknown;
+  insertConfirmedText(text: string): unknown;
+  takeConfirmedText(): string;
+  /** かなにならずに残った打鍵の区間（keymap-engine v2.6.0+。§2.4(a) の強いマーク） */
+  residueRanges(): KanaRange[];
 }
 
 /** 「文を区切る」がどの入口から来たか（§2.6。どちらの道が使われるかを見る） */
@@ -41,6 +50,11 @@ export interface ComposerStats {
   breaks: Record<BreakSource, number>;
   /** Enter が進めた段ごとの回数（§2.3 の表） */
   enters: { settled: number; typing: number; newline: number };
+  /**
+   * 句点で踏みとどまった回数と、その後どうなったか（§2.4(a)）。
+   * again = 句点 2 回で変換 / through = 次の文を打ち進めて誤打ごと流れた / fixed = BS 等で直しに入った
+   */
+  typo: { stops: number; again: number; through: number; fixed: number };
 }
 
 export interface ComposerOptions {
@@ -66,6 +80,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     keys: 0,
     breaks: { punct: 0, key: 0, "double-space": 0 },
     enters: { settled: 0, typing: 0, newline: 0 },
+    typo: { stops: 0, again: 0, through: 0, fixed: 0 },
   };
   const bump = (): void => opts.onStats?.(stats);
 
@@ -157,8 +172,20 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
    */
   function breakSentence(source: BreakSource): boolean {
     if (!engine) return false;
+    flushPending();
+    // 止まっている最中なら、出し切った打鍵が「後ろに足された」かを先に決着させる（afterStop）
+    if (stopped !== null) pump();
     const kana = engine.getState().composingKana;
     if (!canBreak(kana)) return false; // 空白しか無い / 空
+    if (stopped === kana) {
+      // 止めた文をもう一度区切った = 句点 2 回と同じ（誤打ではなかった・直さないの意思）
+      stopped = null;
+      stats.typo.again++;
+    } else if (residueWithin(engine.residueRanges(), kana).length > 0) {
+      stop(kana, source);
+      pump();
+      return true;
+    }
     engine.replaceDirectKana("", kana.length);
     flow.settle(kana);
     convertSettled(kana);
@@ -173,12 +200,52 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     return true;
   }
 
+  /**
+   * 待っているローマ字（末尾の n や、誤打の k）を出し切る。
+   *
+   * 句読点の経路は keymap-engine v2.6.0 で出し切るようになったが、「文を区切る」役
+   * （変換キー・右 Alt・Space 2 連打）は文字を伴わないのでエンジンに届かない。
+   * 出し切らないと待ちの打鍵が区切りから漏れ、次の文の頭へ持ち越される。
+   *
+   * エンジンに「出し切るだけ」の口は無いので、確定（= 出し切って確定テキストへ落とす）
+   * させてから取り戻す。確定テキストは pump が毎回引き取っているので、ここで取れるのは
+   * いま出し切った分だけである。
+   */
+  function flushPending(): void {
+    if (!engine || engine.getState().pendingDisplay === "") return;
+    engine.insertConfirmedText("");
+    const back = engine.takeConfirmedText();
+    if (back) engine.appendDirectKana(back);
+  }
+
+  // ---- 句点で踏みとどまる（§2.4(a)） ----
+
+  /**
+   * 踏みとどまっている文（句点まで含むかな）。null = 止まっていない。
+   * 止まっている間、文はエンジンの打鍵中のかなに残り、変換されない。**キャレットは動かさない**
+   * （速い書き手の先打ちが文の途中に刺さるため）。次の打鍵の扱いは flow.ts の afterStop
+   */
+  let stopped: string | null = null;
+  /** 止めた区切りの入口。流れたときにその入口の区切りとして数える */
+  let stoppedBy: BreakSource = "punct";
+
+  function stop(kana: string, source: BreakSource): void {
+    stopped = kana;
+    stoppedBy = source;
+    stats.typo.stops++;
+    bump();
+  }
+
   /** Enter。**一段ずつ剥がす**（§2.3 の表） */
   function handleEnter(): void {
     const result = flow.enter();
     if (result === "typing" && engine) {
       // 打鍵中のかなはエンジンが持っているので、こちらも捨てる
       engine.reset();
+      if (stopped !== null) {
+        stopped = null; // 止めた文をひらがなのまま流した（Enter の二段目）
+        stats.typo.through++;
+      }
     }
     if (result === "newline") inline.flush("\n");
     stats.enters[result]++;
@@ -285,14 +352,36 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       }
     }
 
+    // 踏みとどまっている文に、次の打鍵が何をしたか（§2.4(a) の表）
+    if (stopped !== null) {
+      const st = engine.getState();
+      const o = afterStop(stopped, st.composingKana);
+      if (o.kind === "clear") {
+        stopped = null; // BS で句点を消した / 直した。この後の句点で改めて判定する
+        stats.typo.fixed++;
+      } else if (o.kind === "pass") {
+        stopped = null;
+        engine.replaceDirectKana(o.rest, st.composingKana.length);
+        flow.settle(o.settle);
+        convertSettled(o.settle);
+        stats.typo[o.again ? "again" : "through"]++;
+        stats.breaks[stoppedBy]++;
+      }
+    }
+
     // 句点は「区切りの合図」を兼ねている文字なので、変換キーと同じ口へ落とす（§2.3）。
     // 貼り付け等で複数の句点が一度に来ることがあるので回す
-    for (;;) {
+    while (stopped === null) {
       const st = engine.getState();
       const p = sentenceBreakAt(st.composingKana);
       if (p < 0) break;
       const head = st.composingKana.slice(0, p + 1);
       const rest = st.composingKana.slice(p + 1);
+      if (canBreak(head) && residueWithin(engine.residueRanges(), head).length > 0) {
+        // 誤打がある = 変換せずに止める。文はエンジンに残したまま
+        stop(head, "punct");
+        break;
+      }
       engine.replaceDirectKana(rest, st.composingKana.length);
       if (canBreak(head)) {
         flow.settle(head);
@@ -302,7 +391,9 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     }
 
     const st = engine.getState();
-    flow.setCurrent(st.composingKana, st.pendingDisplay);
+    // マークは止まっているときだけ出す。打鍵中は英字がそのまま見えているので重ねない
+    const marks = stopped !== null ? residueWithin(engine.residueRanges(), stopped) : [];
+    flow.setCurrent(st.composingKana, st.pendingDisplay, marks);
     render();
   }
 
@@ -318,6 +409,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       stats.keys = 0;
       stats.breaks = { punct: 0, key: 0, "double-space": 0 };
       stats.enters = { settled: 0, typing: 0, newline: 0 };
+      stats.typo = { stops: 0, again: 0, through: 0, fixed: 0 };
       bump();
     },
   };

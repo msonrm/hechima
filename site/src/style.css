@@ -848,6 +848,14 @@ table.km-roles td.note { font-size: 0.8rem; }
   text-underline-offset: 4px;
 }
 
+/* 誤打マーク（§2.4(a)）— 句点で踏みとどまったときだけ出る。**色は付けない**。
+   人を止める赤い波線ではなく、打鍵中の破線をその区間だけ波線に変える程度にとどめる */
+.cmp-typo {
+  text-decoration: underline;
+  text-decoration-style: wavy;
+  text-underline-offset: 4px;
+}
+
 /* 変換が届くまでの数ミリ秒だけ、かなのまま出ている状態 */
 .cmp-pending { color: var(--muted); }
 

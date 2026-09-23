@@ -3,7 +3,8 @@
 // 打っているものが**本文の中に直接**出る。打鍵中はひらがな、句点でその文だけが変換され、
 // 4 文目を打ち始めると最も古い文が確定して通常の本文に戻る。
 //
-// この版にマーク（§2.4）と候補の提示（§2.5）はまだ無い。
+// 句点の時点で誤打（かなにならなかった打鍵）があれば、変換せずに止まる（§2.4(a)）。
+// 変換の不確実性マーク（§2.4(b)）と候補の提示（§2.5）はまだ無い。
 // 仕様と測定: hechima/docs/composer.md
 import { mountComposer, type ComposerStats } from "../composer/index";
 
@@ -39,7 +40,9 @@ function renderStats(s: ComposerStats): void {
   const e = s.enters;
   statsEl.textContent =
     `打鍵 ${s.keys}／区切り: 句点 ${b.punct}・変換キー ${b.key}・Space2連打 ${b["double-space"]}`
-    + `／Enter: 未確定を確定 ${e.settled}・ひらがなで確定 ${e.typing}・改行 ${e.newline}`;
+    + `／Enter: 未確定を確定 ${e.settled}・ひらがなで確定 ${e.typing}・改行 ${e.newline}`
+    // 句点で踏みとどまった後どうなったか（§2.4(a)）。「流れた」が多ければ、止めても見られていない
+    + `／誤打で止めた ${s.typo.stops}（句点2回 ${s.typo.again}・流れた ${s.typo.through}・直した ${s.typo.fixed}）`;
 }
 renderStats(composer.stats);
 

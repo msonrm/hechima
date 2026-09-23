@@ -4,6 +4,7 @@
 //   1. **句点そのもの**が切り出しのトリガー（旧案の「次の 1 文字」ではない）
 //   2. 未確定は**最大 2 文**（打鍵中 1 を入れて 3）。**変換が届いていない文は押し出さない**
 //   3. Enter は**一段だけ**進む（§2.3 の表）
+//   4. 句点で踏みとどまった後の**次の打鍵**の扱い（§2.4(a) の表）
 //
 //   node scripts/check-composer-flow.mjs
 import { readFileSync } from "node:fs";
@@ -15,7 +16,7 @@ const srcPath = fileURLToPath(new URL("../src/composer/flow.ts", import.meta.url
 const js = ts.transpileModule(readFileSync(srcPath, "utf8"), {
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext },
 }).outputText;
-const { Flow, sentenceBreakAt, canBreak, endsWithSpace } =
+const { Flow, sentenceBreakAt, canBreak, endsWithSpace, afterStop, residueWithin } =
   await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 
 let fail = 0;
@@ -49,7 +50,7 @@ eq("末尾が空白でない", endsWithSpace("けんさくご"), false);
 {
   const f = new Flow(() => {});
   f.setCurrent("きょうはあめだ", "k");
-  eq("打鍵中はひらがなのまま", f.view(), { settled: [], typing: "きょうはあめだk" });
+  eq("打鍵中はひらがなのまま", f.view(), { settled: [], typing: "きょうはあめだk", typingMarks: [] });
 }
 
 // --- 4. 未確定は最大 2 文。3 文目を区切った時点で最古が押し出される（§2.1 / §2.3） ---
@@ -102,11 +103,11 @@ eq("末尾が空白でない", endsWithSpace("けんさくご"), false);
 
   eq("一段目: 未確定だけを確定", f.enter(), "settled");
   eq("一段目で出るのは未確定の文だけ", flushed, ["一。"]);
-  eq("**打鍵中の文は何も変わらない**", f.view(), { settled: [], typing: "にほんめ" });
+  eq("**打鍵中の文は何も変わらない**", f.view(), { settled: [], typing: "にほんめ", typingMarks: [] });
 
   eq("二段目: ひらがなのまま確定", f.enter(), "typing");
   eq("二段目で打鍵中が出る", flushed, ["一。", "にほんめ"]);
-  eq("二段目のあとは空", f.view(), { settled: [], typing: "" });
+  eq("二段目のあとは空", f.view(), { settled: [], typing: "", typingMarks: [] });
 
   eq("三段目: 改行", f.enter(), "newline");
   eq("三段目はホストへ何も渡さない（改行は呼び出し側）", flushed, ["一。", "にほんめ"]);
@@ -121,6 +122,32 @@ eq("末尾が空白でない", endsWithSpace("けんさくご"), false);
   f.setCurrent("", "");
   f.settle("い。");
   eq("未確定があれば抱えている", f.holding, true);
+}
+
+// --- 9. 句点で踏みとどまる（§2.4(a)）。次の打鍵で扱いを分ける。タイマーではなく位置で見る ---
+eq("何も足されていない = 止まったまま", afterStop("さk。", "さk。"), { kind: "keep" });
+eq("BS で句点を消した = 止めるのをやめて改めて判定", afterStop("さk。", "さk"), { kind: "clear" });
+eq("直した（読みが変わった）= 改めて判定", afterStop("さk。", "さ"), { kind: "clear" });
+eq("句点 2 回 = 誤打ごと変換。句点は 1 つだけ", afterStop("さk。", "さk。。"),
+  { kind: "pass", settle: "さk。", rest: "", again: true });
+eq("文字キー = 誤打ごと流し、打鍵は新しい文へ", afterStop("さk。", "さk。あ"),
+  { kind: "pass", settle: "さk。", rest: "あ", again: false });
+eq("「文を区切る」で止めた文に句点 = その句点が文の終わり", afterStop("さk", "さk。"),
+  { kind: "pass", settle: "さk。", rest: "", again: true });
+eq("「文を区切る」で止めた文に文字 = 誤打ごと流す", afterStop("さk", "さkあ"),
+  { kind: "pass", settle: "さk", rest: "あ", again: false });
+
+eq("文の中の誤打だけ残す", residueWithin([{ start: 1, end: 2 }, { start: 5, end: 6 }], "さk。"),
+  [{ start: 1, end: 2 }]);
+eq("文の外にはみ出した分は切る", residueWithin([{ start: 2, end: 5 }], "さかk"), [{ start: 2, end: 3 }]);
+eq("誤打が無ければ空", residueWithin([], "さか。"), []);
+
+{
+  const f = new Flow(() => {});
+  f.setCurrent("さk。", "", [{ start: 1, end: 2 }]);
+  eq("マークは打鍵中の文に乗る", f.view().typingMarks, [{ start: 1, end: 2 }]);
+  f.enter();
+  eq("Enter で流したらマークも消える", f.view().typingMarks, []);
 }
 
 if (fail) {
