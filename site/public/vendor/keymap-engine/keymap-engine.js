@@ -1932,7 +1932,7 @@
 	}
 	//#endregion
 	//#region src/engine/version.ts
-	const ENGINE_VERSION = "2.6.0";
+	const ENGINE_VERSION = "2.7.0";
 	//#endregion
 	//#region src/engine/key-router.ts
 	/** Route a KeyEvent to a KeyAction based on the expanded keymap */
@@ -2751,6 +2751,27 @@
 				i++;
 			}
 			return ranges;
+		}
+		/**
+		* かなカーソルを動かす（v2.7.0）。`pos` は `composingKana` のコードポイント位置で、
+		* 範囲外は端に丸める。以後の打鍵・BS・後置変調・直接追加はこの位置で効く。
+		*
+		* 動かす前に、**進行中の入力をいまの位置で閉じる**:
+		* - 逐次バッファの待ち（ローマ字の途中）は出し切る。かなにならない打鍵は英字のまま残る
+		*   （標準 IME でも途中のローマ字は移動で確定する）。残った英字は `residueRanges()` に載る
+		* - 同時打鍵の窓は閉じる。先出しした文字はそのまま残り、以後の打鍵で差し替えない
+		*   （差し替えはカーソルの手前を消すので、動いた後に来ると別の文字を消してしまう）。
+		*   窓の中で保留していた単打の特殊アクションは捨てる
+		*
+		* 合成していないとき（かなが空）は何もしない。
+		*/
+		setComposingCursor(pos) {
+			const pending = this.buffer.flush();
+			if (pending) this.insertAtCursor(pending);
+			this.chordBuffer?.reset();
+			const len = [...this.composingKana].length;
+			this.cursor = Math.max(0, Math.min(len, Math.trunc(pos)));
+			return this.getState();
 		}
 		/** ゲームパッド等から直接かなを composingKana に追加（カーソル位置に入る） */
 		appendDirectKana(kana) {
