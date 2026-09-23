@@ -63,7 +63,22 @@ export class Inline {
     if (view.typing) {
       const span = document.createElement("span");
       span.className = "cmp-typing";
-      span.textContent = view.typing;
+      if (view.typingMarks.length === 0) {
+        span.textContent = view.typing;
+      } else {
+        // 誤打マーク（§2.4(a)）。**色は付けず、その区間だけ下線を波線にする**（目立たせない）
+        const chars = [...view.typing];
+        let at = 0;
+        for (const m of view.typingMarks) {
+          if (m.start > at) span.append(chars.slice(at, m.start).join(""));
+          const mark = document.createElement("span");
+          mark.className = "cmp-typo";
+          mark.textContent = chars.slice(m.start, m.end).join("");
+          span.append(mark);
+          at = m.end;
+        }
+        if (at < chars.length) span.append(chars.slice(at).join(""));
+      }
       parts.push(span);
     }
     el.replaceChildren(...parts);
