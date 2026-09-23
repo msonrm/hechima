@@ -1,9 +1,9 @@
 // 経路コンポーザ（インライン版）の配線（docs/composer.md §2）。
 //
 // この版で実装したのは **§2.1 全体の形 / §2.2 三層モデル / §2.3 テキストの流れ /
-// §2.6 キーの割り当て**（§7 の 4a''）と、**§2.4(a) 句点で踏みとどまる**（4b-1）。
-// ← で誤打へ吸い付く走査はかなカーソルの 2 段目待ち。変換の不確実性マーク（§2.4(b)）と
-// 候補の提示（§2.5）はまだ無い。
+// §2.6 キーの割り当て**（§7 の 4a''）と、**§2.4(a) 句点で踏みとどまる**（4b-1）、
+// **かなカーソル**（4b-0。← / → でマークの右端へ吸い付き、途中を直せる）。
+// 変換の不確実性マーク（§2.4(b)）と候補の提示（§2.5）はまだ無い。
 //
 // 三層モデル（§2.2）は「場所」ではなく「状態」なので、この版が持つ層は見た目で分かれる:
 //   打鍵中の文   … 破線下線。ひらがな。**変換しない**（打鍵フィードバックのセーフガード）
@@ -14,7 +14,7 @@
 //   空白 = Space / 文を区切る = 変換キー・Space 2 連打 / 確定 = Enter
 
 import {
-  Flow, afterStop, canBreak, endsWithSpace, residueWithin, sentenceBreakAt,
+  Flow, afterStop, canBreak, endsWithSpace, residueWithin, scanTarget, sentenceBreakAt,
   type KanaRange, type Segment,
 } from "./flow";
 import { Inline } from "./inline";
@@ -39,7 +39,12 @@ interface EngineLike extends Hechima.InputEngineLike {
   takeConfirmedText(): string;
   /** かなにならずに残った打鍵の区間（keymap-engine v2.6.0+。§2.4(a) の強いマーク） */
   residueRanges(): KanaRange[];
+  /** かなカーソルを動かす（keymap-engine v2.7.0+）。ローマ字の途中を出し切り、同時打鍵の窓を閉じる */
+  setComposingCursor(pos: number): unknown;
 }
+
+/** 句点（§2.3 の SENTENCE_END と同じ集合） */
+const SENTENCE_END = /[。！？]/;
 
 /** 「文を区切る」がどの入口から来たか（§2.6。どちらの道が使われるかを見る） */
 export type BreakSource = "punct" | "key" | "double-space";
@@ -142,6 +147,11 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
         handleEnter();
         return true;
       }
+      // 配列が出す ← / →（薙刀式の T / Y 等）も物理の矢印と同じ走査にする
+      if ((action.type === "moveLeft" || action.type === "moveRight") && hasTyping()) {
+        moveCaret(action.type === "moveLeft" ? -1 : 1);
+        return true;
+      }
       return false;
     };
     engine = e;
@@ -158,7 +168,8 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
   function handleSpace(): void {
     if (!engine) return;
     const kana = engine.getState().composingKana;
-    if (endsWithSpace(kana) && canBreak(kana)) {
+    // 途中を直している間の Space はただの空白（2 連打の判定は文末でだけ効く）
+    if (!editing() && endsWithSpace(kana) && canBreak(kana)) {
       engine.replaceDirectKana("", 1); // 1 打目の空白を消す
       breakSentence("double-space");
       return;
@@ -172,6 +183,8 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
    */
   function breakSentence(source: BreakSource): boolean {
     if (!engine) return false;
+    // 途中を直している最中の区切り = 直し終わった。カーソルを文末へ戻してから判定する
+    if (editing()) engine.setComposingCursor(kanaLength());
     flushPending();
     // 止まっている最中なら、出し切った打鍵が「後ろに足された」かを先に決着させる（afterStop）
     if (stopped !== null) pump();
@@ -216,6 +229,46 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     engine.insertConfirmedText("");
     const back = engine.takeConfirmedText();
     if (back) engine.appendDirectKana(back);
+  }
+
+  // ---- かなカーソル（§2.4「マークへの到達」 / 4b-0） ----
+
+  function kanaLength(): number {
+    return engine ? [...engine.getState().composingKana].length : 0;
+  }
+
+  function cursorOf(): number {
+    return engine ? (engine.getState() as { composingCursor?: number }).composingCursor ?? kanaLength() : 0;
+  }
+
+  /** 打鍵中の文があるか（ローマ字の途中だけでも） */
+  function hasTyping(): boolean {
+    return !!engine && engine.isComposing;
+  }
+
+  /**
+   * 途中を直している最中か = カーソルが文末に無い。
+   * この間は文を切り出さない（句点が末尾にあっても、直し終わるまで変換しない）
+   */
+  function editing(): boolean {
+    return !!engine && cursorOf() < kanaLength();
+  }
+
+  /** いま見せる誤打マーク。止まっているか、途中を直している間だけ（打鍵中は英字がそのまま見えている） */
+  function visibleMarks(): KanaRange[] {
+    if (!engine || (stopped === null && !editing())) return [];
+    return engine.residueRanges();
+  }
+
+  /**
+   * ← / →。**マークの右端へ吸い付き**、行き先のマークが無ければ 1 文字ずつ動く（flow.ts の scanTarget）。
+   * 文末へ戻ったら直し終わり = 句点があればその場で判定される（pump）
+   */
+  function moveCaret(dir: -1 | 1): void {
+    if (!engine) return;
+    engine.setComposingCursor(scanTarget(visibleMarks(), cursorOf(), kanaLength(), dir));
+    pump();
+    bump(); // 文末へ戻った判定で数が動くことがある
   }
 
   // ---- 句点で踏みとどまる（§2.4(a)） ----
@@ -263,9 +316,12 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
 
   // ---- 打鍵 ----
 
+  /** 打鍵中の文があるあいだ、かなカーソルが受けるキー */
+  const CARET_KEYS = new Set(["ArrowLeft", "ArrowRight", "Home", "End", "Delete"]);
+
   /**
    * コンポーザが飲まないキー。ホストの編集操作としてそのまま通す。
-   * マーク走査（§2.4）が入るまで矢印はここに居る —— 走査先が無いので飲む意味がない。
+   * ← / → / Home / End / Delete は、打鍵中の文があるあいだだけ上の CARET_KEYS が受ける。
    */
   const PASS_THROUGH = new Set([
     "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
@@ -290,6 +346,17 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     if (e.code === "Convert") { // JIS の変換キー
       e.preventDefault();
       breakSentence("key"); // 描画は breakSentence の pump が行う
+      return;
+    }
+    // 打鍵中の文があるあいだ、横の移動はかなカーソルが受ける（ホストのキャレットを動かすと
+    // 未確定表示の span の中に入り込み、flow の状態と食い違う）
+    if (hasTyping() && CARET_KEYS.has(e.key)) {
+      e.preventDefault();
+      if (e.key === "ArrowLeft") moveCaret(-1);
+      else if (e.key === "ArrowRight") moveCaret(1);
+      else if (e.key === "Home") { engine.setComposingCursor(0); pump(); }
+      else if (e.key === "End") { engine.setComposingCursor(kanaLength()); pump(); bump(); }
+      // Delete: カーソルの後ろを消す口がエンジンに無い。飲むだけ
       return;
     }
     if (PASS_THROUGH.has(e.key) || /^F\d+$/.test(e.key)) return;
@@ -352,8 +419,20 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       }
     }
 
-    // 踏みとどまっている文に、次の打鍵が何をしたか（§2.4(a) の表）
-    if (stopped !== null) {
+    // 途中で句点を打った = 直し終わりの合図。**途中には入れず**、取り除いて文末へ戻る。
+    // どの配列でも句点はかなとして来るので、キーではなく「カーソルの手前に句点が来たか」で見る
+    if (editing()) {
+      const st = engine.getState();
+      const chars = [...st.composingKana];
+      const at = cursorOf();
+      if (at > 0 && SENTENCE_END.test(chars[at - 1]!)) {
+        engine.replaceDirectKana("", 1);
+        engine.setComposingCursor(chars.length - 1);
+      }
+    }
+
+    // 踏みとどまっている文に、次の打鍵が何をしたか（§2.4(a) の表）。直している最中は見ない
+    if (stopped !== null && !editing()) {
       const st = engine.getState();
       const o = afterStop(stopped, st.composingKana);
       if (o.kind === "clear") {
@@ -371,7 +450,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
 
     // 句点は「区切りの合図」を兼ねている文字なので、変換キーと同じ口へ落とす（§2.3）。
     // 貼り付け等で複数の句点が一度に来ることがあるので回す
-    while (stopped === null) {
+    while (stopped === null && !editing()) {
       const st = engine.getState();
       const p = sentenceBreakAt(st.composingKana);
       if (p < 0) break;
@@ -391,9 +470,11 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     }
 
     const st = engine.getState();
-    // マークは止まっているときだけ出す。打鍵中は英字がそのまま見えているので重ねない
-    const marks = stopped !== null ? residueWithin(engine.residueRanges(), stopped) : [];
-    flow.setCurrent(st.composingKana, st.pendingDisplay, marks);
+    // マークは止まっているか直している間だけ出す。打鍵中は英字がそのまま見えているので重ねない
+    const marks = stopped !== null && !editing()
+      ? residueWithin(engine.residueRanges(), stopped)
+      : visibleMarks();
+    flow.setCurrent(st.composingKana, st.pendingDisplay, marks, cursorOf());
     render();
   }
 
