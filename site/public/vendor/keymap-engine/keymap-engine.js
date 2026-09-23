@@ -1932,7 +1932,7 @@
 	}
 	//#endregion
 	//#region src/engine/version.ts
-	const ENGINE_VERSION = "2.5.0";
+	const ENGINE_VERSION = "2.6.0";
 	//#endregion
 	//#region src/engine/key-router.ts
 	/** Route a KeyEvent to a KeyAction based on the expanded keymap */
@@ -2642,6 +2642,7 @@
 		constructor(keymap) {
 			this.confirmedText = "";
 			this.composingKana = "";
+			this.cursor = 0;
 			this.inputMode = "japanese";
 			this.buffer = new SequentialBuffer();
 			this.chordBuffer = null;
@@ -2699,6 +2700,7 @@
 		getState() {
 			const isComposing = this.composingKana.length > 0 || !this.buffer.isEmpty;
 			return {
+				composingCursor: this.cursor,
 				phase: this.phase,
 				confirmedText: this.confirmedText,
 				composingKana: this.composingKana,
@@ -2723,9 +2725,36 @@
 			this.confirmedText = "";
 			return text;
 		}
-		/** ゲームパッド等から直接かなを composingKana に追加 */
+		/**
+		* 合成中のかなのうち、**かなにならずに残った打鍵**の区間（v2.6.0+）。
+		*
+		* ローマ字表のどの綴りにも当たらない打鍵は、逐次バッファが先頭の 1 字を
+		* そのまま出す（`ks` → `k` が残る）。これは誤打の確かな印になる
+		* （hechima composer.md §2.4(a) の「強いマーク」）。
+		*
+		* 判定は「**綴りの頭になりうる英字**がかなのあいだに残っているか」で、状態を持たない。
+		* Shift で打った大文字（`IME`）は綴りの頭にならないので含まれない。
+		* かなを直接出す配列（chord / フリック / ゲームパッド）では常に空になる。
+		*/
+		residueRanges() {
+			const ranges = [];
+			let i = 0;
+			for (const ch of this.composingKana) {
+				if (/^[a-z]$/.test(ch) && (this.keymap.prefixSet.has(ch) || this.keymap.inputMappings[ch] !== void 0)) {
+					const last = ranges[ranges.length - 1];
+					if (last && last.end === i) last.end = i + 1;
+					else ranges.push({
+						start: i,
+						end: i + 1
+					});
+				}
+				i++;
+			}
+			return ranges;
+		}
+		/** ゲームパッド等から直接かなを composingKana に追加（カーソル位置に入る） */
 		appendDirectKana(kana) {
-			this.composingKana += kana;
+			this.insertAtCursor(kana);
 			return this.getState();
 		}
 		/** confirmedText に直接テキストを挿入（改行等、composing を経由しない） */
@@ -2734,13 +2763,10 @@
 			this.confirmedText += text;
 			return this.getState();
 		}
-		/** composingKana 末尾を差し替え（eager output の巻き戻し用） */
+		/** カーソルの手前 replaceCount 字を差し替え（eager output の巻き戻し用） */
 		replaceDirectKana(kana, replaceCount) {
-			if (replaceCount > 0) {
-				const chars = [...this.composingKana];
-				this.composingKana = chars.slice(0, Math.max(0, chars.length - replaceCount)).join("");
-			}
-			this.composingKana += kana;
+			this.deleteBeforeCursor(replaceCount);
+			this.insertAtCursor(kana);
 			return this.getState();
 		}
 		/** composingKana 末尾の濁点/半濁点/清音をトグル（か→が→か、は→ば→ぱ→は） */
@@ -2760,19 +2786,18 @@
 		* （その経路はセッション層の postModify プリミティブの担当。別便）。
 		*/
 		applyPostModify(op) {
-			if (this.composingKana.length === 0) return this.getState();
-			const chars = [...this.composingKana];
-			const last = chars[chars.length - 1];
-			const next = postModify(last, op);
+			if (this.cursor === 0) return this.getState();
+			const target = [...this.composingKana][this.cursor - 1];
+			const next = postModify(target, op);
 			if (next === null) return this.getState();
-			chars[chars.length - 1] = next;
-			this.composingKana = chars.join("");
+			this.deleteBeforeCursor(1);
+			this.insertAtCursor(next);
 			return this.getState();
 		}
 		/** Reset all state */
 		reset() {
 			this.confirmedText = "";
-			this.composingKana = "";
+			this.setComposing("", 0);
 			this.inputMode = "japanese";
 			this.buffer.reset();
 			this.chordBuffer?.reset();
@@ -2805,12 +2830,8 @@
 						this.onStateChange?.();
 						return;
 					}
-					if (replaceCount > 0) {
-						const chars = [...this.composingKana];
-						const remaining = chars.slice(0, Math.max(0, chars.length - replaceCount));
-						this.composingKana = remaining.join("");
-					}
-					if (text.length > 0) this.composingKana += text;
+					this.deleteBeforeCursor(replaceCount);
+					if (text.length > 0) this.insertAtCursor(text);
 					this.onStateChange?.();
 				};
 				this.chordBuffer.onShiftSingle = (action) => {
@@ -2858,7 +2879,7 @@
 					break;
 				case "insertAndConfirm":
 					if (this.onHostAction?.(action)) break;
-					this.composingKana += action.text;
+					this.insertAtCursor(action.text);
 					this.confirmComposition();
 					break;
 				case "directInsert":
@@ -2907,12 +2928,14 @@
 			const charMapResult = this.keymap.characterMap[logical];
 			if (charMapResult && !this.wouldBufferHandle(logical)) {
 				if (!/^[a-zA-Z]$/.test(logical)) {
-					this.composingKana += charMapResult;
+					const pending = this.buffer.flush();
+					if (pending) this.insertAtCursor(pending);
+					this.insertAtCursor(charMapResult);
 					return;
 				}
 			}
 			const resolved = this.buffer.input(logical);
-			if (resolved) this.composingKana += resolved;
+			if (resolved) this.insertAtCursor(resolved);
 		}
 		/** Check if the sequential buffer's inputMappings would handle this character */
 		wouldBufferHandle(char) {
@@ -2921,15 +2944,15 @@
 		}
 		confirmComposition() {
 			const remaining = this.buffer.flush();
-			if (remaining) this.composingKana += remaining;
+			if (remaining) this.insertAtCursor(remaining);
 			if (this.composingKana.length > 0) {
 				this.confirmedText += this.composingKana;
-				this.composingKana = "";
+				this.setComposing("", 0);
 			}
 			this.chordBuffer?.reset();
 		}
 		cancelComposition() {
-			this.composingKana = "";
+			this.setComposing("", 0);
 			this.buffer.reset();
 			this.chordBuffer?.reset();
 		}
@@ -2944,26 +2967,44 @@
 		*/
 		repend() {
 			if (!this.buffer.isEmpty) return;
-			const run = /[a-zA-Z]+$/.exec(this.composingKana)?.[0];
+			const before = [...this.composingKana].slice(0, this.cursor).join("");
+			const run = /[a-zA-Z]+$/.exec(before)?.[0];
 			if (!run) return;
 			for (let i = 0; i < run.length; i++) {
 				const tail = run.slice(i);
 				if (this.keymap.prefixSet.has(tail)) {
-					this.composingKana = this.composingKana.slice(0, this.composingKana.length - tail.length);
+					this.deleteBeforeCursor(tail.length);
 					this.buffer.restore(tail);
 					return;
 				}
 			}
 		}
+		setComposing(kana, cursor) {
+			this.composingKana = kana;
+			this.cursor = cursor;
+		}
+		insertAtCursor(text) {
+			if (!text) return;
+			const chars = [...this.composingKana];
+			const added = [...text];
+			chars.splice(this.cursor, 0, ...added);
+			this.setComposing(chars.join(""), this.cursor + added.length);
+		}
+		deleteBeforeCursor(count) {
+			if (count <= 0) return;
+			const chars = [...this.composingKana];
+			const from = Math.max(0, this.cursor - count);
+			chars.splice(from, this.cursor - from);
+			this.setComposing(chars.join(""), from);
+		}
 		handleDeleteBack() {
 			if (this.buffer.deleteBack()) return;
-			if (this.composingKana.length > 0) {
-				const chars = [...this.composingKana];
-				chars.pop();
-				this.composingKana = chars.join("");
+			if (this.cursor > 0) {
+				this.deleteBeforeCursor(1);
 				this.repend();
 				return;
 			}
+			if (this.composingKana.length > 0) return;
 			if (this.confirmedText.length > 0) {
 				const chars = [...this.confirmedText];
 				chars.pop();
