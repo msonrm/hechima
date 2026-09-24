@@ -3,7 +3,8 @@
 // この版で実装したのは **§2.1 全体の形 / §2.2 三層モデル / §2.3 テキストの流れ /
 // §2.6 キーの割り当て**（§7 の 4a''）と、**§2.4(a) 句点で踏みとどまる**（4b-1）、
 // **かなカーソル**（4b-0。← / → でマークの右端へ吸い付き、途中を直せる）、
-// **区切りの揺れの印**（§2.4(b) の一つ目）と、**印への走査・候補の提示**（§2.5 / 4c）。
+// **区切りの揺れの印**（§2.4(b)①）、**文書内の表記の揺れの印**（③・§8.1 の台帳）、
+// **印への走査・候補の提示**（§2.5 / 4c）。
 //
 // 三層モデル（§2.2）は「場所」ではなく「状態」なので、この版が持つ層は見た目で分かれる:
 //   打鍵中の文   … 破線下線。ひらがな。**変換しない**（打鍵フィードバックのセーフガード）
@@ -66,6 +67,8 @@ export interface ComposerStats {
    * 別の区切りを選んだ / いまの区切りを選んだ（確かめた）
    */
   unsure: { checked: number; marked: number; opened: number; changed: number; kept: number };
+  /** 表記の揺れ（§8.1）: 候補を開いた / 先例に揃えた / いまの表記のまま（わざと使い分けた） */
+  variant: { opened: number; changed: number; kept: number };
 }
 
 export interface ComposerOptions {
@@ -93,6 +96,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     enters: { settled: 0, typing: 0, newline: 0 },
     typo: { stops: 0, again: 0, through: 0, fixed: 0 },
     unsure: { checked: 0, marked: 0, opened: 0, changed: 0, kept: 0 },
+    variant: { opened: 0, changed: 0, kept: 0 },
   };
   const bump = (): void => opts.onStats?.(stats);
 
@@ -103,7 +107,8 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     setStatus(`エンジン worker の読み込みに失敗: ${e.message || "スクリプトを取得できません"}`));
   const conn = Hechima.connectWorker(worker, {
     // 候補は出さない（§2.5 は 4c）ので 1 文節 1 件で足りる
-    maxCands: 1,
+    // 1 文節 9 件。表記の揺れの印（§8.1）が、先例の表記をいまの文節の候補の中から探す
+    maxCands: 9,
     onProgress: (loaded, total) =>
       setStatus(total > 0
         ? `辞書を取得中… ${mb(loaded)} / ${mb(total)} MB`
@@ -122,7 +127,9 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
   function convertSettled(kana: string): void {
     void conn.convert(kana).then((segs) => {
       if (!segs) return;
-      const out: Segment[] = segs.map((s) => ({ key: s.key, value: s.candidates?.[0] ?? s.key }));
+      const out: Segment[] = segs.map((s) => ({
+        key: s.key, value: s.candidates?.[0] ?? s.key, candidates: s.candidates,
+      }));
       flow.applyConversion(kana, out);
       render();
     }).catch(() => {});
@@ -555,7 +562,8 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
   /** 止まっているか直している最中は、打鍵中の文の破線を薄くして誤打の印を浮かせる */
   function render(): void {
     const items = popup ? flow.alternatives().map((a) => a.label) : [];
-    inline.render(flow.view(), reviewing(), popup && items.length ? { items, selected: popup.selected } : null);
+    inline.render(flow.view(), reviewing(),
+      popup && items.length ? { items, selected: popup.selected, note: flow.note() } : null);
   }
 
   // ---- 印への走査と候補の提示（§2.4「マークへの到達」/ §2.5 / 4c） ----
@@ -565,9 +573,9 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
 
   /** 未確定の文の印へ入る（いちばん新しい印から）。印が無ければ false */
   function enterMarks(): boolean {
-    const marked = flow.markedIndexes();
-    if (!marked.length) return false;
-    flow.setFocus(marked[marked.length - 1]!);
+    const refs = flow.markRefs();
+    if (!refs.length) return false;
+    flow.setFocus(refs[refs.length - 1]!);
     render();
     return true;
   }
@@ -579,9 +587,10 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
   }
 
   function choose(index: number): void {
+    const bucket = flow.focusedKind() === "variant" ? stats.variant : stats.unsure;
     if (flow.choose(index)) {
-      if (index === 0) stats.unsure.kept++;
-      else stats.unsure.changed++;
+      if (index === 0) bucket.kept++;
+      else bucket.changed++;
     }
     popup = null;
     bump();
@@ -593,8 +602,8 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
    * （文字を打てば打鍵中の文へ戻ってそのまま打てる）
    */
   function handleMarkKey(e: KeyboardEvent): boolean {
-    const i = flow.focused;
-    if (i === null) return false;
+    const f = flow.focused;
+    if (f === null) return false;
     if (popup) {
       const n = flow.alternatives().length;
       if (e.key === " " || e.key === "ArrowDown") popup.selected = (popup.selected + 1) % n;
@@ -606,18 +615,17 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       render();
       return true;
     }
-    const marked = flow.markedIndexes();
+    const refs = flow.markRefs();
+    const at = refs.findIndex((r) => r.i === f.i && r.key === f.key);
     if (e.key === "ArrowLeft") {
-      const prev = marked.filter((x) => x < i).pop();
-      if (prev !== undefined) flow.setFocus(prev);
+      if (at > 0) flow.setFocus(refs[at - 1]!);
     } else if (e.key === "ArrowRight") {
-      const next = marked.find((x) => x > i);
-      if (next !== undefined) flow.setFocus(next);
+      if (at + 1 < refs.length) flow.setFocus(refs[at + 1]!);
       else { leaveMarks(); return true; } // いちばん右の印から → で打鍵中の文へ戻る
     } else if (e.key === " ") {
       // 印の上の Space = 候補（§2.6。Space の意味が変わる境目は「印の上かどうか」）
       popup = { selected: 0 };
-      stats.unsure.opened++;
+      (flow.focusedKind() === "variant" ? stats.variant : stats.unsure).opened++;
       bump();
     } else if (e.key === "Escape") {
       leaveMarks();
@@ -639,6 +647,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       stats.enters = { settled: 0, typing: 0, newline: 0 };
       stats.typo = { stops: 0, again: 0, through: 0, fixed: 0 };
       stats.unsure = { checked: 0, marked: 0, opened: 0, changed: 0, kept: 0 };
+      stats.variant = { opened: 0, changed: 0, kept: 0 };
       bump();
     },
   };

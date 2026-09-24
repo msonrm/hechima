@@ -23,16 +23,25 @@ const SPACE_ONLY = /^[\s　]*$/;
 export interface Segment {
   key: string;
   value: string;
+  /** 変換の候補（先頭 = value）。表記の揺れの印（§8.1）が先例の表記を探すのに使う */
+  candidates?: string[];
+}
+
+/** 未確定の文の印の種類。unsure = 区切りの揺れ（§2.4(b)①）/ variant = 文書内の表記の揺れ（③・§8.1） */
+export type MarkKind = "unsure" | "variant";
+
+export interface SettledMark extends KanaRange {
+  kind: MarkKind;
+  /** 吸い付いている（← / → の走査。§2.4「マークへの到達」） */
+  focused: boolean;
 }
 
 export interface SettledView {
   text: string;
   /** false = 変換がまだ届いておらず、かなを見せている */
   filled: boolean;
-  /** 区切りの揺れの印（§2.4(b)）。text の中の位置（コードポイント） */
-  marks: KanaRange[];
-  /** 印に吸い付いている（← / → の走査。§2.4「マークへの到達」） */
-  focused: boolean;
+  /** 印。text の中の位置（コードポイント）。重ならない */
+  marks: SettledMark[];
 }
 
 /** かなの中の区間（コードポイント単位、end は含まない。配列エンジンの KanaRange と同じ形） */
@@ -65,6 +74,50 @@ interface Settled {
   unsure: KanaRange | null;
   /** 経路（候補の提示に使う。§2.5） */
   paths?: PathFull[];
+  /** 区切った順の通し番号（台帳の「N 文前」に使う） */
+  seq: number;
+  /** 文書内の表記の揺れ（§8.1）。文節ごと */
+  variants: Variant[];
+}
+
+/** 表記の揺れ 1 件 = この文節は、この文書で先に別の表記で書いた語である */
+interface Variant {
+  /** 文節の添字 */
+  seg: number;
+  /** 先例に揃えた表記（いまの文節の候補の中から見つけたもの） */
+  replacement: string;
+  /** 先例の文節の表記（見せる用） */
+  precedent: string;
+  /** 先例の通し番号 */
+  precedentSeq: number;
+}
+
+/** 印の身元。走査の位置として持つ（添字だけだと印が増減したときにずれる） */
+export interface MarkRef {
+  /** settled の添字 */
+  i: number;
+  /** "u" = 区切りの揺れ / "v<文節>" = 表記の揺れ */
+  key: string;
+}
+
+// ---- 文書内の一貫性の台帳（§8.1） ----
+
+/**
+ * 台帳の棚。表記の末尾のひらがな連（と句読点）を落とし、よみからも同数だけ落とす（§8.1「正規化が要る」）。
+ * 図る / 図った / 図ります → はか/図、嬉しい / 嬉しかった → うれ/嬉。
+ * **全部かな**（統一すべき表記を持たない）と、**棚のよみが 1 字**（見る / 身を / 実が同じ「み」に落ちる =
+ * 別の語をつなぐ。§2.4 の「見る / 観る はマークしない」とも合う）は棚に入れない
+ */
+export function shelfOf(key: string, value: string): { shelf: string; form: string } | null {
+  const v = [...value], k = [...key];
+  let n = 0;
+  // 句読点・括弧も落とす（文末の文節は「脱ぐ。」のように句点を含む。落とさないと 解説する。/ 開設した。 が別の棚になる）。
+  // 長音「ー」は語の一部なので落とさない
+  while (n < v.length && /[ぁ-ゖ、。，．！？!?「」『』（）()・…\s]/.test(v[v.length - 1 - n]!)) n++;
+  if (n === v.length || n >= k.length) return null;
+  const shelf = k.slice(0, k.length - n).join("");
+  if ([...shelf].length < 2) return null;
+  return { shelf, form: v.slice(0, v.length - n).join("") };
 }
 
 /**
@@ -320,9 +373,11 @@ export class Flow {
    */
   settle(kana: string): void {
     const segs = this.cache.get(kana);
-    this.settled.push(segs
-      ? { kana, text: join(segs), filled: true, segs, unsure: null }
-      : { kana, text: kana, filled: false, unsure: null });
+    const s: Settled = segs
+      ? { kana, text: join(segs), filled: true, segs, unsure: null, seq: ++this.seq, variants: [] }
+      : { kana, text: kana, filled: false, unsure: null, seq: ++this.seq, variants: [] };
+    this.settled.push(s);
+    if (segs) this.observe(s);
     this.drainFifo();
   }
 
@@ -335,9 +390,38 @@ export class Flow {
         s.text = join(segments);
         s.filled = true;
         s.segs = segments;
+        this.observe(s);
       }
     }
     this.drainFifo();
+  }
+
+  /** 台帳（§8.1）。棚 → この文書で先に使った表記。**文書の寿命で消える**（Flow ごと） */
+  private ledger = new Map<string, { form: string; value: string; seq: number }>();
+  private seq = 0;
+
+  /**
+   * 変換された文を台帳に照らす。棚が空なら登録し、別の表記で埋まっていれば揺れとして印を付ける。
+   * **先例に揃えた表記がいまの文節の候補に無ければ印を出さない**（出せる候補が無い）。
+   * 台帳は**マークにだけ使い、並べ替えには使わない**（§2.4 / §8.1）
+   */
+  private observe(s: Settled): void {
+    if (!s.segs) return;
+    s.variants = [];
+    s.segs.forEach((sg, idx) => {
+      const sh = shelfOf(sg.key, sg.value);
+      if (!sh) return;
+      const prev = this.ledger.get(sh.shelf);
+      if (!prev) {
+        this.ledger.set(sh.shelf, { form: sh.form, value: sg.value, seq: s.seq });
+        return;
+      }
+      if (prev.form === sh.form || prev.seq === s.seq) return;
+      const replacement = (sg.candidates ?? []).find((c) => shelfOf(sg.key, c)?.form === prev.form);
+      if (replacement) {
+        s.variants.push({ seg: idx, replacement, precedent: prev.value, precedentSeq: prev.seq });
+      }
+    });
   }
 
   /**
@@ -355,46 +439,87 @@ export class Flow {
 
   // ---- 印への走査と候補の提示（§2.4「マークへの到達」/ §2.5） ----
 
-  /** 吸い付いている印の持ち主（settled の添字）。null = 走査していない */
-  private focus: number | null = null;
+  /** 吸い付いている印。null = 走査していない */
+  private focus: MarkRef | null = null;
 
-  /** 印を持つ未確定の文の添字（古い順） */
-  markedIndexes(): number[] {
-    return this.settled.flatMap((s, i) => (marksOf(s).length ? [i] : []));
+  /** 未確定の文の印を、文の古い順・文の中の位置順に */
+  markRefs(): MarkRef[] {
+    return this.settled.flatMap((s, i) => marksOf(s).map((m) => ({ i, key: m.key })));
   }
 
-  get focused(): number | null {
-    return this.focus !== null && this.markedIndexes().includes(this.focus) ? this.focus : null;
+  get focused(): MarkRef | null {
+    const f = this.focus;
+    return f && this.markRefs().some((r) => r.i === f.i && r.key === f.key) ? f : null;
   }
 
-  setFocus(i: number | null): void {
-    this.focus = i;
+  setFocus(ref: MarkRef | null): void {
+    this.focus = ref;
   }
 
-  /** 吸い付いている印の候補。先頭がいまの区切り */
+  /** 吸い付いている印の種類 */
+  focusedKind(): MarkKind | null {
+    const f = this.focused;
+    return f ? (f.key === "u" ? "unsure" : "variant") : null;
+  }
+
+  /** 吸い付いている印の候補。先頭がいまの表記 */
   alternatives(): Alternative[] {
-    const i = this.focused;
-    const s = i === null ? null : this.settled[i];
-    if (!s || !s.unsure || !s.paths) return [];
-    return alternativesIn(s.paths, s.unsure);
+    const f = this.focused;
+    const s = f ? this.settled[f.i] : null;
+    if (!f || !s) return [];
+    if (f.key === "u") return s.unsure && s.paths ? alternativesIn(s.paths, s.unsure) : [];
+    const v = this.variantOf(s, f.key);
+    if (!v || !s.segs) return [];
+    const sg = s.segs[v.seg]!;
+    return [
+      { segments: [sg], label: sg.value },
+      { segments: [{ ...sg, value: v.replacement }], label: v.replacement },
+    ];
+  }
+
+  /** 候補に添える一言（表記の揺れのときだけ。§2.5「この文書では『乱用』（3 文前）」） */
+  note(): string | null {
+    const f = this.focused;
+    const s = f ? this.settled[f.i] : null;
+    const v = s && f ? this.variantOf(s, f.key) : null;
+    if (!s || !v) return null;
+    const ago = s.seq - v.precedentSeq;
+    return `この文書では「${v.precedent}」（${ago} 文前）`;
+  }
+
+  private variantOf(s: Settled, key: string): Variant | null {
+    if (!key.startsWith("v")) return null;
+    return s.variants.find((v) => v.seg === Number(key.slice(1))) ?? null;
   }
 
   /**
    * 候補を選んだ（§2.5）。**書き換えはユーザーが選んだときだけ**（§2.2 の「自動修正はしない」は保たれる）。
-   * 先頭（いまの区切り）を選んだときも印は消す = 見て確かめた
+   * 先頭（いまの表記）を選んだときも印は消す = 見て確かめた（表記の揺れなら、わざと使い分けた）
    */
   choose(index: number): boolean {
-    const i = this.focused;
-    const s = i === null ? null : this.settled[i];
+    const f = this.focused;
+    const s = f ? this.settled[f.i] : null;
     const alt = this.alternatives()[index];
-    if (!s || !s.unsure || !s.segs || !alt) return false;
-    if (index > 0) {
-      const next = spliceSegments(s.segs, s.unsure, alt.segments);
-      if (!next) return false;
-      s.segs = next;
-      s.text = join(next);
+    if (!f || !s || !s.segs || !alt) return false;
+    if (f.key === "u") {
+      if (!s.unsure) return false;
+      if (index > 0) {
+        const next = spliceSegments(s.segs, s.unsure, alt.segments);
+        if (!next) return false;
+        s.segs = next;
+        s.text = join(next);
+        s.variants = []; // 文節が組み変わったので添字が合わない
+      }
+      s.unsure = null;
+    } else {
+      const v = this.variantOf(s, f.key);
+      if (!v) return false;
+      if (index > 0) {
+        s.segs = s.segs.map((sg, j) => (j === v.seg ? { ...sg, value: v.replacement } : sg));
+        s.text = join(s.segs);
+      }
+      s.variants = s.variants.filter((x) => x !== v);
     }
-    s.unsure = null;
     this.focus = null;
     return true;
   }
@@ -429,7 +554,12 @@ export class Flow {
     const n = [...this.inflight].length;
     return {
       settled: this.settled.map((s, i) => ({
-        text: s.text, filled: s.filled, marks: marksOf(s), focused: i === this.focused,
+        text: s.text,
+        filled: s.filled,
+        marks: marksOf(s).map((m) => ({
+          start: m.start, end: m.end, kind: m.kind,
+          focused: this.focused?.i === i && this.focused.key === m.key,
+        })),
       })),
       typing: chars.slice(0, at).join("") + this.inflight + chars.slice(at).join(""),
       // カーソルより後ろのマークはローマ字の途中の分だけ後ろへずれる
@@ -455,15 +585,30 @@ export class Flow {
     while (this.settled.length + 1 > BUFFER_SENTENCES && this.settled[0]!.filled) {
       this.onFlush(this.settled.shift()!.text);
       // 添字がずれる。押し出された文に吸い付いていたなら走査は終わる
-      if (this.focus !== null) this.focus = this.focus > 0 ? this.focus - 1 : null;
+      if (this.focus) this.focus = this.focus.i > 0 ? { ...this.focus, i: this.focus.i - 1 } : null;
     }
   }
 }
 
-/** 未確定の文の印（表記の位置）。変換が届いていて、区間が文節の境目に写せるときだけ */
-function marksOf(s: Settled): KanaRange[] {
-  const m = s.filled && s.segs && s.unsure ? kanaToSurface(s.segs, s.unsure) : null;
-  return m ? [m] : [];
+/**
+ * 未確定の文の印（表記の位置・位置順）。変換が届いていて、区間が文節の境目に写せるときだけ。
+ * 表記の揺れが区切りの揺れの区間に重なるときは、区切りの揺れを優先する（区切りが変われば文節も変わる）
+ */
+function marksOf(s: Settled): (KanaRange & { kind: MarkKind; key: string })[] {
+  if (!s.filled || !s.segs) return [];
+  const out: (KanaRange & { kind: MarkKind; key: string })[] = [];
+  const u = s.unsure ? kanaToSurface(s.segs, s.unsure) : null;
+  if (u) out.push({ ...u, kind: "unsure", key: "u" });
+  let at = 0;
+  s.segs.forEach((sg, j) => {
+    const len = [...sg.value].length;
+    const r = { start: at, end: at + len };
+    at += len;
+    if (!s.variants.some((v) => v.seg === j)) return;
+    if (u && r.start < u.end && u.start < r.end) return;
+    out.push({ ...r, kind: "variant", key: `v${j}` });
+  });
+  return out.sort((a, b) => a.start - b.start);
 }
 
 function join(segs: Segment[]): string {

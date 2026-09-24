@@ -46,7 +46,9 @@ function renderStats(s: ComposerStats): void {
     // 区切りの揺れの印を付けた割合（§2.4(b)）。§4.2b の予想は 6 文に 1 文（17.8%）
     + `／区切りの揺れ ${s.unsure.marked}/${s.unsure.checked} 文`
     // 候補を開いて何を選んだか（§2.5）。「確かめた」= いまの区切りを選んだ = 印が空振りだった
-    + `（候補を開いた ${s.unsure.opened}・別の区切りを選んだ ${s.unsure.changed}・確かめた ${s.unsure.kept}）`;
+    + `（候補を開いた ${s.unsure.opened}・別の区切りを選んだ ${s.unsure.changed}・確かめた ${s.unsure.kept}）`
+    // 表記の揺れ（§8.1）。「わざと」が多ければ同音異義語を拾っている（§8.3 の留保）
+    + `／表記の揺れ: 候補を開いた ${s.variant.opened}・揃えた ${s.variant.changed}・わざと ${s.variant.kept}`;
 }
 renderStats(composer.stats);
 
