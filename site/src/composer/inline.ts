@@ -60,31 +60,43 @@ export class Inline {
       span.textContent = s.text;
       parts.push(span);
     }
+    // キャレットを置く場所（打鍵中の文の途中を直しているとき）。null = 未確定表示の直後
+    let caretAt: { node: Text; offset: number } | null = null;
     if (view.typing) {
       const span = document.createElement("span");
       span.className = "cmp-typing";
-      if (view.typingMarks.length === 0) {
-        span.textContent = view.typing;
-      } else {
-        // 誤打マーク（§2.4(a)）。**色は付けず、その区間だけ下線を波線にする**（目立たせない）
-        const chars = [...view.typing];
-        let at = 0;
-        for (const m of view.typingMarks) {
-          if (m.start > at) span.append(chars.slice(at, m.start).join(""));
+      const chars = [...view.typing];
+      const midCaret = view.caret < chars.length;
+      // 誤打マーク（§2.4(a)）。**色は付けず、その区間だけ下線を波線にする**（目立たせない）。
+      // 区切り目 = マークの端とキャレット。文字列をそこで割って、マークの区間だけ span に包む
+      const cuts = new Set<number>([0, chars.length]);
+      for (const m of view.typingMarks) { cuts.add(m.start); cuts.add(m.end); }
+      if (midCaret) cuts.add(view.caret);
+      const points = [...cuts].sort((a, b) => a - b);
+      for (let i = 0; i + 1 < points.length; i++) {
+        const a = points[i]!, b = points[i + 1]!;
+        const text = document.createTextNode(chars.slice(a, b).join(""));
+        if (view.typingMarks.some((m) => m.start <= a && b <= m.end)) {
           const mark = document.createElement("span");
           mark.className = "cmp-typo";
-          mark.textContent = chars.slice(m.start, m.end).join("");
+          mark.append(text);
           span.append(mark);
-          at = m.end;
+        } else {
+          span.append(text);
         }
-        if (at < chars.length) span.append(chars.slice(at).join(""));
+        // キャレットは区切り目の直後の文字の手前 = この断片の先頭
+        if (midCaret && a === view.caret) caretAt = { node: text, offset: 0 };
       }
       parts.push(span);
     }
     el.replaceChildren(...parts);
-    // 打鍵中はキャレットを未確定表示の直後に置き直す。
-    // 矢印でキャレットが離れても次の打鍵でここへ戻る（マーク走査は §2.4 = 4b）
-    this.setCaretAfter(el);
+    if (caretAt) {
+      // 途中を直している。キャレットをかなカーソルの位置へ（§2.4 / 4b-0）
+      this.setCaretIn(caretAt.node, caretAt.offset);
+    } else {
+      // 打鍵中はキャレットを未確定表示の直後に置き直す
+      this.setCaretAfter(el);
+    }
   }
 
   private caretRange(): Range {
@@ -98,6 +110,16 @@ export class Inline {
     r.selectNodeContents(this.host);
     r.collapse(false);
     return r;
+  }
+
+  private setCaretIn(node: Text, offset: number): void {
+    const sel = window.getSelection();
+    if (!sel) return;
+    const r = document.createRange();
+    r.setStart(node, offset);
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
   }
 
   private setCaretAfter(node: Node): void {

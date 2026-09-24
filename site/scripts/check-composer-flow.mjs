@@ -16,7 +16,7 @@ const srcPath = fileURLToPath(new URL("../src/composer/flow.ts", import.meta.url
 const js = ts.transpileModule(readFileSync(srcPath, "utf8"), {
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext },
 }).outputText;
-const { Flow, sentenceBreakAt, canBreak, endsWithSpace, afterStop, residueWithin } =
+const { Flow, sentenceBreakAt, canBreak, endsWithSpace, afterStop, residueWithin, scanTarget } =
   await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 
 let fail = 0;
@@ -50,7 +50,7 @@ eq("末尾が空白でない", endsWithSpace("けんさくご"), false);
 {
   const f = new Flow(() => {});
   f.setCurrent("きょうはあめだ", "k");
-  eq("打鍵中はひらがなのまま", f.view(), { settled: [], typing: "きょうはあめだk", typingMarks: [] });
+  eq("打鍵中はひらがなのまま", f.view(), { settled: [], typing: "きょうはあめだk", typingMarks: [], caret: 8 });
 }
 
 // --- 4. 未確定は最大 2 文。3 文目を区切った時点で最古が押し出される（§2.1 / §2.3） ---
@@ -103,11 +103,11 @@ eq("末尾が空白でない", endsWithSpace("けんさくご"), false);
 
   eq("一段目: 未確定だけを確定", f.enter(), "settled");
   eq("一段目で出るのは未確定の文だけ", flushed, ["一。"]);
-  eq("**打鍵中の文は何も変わらない**", f.view(), { settled: [], typing: "にほんめ", typingMarks: [] });
+  eq("**打鍵中の文は何も変わらない**", f.view(), { settled: [], typing: "にほんめ", typingMarks: [], caret: 4 });
 
   eq("二段目: ひらがなのまま確定", f.enter(), "typing");
   eq("二段目で打鍵中が出る", flushed, ["一。", "にほんめ"]);
-  eq("二段目のあとは空", f.view(), { settled: [], typing: "", typingMarks: [] });
+  eq("二段目のあとは空", f.view(), { settled: [], typing: "", typingMarks: [], caret: 0 });
 
   eq("三段目: 改行", f.enter(), "newline");
   eq("三段目はホストへ何も渡さない（改行は呼び出し側）", flushed, ["一。", "にほんめ"]);
@@ -148,6 +148,28 @@ eq("誤打が無ければ空", residueWithin([], "さか。"), []);
   eq("マークは打鍵中の文に乗る", f.view().typingMarks, [{ start: 1, end: 2 }]);
   f.enter();
   eq("Enter で流したらマークも消える", f.view().typingMarks, []);
+}
+
+// --- 10. かなカーソル（§2.4「マークへの到達」）。← / → はマークの右端へ吸い付く ---
+{
+  const marks = [{ start: 2, end: 3 }, { start: 6, end: 7 }];
+  eq("← は手前のマークの右端へ", scanTarget(marks, 9, 9, -1), 7);
+  eq("← をもう一度で次のマークへ", scanTarget(marks, 7, 9, -1), 3);
+  eq("手前にマークが無ければ 1 文字", scanTarget(marks, 3, 9, -1), 2);
+  eq("先頭で止まる", scanTarget([], 0, 9, -1), 0);
+  eq("→ は後ろのマークの右端へ", scanTarget(marks, 3, 9, 1), 7);
+  eq("後ろにマークが無ければ 1 文字", scanTarget(marks, 7, 9, 1), 8);
+  eq("末尾で止まる", scanTarget([], 9, 9, 1), 9);
+}
+{
+  const f = new Flow(() => {});
+  f.setCurrent("だかざあ。", "r", [], 2);
+  eq("ローマ字の途中はカーソルの位置に見せる", f.view().typing, "だかrざあ。");
+  eq("キャレットはローマ字の途中の後ろ", f.view().caret, 3);
+  f.setCurrent("だかrざあ。k", "", [{ start: 2, end: 3 }, { start: 6, end: 7 }], 3);
+  eq("カーソルが無くてもマークはそのまま", f.view().typingMarks, [{ start: 2, end: 3 }, { start: 6, end: 7 }]);
+  f.setCurrent("だかrざあ。", "t", [{ start: 2, end: 3 }, { start: 4, end: 5 }], 3);
+  eq("カーソルより後ろのマークはずれる", f.view().typingMarks, [{ start: 2, end: 3 }, { start: 5, end: 6 }]);
 }
 
 if (fail) {

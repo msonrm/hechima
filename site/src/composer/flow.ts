@@ -42,8 +42,10 @@ export interface FlowView {
   settled: SettledView[];
   /** 打鍵中の文（ひらがな ＋ ローマ字の途中） */
   typing: string;
-  /** 打鍵中の文に付いた誤打マーク（§2.4(a)。句点で踏みとどまったときだけ） */
+  /** 打鍵中の文に付いた誤打マーク（§2.4(a)。句点で踏みとどまったときだけ）。typing の中の位置 */
   typingMarks: KanaRange[];
+  /** 打鍵中の文の中のキャレット（typing のコードポイント位置）。普段は末尾 */
+  caret: number;
 }
 
 /** Enter が実際に行った段（§2.3 の表） */
@@ -76,6 +78,19 @@ export function canBreak(kana: string): boolean {
 /** 末尾が空白か（Space 2 連打の判定。**時間ではなく位置で見る**。§2.6） */
 export function endsWithSpace(kana: string): boolean {
   return /[\s　]$/.test(kana);
+}
+
+/**
+ * ← / → の行き先（§2.4「マークへの到達」）。**マークの右端へ吸い付く**（直しは BS から始まるので右端）。
+ * 行き先のマークが無ければ 1 文字ずつ動く。どちらも文の端で止まる。
+ */
+export function scanTarget(marks: KanaRange[], cursor: number, length: number, dir: -1 | 1): number {
+  if (dir < 0) {
+    const ends = marks.map((m) => m.end).filter((e) => e < cursor);
+    return ends.length ? Math.max(...ends) : Math.max(0, cursor - 1);
+  }
+  const ends = marks.map((m) => m.end).filter((e) => e > cursor);
+  return ends.length ? Math.min(...ends) : Math.min(length, cursor + 1);
 }
 
 /** 末尾が句点か */
@@ -125,6 +140,8 @@ export class Flow {
   private kana = "";
   private inflight = "";
   private marks: KanaRange[] = [];
+  /** かなの中のカーソル（コードポイント）。null = 末尾 */
+  private cursor: number | null = null;
   /** 区切った文の変換結果を凍結するための控え */
   private cache = new Map<string, Segment[]>();
 
@@ -132,10 +149,15 @@ export class Flow {
   constructor(private readonly onFlush: (text: string) => void) {}
 
   /** 打鍵中の文（エンジンが持つかな ＋ 合成中のローマ字）を写す */
-  setCurrent(kana: string, inflight: string, marks: KanaRange[] = []): void {
+  /**
+   * cursor はかなの中のカーソル（配列エンジンの composingCursor）。省略 = 末尾。
+   * ローマ字の途中（inflight）は**カーソルの位置に**見せる（途中を直しているとき）。
+   */
+  setCurrent(kana: string, inflight: string, marks: KanaRange[] = [], cursor?: number): void {
     this.kana = kana;
     this.inflight = inflight;
     this.marks = marks;
+    this.cursor = cursor ?? null;
   }
 
   /**
@@ -180,16 +202,24 @@ export class Flow {
       this.kana = "";
       this.inflight = "";
       this.marks = [];
+      this.cursor = null;
       return "typing";
     }
     return "newline";
   }
 
   view(): FlowView {
+    const chars = [...this.kana];
+    const at = Math.min(this.cursor ?? chars.length, chars.length);
+    const n = [...this.inflight].length;
     return {
       settled: this.settled.map((s) => ({ text: s.text, filled: s.filled })),
-      typing: this.kana + this.inflight,
-      typingMarks: this.marks,
+      typing: chars.slice(0, at).join("") + this.inflight + chars.slice(at).join(""),
+      // カーソルより後ろのマークはローマ字の途中の分だけ後ろへずれる
+      typingMarks: this.marks.map((m) => m.start >= at
+        ? { start: m.start + n, end: m.end + n }
+        : { start: m.start, end: m.end }),
+      caret: at + n,
     };
   }
 
