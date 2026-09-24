@@ -139,13 +139,17 @@ export interface PathFull extends PathLike {
 /** 候補 1 つ = 印の区間の中の文節の並び（§2.5「区切りでグループ化し、各グループの最良を代表に」） */
 export interface Alternative {
   segments: Segment[];
-  /** 区切りを見せる表示（`ここで|履物を`） */
+  /**
+   * 表示。**区切りは見せない**（`ここで履物を`）。読み手が比べたいのは「どれが自然で意図どおりか」で、
+   * 区切りの位置はその判断に効かない（実地・2026-09-25）
+   */
   label: string;
 }
 
 /**
  * 印の区間の中の候補（§2.5）。**先頭は base**（いまの区切り）、以下コストの小さい順。
- * 区間の両端で切れていない経路は並べない（区間の外まで変わってしまう）。区間の中が同じなら 1 つにまとめる。
+ * 区間の両端で切れていない経路は並べない（区間の外まで変わってしまう）。**表記が同じなら 1 つにまとめる**
+ * （区切りだけ違う候補は、読み手には同じものが 2 行並んで見える）。
  *
  * **重みが最良の minWeight に満たない経路は出さない**（重みは baseShare と同じ λ のソフトマックス）。
  * 経路のコストには崖があり（「ここではきものをぬぐ」で 2 位は差 721、3 位以降は差 2405〜）、
@@ -169,10 +173,9 @@ export function alternativesIn(paths: PathFull[], span: KanaRange, max = 9, minW
       if (k === span.end) okEnd = true;
     }
     if (!okStart || !okEnd || inside.length === 0) continue;
-    const label = inside.map((sg) => sg.value).join("|");
-    const id = inside.map((sg) => `${sg.key}:${sg.value}`).join("|");
-    if (seen.has(id)) continue;
-    seen.add(id);
+    const label = inside.map((sg) => sg.value).join("");
+    if (seen.has(label)) continue;
+    seen.add(label);
     out.push({ segments: inside, label });
     if (out.length >= max) break;
   }
