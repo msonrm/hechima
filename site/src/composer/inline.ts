@@ -57,7 +57,7 @@ export class Inline {
       const span = document.createElement("span");
       // filled=false は変換待ちのかな。1〜5ms なので普段は目に入らない
       span.className = s.filled ? "cmp-unconfirmed" : "cmp-unconfirmed cmp-pending";
-      span.textContent = s.text;
+      appendMarked(span, [...s.text], s.marks, "cmp-unsure");
       parts.push(span);
     }
     // キャレットを置く場所（打鍵中の文の途中を直しているとき）。null = 未確定表示の直後
@@ -131,4 +131,21 @@ export class Inline {
     sel.removeAllRanges();
     sel.addRange(r);
   }
+}
+
+/**
+ * 文字列を印の区間で割って parent に積む。印の区間だけ className の span に包む。
+ * marks は chars の中の位置（コードポイント）
+ */
+function appendMarked(parent: HTMLElement, chars: string[], marks: { start: number; end: number }[], className: string): void {
+  let at = 0;
+  for (const m of [...marks].sort((a, b) => a.start - b.start)) {
+    if (m.start > at) parent.append(chars.slice(at, m.start).join(""));
+    const mark = document.createElement("span");
+    mark.className = className;
+    mark.textContent = chars.slice(m.start, m.end).join("");
+    parent.append(mark);
+    at = m.end;
+  }
+  if (at < chars.length) parent.append(chars.slice(at).join(""));
 }

@@ -1,10 +1,11 @@
-// Hechima v0.22.1 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// Hechima v0.23.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 2.0.0（keymap v2。配列は roles で役を宣言し、物理キーへの割当は
 // layouts + ホストの roleOverrides で決まる。**v1 のキーマップは読めない**）。
 // v0.19.0 は engine の局面問い合わせ（InputEngine.hostPhase）を配線する。
 // v0.20.0 は内蔵ローマ字と engine 経路（JSON 配列）の挙動差を消した: 英字合成が engine 挿し
 // でも 2 字目以降続くようになり（「Ja」が「Jあ」にならない）、記号は**どちらの経路でも
 // 特別扱いしない**（空でも文中でも未確定に入り変換対象。内蔵の「空なら即確定」を廃止）。
+// v0.23.0 は worker に paths 要求を足した（区切りの異なる経路の列挙。WorkerConnection.paths）。
 // ※ このヘッダの版は web/src/hechima/version.ts の HECHIMA_VERSION と一致させること
 //   （hechima リポジトリ側は npm run build が機械照合する）。
 // 対応バンドル: hechima.js / hechima.min.js（UMD、グローバル名 `Hechima`）
@@ -317,12 +318,14 @@ export interface ClearLearningRequest { type: "clearLearning"; id: number }
 export interface RevertRequest { type: "revert"; id: number }
 /** ホスト → Worker: 再変換（v0.10.0+。表記 → 逆変換でよみ → 変換。応答は result で keys がよみ） */
 export interface ReconvertRequest { type: "reconvert"; id: number; surface: string; maxCands?: number }
-export type WorkerRequest = InitRequest | ConvertRequest | ResizeRequest | ReconvertRequest | LearnRequest | ClearLearningRequest | RevertRequest | DictListRequest | DictAddRequest | DictRemoveRequest;
+/** 区切りの異なる経路の列挙（v0.23.0+。hechima_paths 入りの wasm が要る）。ステートレス */
+export interface PathsRequest { type: "paths"; id: number; kana: string; maxPaths?: number; expand?: number }
+export type WorkerRequest = InitRequest | ConvertRequest | ResizeRequest | ReconvertRequest | PathsRequest | LearnRequest | ClearLearningRequest | RevertRequest | DictListRequest | DictAddRequest | DictRemoveRequest;
 
 /** Worker → ホスト: 辞書ダウンロード進捗（total 不明時は 0） */
 export interface ProgressMessage { type: "progress"; loaded: number; total: number }
 /** Worker → ホスト: 初期化完了。features.learn = 学習可、persist = OPFS 永続化可（v0.8.0+） */
-export interface ReadyMessage { type: "ready"; protocol: number; version: string; features: { resize: boolean; learn?: boolean; persist?: boolean; dict?: boolean } }
+export interface ReadyMessage { type: "ready"; protocol: number; version: string; features: { resize: boolean; learn?: boolean; persist?: boolean; dict?: boolean; paths?: boolean } }
 /** Worker → ホスト: 初期化失敗 */
 export interface ErrorMessage { type: "error"; message: string }
 /** Worker → ホスト: convert / resize の結果。segments null = 結果なし（error は診断用付帯） */
@@ -337,7 +340,14 @@ export interface DictAddRequest { type: "dictAdd"; id: number; reading: string; 
 export interface DictRemoveRequest { type: "dictRemove"; id: number; index: number }
 /** Worker → ホスト: 辞書操作の結果（entries = 一覧。失敗は null + error） */
 export interface DictMessage { type: "dict"; id: number; entries: DictEntry[] | null; error?: string }
-export type WorkerResponse = ProgressMessage | ReadyMessage | ErrorMessage | ResultMessage | LearnedMessage | DictMessage;
+/**
+ * 1 本の経路 = 1 つの区切り方（v0.23.0+）。cost は Mozc の経路コスト（小さいほど良い。較正された確率ではない）。
+ * base = 通常の変換が選ぶ区切り。sizes = 各文節のよみの長さ（コードポイント）
+ */
+export interface WirePath { base: boolean; cost: number; sizes: number[]; segments: { key: string; value: string }[] }
+/** paths の結果。null = 未対応の wasm・失敗・未初期化 */
+export interface PathsMessage { type: "paths"; id: number; paths: WirePath[] | null; error?: string }
+export type WorkerResponse = ProgressMessage | ReadyMessage | ErrorMessage | ResultMessage | LearnedMessage | DictMessage | PathsMessage;
 
 /** Worker の構造互換（DOM の Worker がそのまま渡せる） */
 export interface HechimaWorkerLike {
@@ -365,7 +375,7 @@ export interface WorkerInitPaths {
 export interface ReadyInfo {
   protocol: number;
   version: string;
-  features: { resize: boolean; learn?: boolean; persist?: boolean; dict?: boolean };
+  features: { resize: boolean; learn?: boolean; persist?: boolean; dict?: boolean; paths?: boolean };
 }
 
 export interface WorkerConnection {
@@ -379,6 +389,8 @@ export interface WorkerConnection {
   learn(segments: { key: string; value: string }[]): Promise<boolean>;
   /** 再変換（v0.10.0+、cb.reconvert 互換）。不能・未対応は null */
   reconvert(surface: string): Promise<ConvertSegment[] | null>;
+  /** 区切りの異なる経路の列挙（v0.23.0+）。features.paths=false の wasm・失敗は null */
+  paths(kana: string, opts?: { maxPaths?: number; expand?: number }): Promise<WirePath[] | null>;
   /** 直近の learn の取り消し（v0.9.0+ = 確定アンドゥの学習巻き戻し） */
   revert(): Promise<boolean>;
   /** OPFS の学習保存分を削除（v0.8.0+。メモリ内の学習は再ロードまで残る） */

@@ -2,8 +2,8 @@
 //
 // この版で実装したのは **§2.1 全体の形 / §2.2 三層モデル / §2.3 テキストの流れ /
 // §2.6 キーの割り当て**（§7 の 4a''）と、**§2.4(a) 句点で踏みとどまる**（4b-1）、
-// **かなカーソル**（4b-0。← / → でマークの右端へ吸い付き、途中を直せる）。
-// 変換の不確実性マーク（§2.4(b)）と候補の提示（§2.5）はまだ無い。
+// **かなカーソル**（4b-0。← / → でマークの右端へ吸い付き、途中を直せる）、
+// **区切りの揺れの印**（§2.4(b) の一つ目。印だけで、走査と候補の提示 §2.5 はまだ無い）。
 //
 // 三層モデル（§2.2）は「場所」ではなく「状態」なので、この版が持つ層は見た目で分かれる:
 //   打鍵中の文   … 破線下線。ひらがな。**変換しない**（打鍵フィードバックのセーフガード）
@@ -15,6 +15,7 @@
 
 import {
   Flow, afterStop, canBreak, endsWithSpace, residueWithin, scanTarget, sentenceBreakAt,
+  shouldOfferAlternatives, unsureSpan,
   type KanaRange, type Segment,
 } from "./flow";
 import { Inline } from "./inline";
@@ -60,6 +61,8 @@ export interface ComposerStats {
    * again = 句点 2 回で変換 / through = 次の文を打ち進めて誤打ごと流れた / fixed = BS 等で直しに入った
    */
   typo: { stops: number; again: number; through: number; fixed: number };
+  /** 区切りの揺れ（§2.4(b)）: 経路を調べた文 / 印を付けた文。§4.2b の予想は 6 文に 1 文 */
+  unsure: { checked: number; marked: number };
 }
 
 export interface ComposerOptions {
@@ -86,6 +89,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     breaks: { punct: 0, key: 0, "double-space": 0 },
     enters: { settled: 0, typing: 0, newline: 0 },
     typo: { stops: 0, again: 0, through: 0, fixed: 0 },
+    unsure: { checked: 0, marked: 0 },
   };
   const bump = (): void => opts.onStats?.(stats);
 
@@ -102,8 +106,9 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
         ? `辞書を取得中… ${mb(loaded)} / ${mb(total)} MB`
         : `辞書を取得中… ${mb(loaded)} MB`),
   });
+  // 経路 API（hechima_paths）入りの wasm を読む（§2.4(b)）。辞書は本体と共有（VENDOR.md）
   conn
-    .init({ wasmJs: "/vendor/hechima-wasm/hechima-wasm.js", dataUrl: "/vendor/hechima-wasm/mozc.data" })
+    .init({ wasmJs: "/vendor/hechima-wasm-paths/hechima-wasm.js", dataUrl: "/vendor/hechima-wasm/mozc.data" })
     .then((info) => setStatus(`準備完了 — Mozc 実変換（hechima v${info.version}）`))
     .catch((e: Error) => setStatus(`エンジン初期化失敗: ${e.message}`));
 
@@ -116,6 +121,23 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       if (!segs) return;
       const out: Segment[] = segs.map((s) => ({ key: s.key, value: s.candidates?.[0] ?? s.key }));
       flow.applyConversion(kana, out);
+      render();
+    }).catch(() => {});
+    checkPaths(kana);
+  }
+
+  /**
+   * 区切りの揺れ（§2.4(b)）。経路を列挙し、`baseShare < 0.9` なら base と次点が食い違う区間に印を付ける。
+   * 列挙の条件（60 本 / 展開 800）は §4.2b の測定と同じにしてある —— ゲートの閾値はこの条件で決めた
+   */
+  function checkPaths(kana: string): void {
+    void conn.paths(kana, { maxPaths: 60, expand: 800 }).then((ps) => {
+      if (!ps) return; // 経路 API の無い wasm
+      stats.unsure.checked++;
+      const span = shouldOfferAlternatives(ps) ? unsureSpan(ps) : null;
+      if (span) stats.unsure.marked++;
+      flow.applyUnsure(kana, span);
+      bump();
       render();
     }).catch(() => {});
   }
@@ -528,6 +550,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       stats.breaks = { punct: 0, key: 0, "double-space": 0 };
       stats.enters = { settled: 0, typing: 0, newline: 0 };
       stats.typo = { stops: 0, again: 0, through: 0, fixed: 0 };
+      stats.unsure = { checked: 0, marked: 0 };
       bump();
     },
   };

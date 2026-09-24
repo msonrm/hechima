@@ -29,6 +29,8 @@ export interface SettledView {
   text: string;
   /** false = 変換がまだ届いておらず、かなを見せている */
   filled: boolean;
+  /** 区切りの揺れの印（§2.4(b)）。text の中の位置（コードポイント） */
+  marks: KanaRange[];
 }
 
 /** かなの中の区間（コードポイント単位、end は含まない。配列エンジンの KanaRange と同じ形） */
@@ -55,6 +57,10 @@ interface Settled {
   kana: string;
   text: string;
   filled: boolean;
+  /** 変換結果の文節（よみ → 表記の位置の写しに使う） */
+  segs?: Segment[];
+  /** 区切りの揺れている区間（よみの位置）。null = 揺れていない / まだ届いていない */
+  unsure: KanaRange | null;
 }
 
 /**
@@ -91,6 +97,78 @@ export function scanTarget(marks: KanaRange[], cursor: number, length: number, d
   }
   const ends = marks.map((m) => m.end).filter((e) => e > cursor);
   return ends.length ? Math.min(...ends) : Math.min(length, cursor + 1);
+}
+
+// ---- 区切りの揺れ（§2.4(b)） ----
+
+/** 経路（hechima の WirePath のうち、判定に要る分） */
+export interface PathLike {
+  base: boolean;
+  cost: number;
+  sizes: number[];
+}
+
+/**
+ * **baseShare** = 列挙した経路の重みのうち base の区切りが占める取り分（§4.2b / §9.2）。
+ * 重みは Mozc の経路コストのソフトマックス（λ = 温度）。**確率ではない** ——
+ * 「base が正しいか」には弱く（AUC 0.677）、「正解が近くにあるか」に効く（AUC 0.889）。
+ * だから量の名前であって判断の名前ではない。判断は shouldOfferAlternatives の側
+ */
+export function baseShare(paths: PathLike[], lambda = 500): number {
+  if (paths.length === 0) return 1;
+  const min = Math.min(...paths.map((p) => p.cost));
+  const ws = paths.map((p) => Math.exp(-(p.cost - min) / lambda));
+  const bi = Math.max(0, paths.findIndex((p) => p.base));
+  return ws[bi]! / ws.reduce((a, b) => a + b, 0);
+}
+
+/** 代替の区切りを出す価値があるか（§4.2b: baseShare < 0.9 で 6 文に 1 文、救えるものの 9 割弱） */
+export function shouldOfferAlternatives(paths: PathLike[]): boolean {
+  return paths.length >= 2 && baseShare(paths) < 0.9;
+}
+
+/** 区切りの位置（先頭 0 と末尾を含む） */
+function cutsOf(sizes: number[]): number[] {
+  const out = [0];
+  for (const n of sizes) out.push(out[out.length - 1]! + n);
+  return out;
+}
+
+/**
+ * base と次点の区切りが**食い違う区間**（よみの位置）。前後の共通の区切りまで広げるので、
+ * 両端は必ず base の文節の境目に乗る（表記の位置へ写せる）。食い違いが無ければ null
+ */
+export function unsureSpan(paths: PathLike[]): KanaRange | null {
+  const base = paths.find((p) => p.base);
+  const alt = paths.filter((p) => !p.base).sort((a, b) => a.cost - b.cost)[0];
+  if (!base || !alt) return null;
+  const b = cutsOf(base.sizes), a = cutsOf(alt.sizes);
+  const bs = new Set(b), as = new Set(a);
+  const diff = [...b.filter((x) => !as.has(x)), ...a.filter((x) => !bs.has(x))];
+  if (diff.length === 0) return null;
+  const lo = Math.min(...diff), hi = Math.max(...diff);
+  const common = b.filter((x) => as.has(x));
+  return {
+    start: Math.max(...common.filter((x) => x < lo)),
+    end: Math.min(...common.filter((x) => x > hi)),
+  };
+}
+
+/**
+ * よみの区間を表記の区間へ写す。区間の両端が文節の境目に乗っていなければ null
+ * （変換の文節と経路の base の区切りが食い違った = 写せない。印を出さない）
+ */
+export function kanaToSurface(segs: Segment[], r: KanaRange): KanaRange | null {
+  let k = 0, v = 0;
+  let start: number | null = null, end: number | null = null;
+  if (r.start === 0) start = 0;
+  for (const s of segs) {
+    k += [...s.key].length;
+    v += [...s.value].length;
+    if (k === r.start) start = v;
+    if (k === r.end) end = v;
+  }
+  return start !== null && end !== null && start < end ? { start, end } : null;
 }
 
 /** 末尾が句点か */
@@ -167,8 +245,8 @@ export class Flow {
   settle(kana: string): void {
     const segs = this.cache.get(kana);
     this.settled.push(segs
-      ? { kana, text: join(segs), filled: true }
-      : { kana, text: kana, filled: false });
+      ? { kana, text: join(segs), filled: true, segs, unsure: null }
+      : { kana, text: kana, filled: false, unsure: null });
     this.drainFifo();
   }
 
@@ -180,9 +258,20 @@ export class Flow {
       if (!s.filled && s.kana === kana) {
         s.text = join(segments);
         s.filled = true;
+        s.segs = segments;
       }
     }
     this.drainFifo();
+  }
+
+  /**
+   * 区切りの揺れが届いた（§2.4(b)）。**印だけを付ける。表記は書き換えない**（§2.2）。
+   * span = よみの区間（unsureSpan の結果）。null = 揺れていない
+   */
+  applyUnsure(kana: string, span: KanaRange | null): void {
+    for (const s of this.settled) {
+      if (s.kana === kana) s.unsure = span;
+    }
   }
 
   /**
@@ -213,7 +302,10 @@ export class Flow {
     const at = Math.min(this.cursor ?? chars.length, chars.length);
     const n = [...this.inflight].length;
     return {
-      settled: this.settled.map((s) => ({ text: s.text, filled: s.filled })),
+      settled: this.settled.map((s) => {
+        const m = s.filled && s.segs && s.unsure ? kanaToSurface(s.segs, s.unsure) : null;
+        return { text: s.text, filled: s.filled, marks: m ? [m] : [] };
+      }),
       typing: chars.slice(0, at).join("") + this.inflight + chars.slice(at).join(""),
       // カーソルより後ろのマークはローマ字の途中の分だけ後ろへずれる
       typingMarks: this.marks.map((m) => m.start >= at

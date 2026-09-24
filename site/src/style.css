@@ -859,6 +859,14 @@ table.km-roles td.note { font-size: 0.8rem; }
   border-radius: 2px;
 }
 
+/* 区切りの揺れの印（§2.4(b)）— 変換済み未確定の文の中で、区切りの違う読み方が拮抗している区間。
+   誤打の印（灰）と**見た目を分ける**（意味が違う: 打鍵の異常 / 変換の不確実性）ので、
+   アクセント色を薄く混ぜた背景にする。どちらも「背景 = 印」の語彙にそろえてある */
+.cmp-unsure {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: 2px;
+}
+
 /* 変換が届くまでの数ミリ秒だけ、かなのまま出ている状態 */
 .cmp-pending { color: var(--muted); }
 

@@ -1,6 +1,6 @@
 (function() {
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.22.1";
+	const HECHIMA_VERSION = "0.23.0";
 	//#endregion
 	//#region src/hechima/worker-main.ts
 	let M = null;
@@ -279,6 +279,59 @@
 			});
 		}
 	}
+	/** 区切りの異なる経路の列挙（v0.23.0+）。ステートレス */
+	function handlePaths(id, kana, maxPaths, expand) {
+		if (!M || typeof M._hechima_paths !== "function") {
+			self.postMessage({
+				type: "paths",
+				id,
+				paths: null,
+				error: "hechima_paths 未搭載（経路 API 入りの hechima-wasm が必要）"
+			});
+			return;
+		}
+		try {
+			const json = M.ccall("hechima_paths", "string", [
+				"string",
+				"number",
+				"number"
+			], [
+				kana,
+				maxPaths | 0,
+				expand | 0
+			]);
+			const raw = JSON.parse(json || "{}").paths;
+			if (!Array.isArray(raw)) {
+				self.postMessage({
+					type: "paths",
+					id,
+					paths: null
+				});
+				return;
+			}
+			const paths = raw.map((p) => ({
+				base: !!p.base,
+				cost: p.cost,
+				sizes: p.sizes,
+				segments: p.segments.map((s) => ({
+					key: s.key,
+					value: s.value
+				}))
+			}));
+			self.postMessage({
+				type: "paths",
+				id,
+				paths
+			});
+		} catch (e) {
+			self.postMessage({
+				type: "paths",
+				id,
+				paths: null,
+				error: String(e?.message ?? e)
+			});
+		}
+	}
 	/** 再変換（表記 → 逆変換でよみ → 通常変換）。結果は convert と同形（keys がよみ） */
 	function handleReconvert(id, surface, maxCands) {
 		if (!M || typeof M._hechima_reconvert !== "function") {
@@ -516,7 +569,8 @@
 						resize: !!(M && (typeof M._hechima_convert2 === "function" || typeof M._hechima_resize === "function")),
 						learn: !!(M && learningEnabled && typeof M._hechima_learn === "function"),
 						persist: opfsDir !== null,
-						dict: !!(M && typeof M._hechima_dict_add === "function")
+						dict: !!(M && typeof M._hechima_dict_add === "function"),
+						paths: !!(M && typeof M._hechima_paths === "function")
 					}
 				});
 			}, (e) => {
@@ -528,6 +582,7 @@
 		} else if (m.type === "convert") handleConvert(m.id, m.kana, m.maxCands ?? 9);
 		else if (m.type === "resize") handleResize(m.id, m.segIdx, m.offset, m.maxCands ?? 9);
 		else if (m.type === "reconvert") handleReconvert(m.id, m.surface, m.maxCands ?? 9);
+		else if (m.type === "paths") handlePaths(m.id, m.kana, m.maxPaths ?? 10, m.expand ?? 0);
 		else if (m.type === "learn") handleLearn(m.id, m.kana, m.sizes, m.values);
 		else if (m.type === "revert") handleRevert(m.id);
 		else if (m.type === "clearLearning") handleClearLearning(m.id);
