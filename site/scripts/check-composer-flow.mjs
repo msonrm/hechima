@@ -16,7 +16,7 @@ const srcPath = fileURLToPath(new URL("../src/composer/flow.ts", import.meta.url
 const js = ts.transpileModule(readFileSync(srcPath, "utf8"), {
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext },
 }).outputText;
-const { Flow, sentenceBreakAt, canBreak, endsWithSpace, afterStop, residueWithin, scanTarget, baseShare, shouldOfferAlternatives, unsureSpan, kanaToSurface, alternativesIn, spliceSegments } =
+const { Flow, sentenceBreakAt, canBreak, endsWithSpace, afterStop, residueWithin, scanTarget, baseShare, shouldOfferAlternatives, unsureSpan, kanaToSurface, alternativesIn, spliceSegments, shelfOf } =
   await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 
 let fail = 0;
@@ -63,8 +63,8 @@ eq("末尾が空白でない", endsWithSpace("けんさくご"), false);
   }
   eq("FIFO で古い順に出る", flushed, ["一。", "二。"]);
   eq("未確定は 2 文まで", f.view().settled, [
-    { text: "三。", filled: true, marks: [], focused: false },
-    { text: "四。", filled: true, marks: [], focused: false },
+    { text: "三。", filled: true, marks: [] },
+    { text: "四。", filled: true, marks: [] },
   ]);
 }
 
@@ -86,11 +86,11 @@ eq("末尾が空白でない", endsWithSpace("けんさくご"), false);
 {
   const f = new Flow(() => {});
   f.settle("あめだ。");
-  eq("未着はかなのまま", f.view().settled, [{ text: "あめだ。", filled: false, marks: [], focused: false }]);
+  eq("未着はかなのまま", f.view().settled, [{ text: "あめだ。", filled: false, marks: [] }]);
   f.applyConversion("あめだ。", seg([["あめだ。", "雨だ。"]]));
-  eq("届いたら埋まる", f.view().settled, [{ text: "雨だ。", filled: true, marks: [], focused: false }]);
+  eq("届いたら埋まる", f.view().settled, [{ text: "雨だ。", filled: true, marks: [] }]);
   f.applyConversion("あめだ。", seg([["あめだ。", "飴だ。"]]));
-  eq("2 度目は書き換えない", f.view().settled, [{ text: "雨だ。", filled: true, marks: [], focused: false }]);
+  eq("2 度目は書き換えない", f.view().settled, [{ text: "雨だ。", filled: true, marks: [] }]);
 }
 
 // --- 7. Enter は一段だけ進む（§2.3 の表） ---
@@ -201,7 +201,7 @@ eq("誤打が無ければ空", residueWithin([], "さか。"), []);
   f.settle("ここではきものをぬぐ");
   eq("印が届くまでは無し", f.view().settled[0].marks, []);
   f.applyUnsure("ここではきものをぬぐ", { start: 0, end: 8 });
-  eq("印は表記の位置で出る", f.view().settled[0].marks, [{ start: 0, end: 7 }]);
+  eq("印は表記の位置で出る", f.view().settled[0].marks, [{ start: 0, end: 7, kind: "unsure", focused: false }]);
   eq("表記は書き換えない", f.view().settled[0].text, "ここでは着物を脱ぐ");
 }
 
@@ -241,18 +241,57 @@ eq("誤打が無ければ空", residueWithin([], "さか。"), []);
   f.applyConversion(kana, segs);
   f.settle(kana);
   f.applyUnsure(kana, span, paths);
-  eq("印を持つ文", f.markedIndexes(), [0]);
-  f.setFocus(0);
-  eq("吸い付いた印は見える", f.view().settled[0].focused, true);
+  eq("印の一覧", f.markRefs(), [{ i: 0, key: "u" }]);
+  f.setFocus({ i: 0, key: "u" });
+  eq("吸い付いた印は見える", f.view().settled[0].marks[0].focused, true);
   eq("候補が並ぶ", f.alternatives().length, 3);
   eq("選ぶと差し替わる", f.choose(1), true);
   eq("表記が変わる", f.view().settled[0].text, "ここで履物を脱ぐ");
   eq("印は消え、走査は終わる", [f.view().settled[0].marks, f.focused], [[], null]);
 
   const g = new Flow(() => {});
-  g.applyConversion(kana, segs); g.settle(kana); g.applyUnsure(kana, span, paths); g.setFocus(0);
+  g.applyConversion(kana, segs); g.settle(kana); g.applyUnsure(kana, span, paths); g.setFocus({ i: 0, key: "u" });
   g.choose(0);
   eq("いまの区切りを選んでも印は消える（確かめた）", [g.view().settled[0].text, g.view().settled[0].marks], ["ここでは着物を脱ぐ", []]);
+}
+
+// --- 13. 文書内の一貫性の台帳（§8.1）。棚 = 末尾のひらがなを落としたよみ。先例と違う表記に印 ---
+eq("図る / 図った は同じ棚", [shelfOf("はかる", "図る"), shelfOf("はかった", "図った")],
+  [{ shelf: "はか", form: "図" }, { shelf: "はか", form: "図" }]);
+eq("助詞も落ちる", shelfOf("らんようを", "乱用を"), { shelf: "らんよう", form: "乱用" });
+eq("文末の句点も落ちる", [shelfOf("かいせつする。", "解説する。"), shelfOf("かいせつした。", "開設した。")],
+  [{ shelf: "かいせつ", form: "解説" }, { shelf: "かいせつ", form: "開設" }]);
+eq("長音は語の一部", shelfOf("こーひー", "コーヒー"), { shelf: "こーひー", form: "コーヒー" });
+eq("全部かなは棚に入れない", shelfOf("ここでは", "ここでは"), null);
+eq("棚のよみが 1 字は入れない（見る / 身を / 実が を繋がない）", shelfOf("みる", "見る"), null);
+{
+  const S = (key, value, candidates) => ({ key, value, candidates });
+  const f = new Flow(() => {});
+  f.applyConversion("らんようをいましめる。", [S("らんようを", "乱用を", ["乱用を", "濫用を"]), S("いましめる。", "戒める。")]);
+  f.settle("らんようをいましめる。");
+  f.applyConversion("らんようがめだつ。", [S("らんようが", "濫用が", ["濫用が", "乱用が"]), S("めだつ。", "目立つ。")]);
+  f.settle("らんようがめだつ。");
+  eq("先例と違う表記に印", f.view().settled[1].marks, [{ start: 0, end: 3, kind: "variant", focused: false }]);
+  eq("先例の文には付かない", f.view().settled[0].marks, []);
+  f.setFocus({ i: 1, key: "v0" });
+  eq("候補 = いまの表記と、先例に揃えた表記", f.alternatives().map((a) => a.label), ["濫用が", "乱用が"]);
+  eq("一言が添えられる", f.note(), "この文書では「乱用を」（1 文前）");
+  eq("揃える", f.choose(1), true);
+  eq("文節だけ差し替わる", f.view().settled[1].text, "乱用が目立つ。");
+  eq("印は消える", f.view().settled[1].marks, []);
+
+  const g = new Flow(() => {});
+  g.applyConversion("らんよう。", [S("らんよう。", "乱用。", ["乱用。"])]); g.settle("らんよう。");
+  g.applyConversion("らんよう！", [S("らんよう！", "濫用！", ["濫用！"])]); g.settle("らんよう！");
+  eq("先例の表記が候補に無ければ印を出さない", g.view().settled[1].marks, []);
+
+  const h = new Flow(() => {});
+  h.applyConversion("かいせつする。", [S("かいせつする。", "解説する。", ["解説する。", "開設する。"])]); h.settle("かいせつする。");
+  h.applyConversion("かいせつした。", [S("かいせつした。", "開設した。", ["開設した。", "解説した。"])]); h.settle("かいせつした。");
+  eq("同音異義語にも印は付く（§8.3 の留保。わざとなら 1 番で消える）", h.view().settled[1].marks.length, 1);
+  h.setFocus({ i: 1, key: "v0" });
+  h.choose(0);
+  eq("いまの表記のまま = 表記は変わらず印だけ消える", [h.view().settled[1].text, h.view().settled[1].marks], ["開設した。", []]);
 }
 
 if (fail) {

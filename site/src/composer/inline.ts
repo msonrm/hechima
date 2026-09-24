@@ -15,6 +15,8 @@ import type { FlowView } from "./flow";
 export interface PopupView {
   items: string[];
   selected: number;
+  /** 候補に添える一言（表記の揺れ: 「この文書では『乱用』（3 文前）」。§2.5） */
+  note?: string | null;
 }
 
 export class Inline {
@@ -66,8 +68,10 @@ export class Inline {
       const span = document.createElement("span");
       // filled=false は変換待ちのかな。1〜5ms なので普段は目に入らない
       span.className = s.filled ? "cmp-unconfirmed" : "cmp-unconfirmed cmp-pending";
-      appendMarked(span, [...s.text], s.marks, s.focused ? "cmp-unsure cmp-focus" : "cmp-unsure");
-      if (s.focused) focusedMark = span.querySelector(".cmp-focus");
+      appendMarked(span, [...s.text], s.marks.map((m) => ({
+        ...m, cls: `cmp-${m.kind}${m.focused ? " cmp-focus" : ""}`,
+      })));
+      focusedMark ??= span.querySelector(".cmp-focus");
       parts.push(span);
     }
     // キャレットを置く場所（打鍵中の文の途中を直しているとき）。null = 未確定表示の直後
@@ -139,6 +143,12 @@ export class Inline {
       row.append(num, text);
       return row;
     });
+    if (popup.note) {
+      const note = document.createElement("div");
+      note.className = "cmp-cand-note";
+      note.textContent = popup.note;
+      rows.push(note);
+    }
     this.popupEl.replaceChildren(...rows);
     const r = anchor.getBoundingClientRect();
     this.popupEl.style.left = `${Math.max(8, Math.min(r.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - this.popupEl.offsetWidth - 8))}px`;
@@ -180,15 +190,15 @@ export class Inline {
 }
 
 /**
- * 文字列を印の区間で割って parent に積む。印の区間だけ className の span に包む。
- * marks は chars の中の位置（コードポイント）
+ * 文字列を印の区間で割って parent に積む。印の区間だけ cls の span に包む。
+ * marks は chars の中の位置（コードポイント）。重ならないこと
  */
-function appendMarked(parent: HTMLElement, chars: string[], marks: { start: number; end: number }[], className: string): void {
+function appendMarked(parent: HTMLElement, chars: string[], marks: { start: number; end: number; cls: string }[]): void {
   let at = 0;
   for (const m of [...marks].sort((a, b) => a.start - b.start)) {
     if (m.start > at) parent.append(chars.slice(at, m.start).join(""));
     const mark = document.createElement("span");
-    mark.className = className;
+    mark.className = m.cls;
     mark.textContent = chars.slice(m.start, m.end).join("");
     parent.append(mark);
     at = m.end;
