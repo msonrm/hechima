@@ -39,7 +39,7 @@ export class Inline {
     this.host.normalize();
   }
 
-  render(view: FlowView): void {
+  render(view: FlowView, reviewing = false): void {
     if (!view.settled.length && !view.typing) {
       // 何も抱えていない = 未確定表示は無い。span を畳んでホストを素の本文へ戻す
       if (this.el?.isConnected) {
@@ -64,7 +64,7 @@ export class Inline {
     let caretAt: { node: Text; offset: number } | null = null;
     if (view.typing) {
       const span = document.createElement("span");
-      span.className = "cmp-typing";
+      span.className = reviewing ? "cmp-typing cmp-reviewing" : "cmp-typing";
       const chars = [...view.typing];
       const midCaret = view.caret < chars.length;
       // 誤打マーク（§2.4(a)）。**色は付けず、その区間だけ下線を波線にする**（目立たせない）。
