@@ -16,7 +16,7 @@ const srcPath = fileURLToPath(new URL("../src/composer/flow.ts", import.meta.url
 const js = ts.transpileModule(readFileSync(srcPath, "utf8"), {
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext },
 }).outputText;
-const { Flow, sentenceBreakAt, canBreak, endsWithSpace, afterStop, residueWithin, scanTarget } =
+const { Flow, sentenceBreakAt, canBreak, endsWithSpace, afterStop, residueWithin, scanTarget, baseShare, shouldOfferAlternatives, unsureSpan, kanaToSurface } =
   await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 
 let fail = 0;
@@ -63,8 +63,8 @@ eq("末尾が空白でない", endsWithSpace("けんさくご"), false);
   }
   eq("FIFO で古い順に出る", flushed, ["一。", "二。"]);
   eq("未確定は 2 文まで", f.view().settled, [
-    { text: "三。", filled: true },
-    { text: "四。", filled: true },
+    { text: "三。", filled: true, marks: [] },
+    { text: "四。", filled: true, marks: [] },
   ]);
 }
 
@@ -86,11 +86,11 @@ eq("末尾が空白でない", endsWithSpace("けんさくご"), false);
 {
   const f = new Flow(() => {});
   f.settle("あめだ。");
-  eq("未着はかなのまま", f.view().settled, [{ text: "あめだ。", filled: false }]);
+  eq("未着はかなのまま", f.view().settled, [{ text: "あめだ。", filled: false, marks: [] }]);
   f.applyConversion("あめだ。", seg([["あめだ。", "雨だ。"]]));
-  eq("届いたら埋まる", f.view().settled, [{ text: "雨だ。", filled: true }]);
+  eq("届いたら埋まる", f.view().settled, [{ text: "雨だ。", filled: true, marks: [] }]);
   f.applyConversion("あめだ。", seg([["あめだ。", "飴だ。"]]));
-  eq("2 度目は書き換えない", f.view().settled, [{ text: "雨だ。", filled: true }]);
+  eq("2 度目は書き換えない", f.view().settled, [{ text: "雨だ。", filled: true, marks: [] }]);
 }
 
 // --- 7. Enter は一段だけ進む（§2.3 の表） ---
@@ -170,6 +170,39 @@ eq("誤打が無ければ空", residueWithin([], "さか。"), []);
   eq("カーソルが無くてもマークはそのまま", f.view().typingMarks, [{ start: 2, end: 3 }, { start: 6, end: 7 }]);
   f.setCurrent("だかrざあ。", "t", [{ start: 2, end: 3 }, { start: 4, end: 5 }], 3);
   eq("カーソルより後ろのマークはずれる", f.view().typingMarks, [{ start: 2, end: 3 }, { start: 5, end: 6 }]);
+}
+
+// --- 11. 区切りの揺れ（§2.4(b)）。baseShare < 0.9 で印。印の区間は base と次点が食い違うところ ---
+{
+  // ここでは|着物を|脱ぐ（base）/ ここで|履物を|脱ぐ
+  const paths = [
+    { base: true, cost: 1000, sizes: [4, 4, 2] },
+    { base: false, cost: 1100, sizes: [3, 5, 2] },
+    { base: false, cost: 3000, sizes: [2, 2, 4, 2] },
+  ];
+  const share = baseShare(paths);
+  eq("baseShare は 0..1", share > 0 && share < 1, true);
+  eq("コスト差 100 は拮抗 = 代替を出す", shouldOfferAlternatives(paths), true);
+  eq("コスト差が大きければ出さない", shouldOfferAlternatives([
+    { base: true, cost: 1000, sizes: [4, 4, 2] }, { base: false, cost: 4000, sizes: [3, 5, 2] }]), false);
+  eq("経路が 1 本なら出さない", shouldOfferAlternatives([{ base: true, cost: 1000, sizes: [10] }]), false);
+  eq("食い違う区間は共通の区切りまで広げる", unsureSpan(paths), { start: 0, end: 8 });
+  eq("区切りが同じなら null", unsureSpan([
+    { base: true, cost: 1, sizes: [2, 2] }, { base: false, cost: 2, sizes: [2, 2] }]), null);
+  eq("後半だけの食い違い", unsureSpan([
+    { base: true, cost: 1, sizes: [3, 2, 3] }, { base: false, cost: 2, sizes: [3, 3, 2] }]), { start: 3, end: 8 });
+
+  const segs = seg([["ここでは", "ここでは"], ["きものを", "着物を"], ["ぬぐ", "脱ぐ"]]);
+  eq("よみの区間を表記へ写す", kanaToSurface(segs, { start: 0, end: 8 }), { start: 0, end: 7 });
+  eq("文節の途中は写せない", kanaToSurface(segs, { start: 0, end: 5 }), null);
+
+  const f = new Flow(() => {});
+  f.applyConversion("ここではきものをぬぐ", segs);
+  f.settle("ここではきものをぬぐ");
+  eq("印が届くまでは無し", f.view().settled[0].marks, []);
+  f.applyUnsure("ここではきものをぬぐ", { start: 0, end: 8 });
+  eq("印は表記の位置で出る", f.view().settled[0].marks, [{ start: 0, end: 7 }]);
+  eq("表記は書き換えない", f.view().settled[0].text, "ここでは着物を脱ぐ");
 }
 
 if (fail) {

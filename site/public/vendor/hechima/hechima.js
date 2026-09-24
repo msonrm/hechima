@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.22.1";
+	const HECHIMA_VERSION = "0.23.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	const ROMAJI = {
@@ -1112,6 +1112,7 @@
 		const pending = /* @__PURE__ */ new Map();
 		const pendingLearn = /* @__PURE__ */ new Map();
 		const pendingDict = /* @__PURE__ */ new Map();
+		const pendingPaths = /* @__PURE__ */ new Map();
 		let seq = 0;
 		let ready = null;
 		let initPromise = null;
@@ -1140,6 +1141,12 @@
 				if (resolve) {
 					pendingLearn.delete(m.id);
 					resolve(m.ok);
+				}
+			} else if (m.type === "paths") {
+				const resolve = pendingPaths.get(m.id);
+				if (resolve) {
+					pendingPaths.delete(m.id);
+					resolve(m.paths);
 				}
 			} else if (m.type === "dict") {
 				const resolve = pendingDict.get(m.id);
@@ -1224,6 +1231,21 @@
 				});
 			});
 		}
+		async function paths(kana, o) {
+			const info = await whenReady();
+			if (!info || !info.features.paths) return null;
+			return new Promise((resolve) => {
+				const id = ++seq;
+				pendingPaths.set(id, resolve);
+				worker.postMessage({
+					type: "paths",
+					id,
+					kana,
+					maxPaths: o?.maxPaths,
+					expand: o?.expand
+				});
+			});
+		}
 		async function revert() {
 			if (!await whenReady()) return false;
 			return new Promise((resolve) => {
@@ -1284,6 +1306,7 @@
 			convert,
 			resize,
 			reconvert,
+			paths,
 			learn,
 			revert,
 			clearLearning,
