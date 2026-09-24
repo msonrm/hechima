@@ -11,8 +11,15 @@
 
 import type { FlowView } from "./flow";
 
+/** 候補一覧（§2.5。見た目は標準 IME の候補ポップアップ、中身は経路の並列） */
+export interface PopupView {
+  items: string[];
+  selected: number;
+}
+
 export class Inline {
   private el: HTMLSpanElement | null = null;
+  private popupEl: HTMLDivElement | null = null;
 
   constructor(private readonly host: HTMLElement) {}
 
@@ -39,9 +46,10 @@ export class Inline {
     this.host.normalize();
   }
 
-  render(view: FlowView, reviewing = false): void {
+  render(view: FlowView, reviewing = false, popup: PopupView | null = null): void {
     if (!view.settled.length && !view.typing) {
       // 何も抱えていない = 未確定表示は無い。span を畳んでホストを素の本文へ戻す
+      this.renderPopup(null, null);
       if (this.el?.isConnected) {
         const marker = document.createTextNode("");
         this.el.replaceWith(marker);
@@ -53,11 +61,13 @@ export class Inline {
     }
     const el = this.ensure();
     const parts: HTMLSpanElement[] = [];
+    let focusedMark: HTMLElement | null = null;
     for (const s of view.settled) {
       const span = document.createElement("span");
       // filled=false は変換待ちのかな。1〜5ms なので普段は目に入らない
       span.className = s.filled ? "cmp-unconfirmed" : "cmp-unconfirmed cmp-pending";
-      appendMarked(span, [...s.text], s.marks, "cmp-unsure");
+      appendMarked(span, [...s.text], s.marks, s.focused ? "cmp-unsure cmp-focus" : "cmp-unsure");
+      if (s.focused) focusedMark = span.querySelector(".cmp-focus");
       parts.push(span);
     }
     // キャレットを置く場所（打鍵中の文の途中を直しているとき）。null = 未確定表示の直後
@@ -90,6 +100,13 @@ export class Inline {
       parts.push(span);
     }
     el.replaceChildren(...parts);
+    if (focusedMark) {
+      // 印に吸い付いている（§2.4「マークへの到達」）。キャレットは印の直後に置く
+      this.setCaretAfter(focusedMark);
+      this.renderPopup(popup, focusedMark);
+      return;
+    }
+    this.renderPopup(null, null);
     if (caretAt) {
       // 途中を直している。キャレットをかなカーソルの位置へ（§2.4 / 4b-0）
       this.setCaretIn(caretAt.node, caretAt.offset);
@@ -97,6 +114,35 @@ export class Inline {
       // 打鍵中はキャレットを未確定表示の直後に置き直す
       this.setCaretAfter(el);
     }
+  }
+
+  /** 候補一覧を印の真下に出す。popup = null なら畳む */
+  private renderPopup(popup: PopupView | null, anchor: HTMLElement | null): void {
+    if (!popup || !anchor) {
+      this.popupEl?.remove();
+      this.popupEl = null;
+      return;
+    }
+    if (!this.popupEl) {
+      this.popupEl = document.createElement("div");
+      this.popupEl.className = "cmp-popup";
+      this.popupEl.setAttribute("role", "listbox");
+      document.body.append(this.popupEl);
+    }
+    const rows = popup.items.map((text, i) => {
+      const row = document.createElement("div");
+      row.className = i === popup.selected ? "cmp-cand cmp-cand-sel" : "cmp-cand";
+      row.setAttribute("role", "option");
+      const num = document.createElement("span");
+      num.className = "cmp-cand-num";
+      num.textContent = String(i + 1);
+      row.append(num, text);
+      return row;
+    });
+    this.popupEl.replaceChildren(...rows);
+    const r = anchor.getBoundingClientRect();
+    this.popupEl.style.left = `${Math.max(8, Math.min(r.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - this.popupEl.offsetWidth - 8))}px`;
+    this.popupEl.style.top = `${r.bottom + window.scrollY + 6}px`;
   }
 
   private caretRange(): Range {
