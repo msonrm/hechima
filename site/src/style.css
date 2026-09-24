@@ -849,14 +849,14 @@ table.km-roles td.note { font-size: 0.8rem; }
 }
 
 /* 誤打マーク（§2.4(a)）— 句点で踏みとどまったときだけ出る。**色は付けない**。
-   破線の中に細い波線を置いても見分けられなかった（実地・2026-09-24）ので、
-   止まっている間は**文の破線を消し**、波線だけを太く残す。色ではなく対比で浮かせる */
-.cmp-typing.cmp-reviewing { text-decoration: none; }
+   波線は 1〜2 字では波に見えず「傾きの狂った線」になった（実地・2026-09-24）ので、
+   **薄い背景**にする。文字色を薄く混ぜるので明暗どちらのテーマでも中立の灰になる。
+   止まっている間は文の破線を**薄くして**印を浮かせる。消すと、止まっている文が確定した本文と
+   見分けられなくなる（未確定であることは下線が示している） */
+.cmp-typing.cmp-reviewing { text-decoration-color: color-mix(in srgb, currentColor 30%, transparent); }
 .cmp-typo {
-  text-decoration: underline;
-  text-decoration-style: wavy;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 4px;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 2px;
 }
 
 /* 変換が届くまでの数ミリ秒だけ、かなのまま出ている状態 */

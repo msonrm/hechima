@@ -514,7 +514,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     render();
   }
 
-  /** 止まっているか直している最中は、打鍵中の文の破線を消して波線を浮かせる */
+  /** 止まっているか直している最中は、打鍵中の文の破線を薄くして誤打の印を浮かせる */
   function render(): void {
     inline.render(flow.view(), reviewing());
   }

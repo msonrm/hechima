@@ -67,7 +67,7 @@ export class Inline {
       span.className = reviewing ? "cmp-typing cmp-reviewing" : "cmp-typing";
       const chars = [...view.typing];
       const midCaret = view.caret < chars.length;
-      // 誤打マーク（§2.4(a)）。**色は付けず、その区間だけ下線を波線にする**（目立たせない）。
+      // 誤打マーク（§2.4(a)）。**色は付けず、その区間だけ背景を薄く塗る**（目立たせすぎない）。
       // 区切り目 = マークの端とキャレット。文字列をそこで割って、マークの区間だけ span に包む
       const cuts = new Set<number>([0, chars.length]);
       for (const m of view.typingMarks) { cuts.add(m.start); cuts.add(m.end); }
