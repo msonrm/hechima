@@ -867,9 +867,9 @@ table.km-roles td.note { font-size: 0.8rem; }
   border-radius: 2px;
 }
 
-/* 文書内の表記の揺れの印（§8.1）— 区切りの揺れと同じ「変換の」印なので同じ色味。
+/* 文書内の表記の揺れの印（§8.1）と同音異義語の印（§2.4(b)②）— 区切りの揺れと同じ「変換の」印なので同じ色味。
    中身は候補一覧の一言（「この文書では『乱用』」）で見分ける */
-.cmp-variant {
+.cmp-variant, .cmp-homonym {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   border-radius: 2px;
 }

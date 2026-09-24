@@ -3,7 +3,8 @@
 // この版で実装したのは **§2.1 全体の形 / §2.2 三層モデル / §2.3 テキストの流れ /
 // §2.6 キーの割り当て**（§7 の 4a''）と、**§2.4(a) 句点で踏みとどまる**（4b-1）、
 // **かなカーソル**（4b-0。← / → でマークの右端へ吸い付き、途中を直せる）、
-// **区切りの揺れの印**（§2.4(b)①）、**文書内の表記の揺れの印**（③・§8.1 の台帳）、
+// **区切りの揺れの印**（§2.4(b)①）、**同音異義語の印**（②。迷っているときだけ・判定しない）、
+// **文書内の表記の揺れの印**（③・§8.1 の台帳）、
 // **印への走査・候補の提示**（§2.5 / 4c）。
 //
 // 三層モデル（§2.2）は「場所」ではなく「状態」なので、この版が持つ層は見た目で分かれる:
@@ -16,7 +17,7 @@
 
 import {
   Flow, afterStop, canBreak, endsWithSpace, residueWithin, scanTarget, sentenceBreakAt,
-  shouldOfferAlternatives, unsureSpan,
+  shouldOfferAlternatives, unsureSpan, isHomonymDoubt,
   type KanaRange, type Segment,
 } from "./flow";
 import { Inline } from "./inline";
@@ -69,6 +70,8 @@ export interface ComposerStats {
   unsure: { checked: number; marked: number; opened: number; changed: number; kept: number };
   /** 表記の揺れ（§8.1）: 候補を開いた / 先例に揃えた / いまの表記のまま（わざと使い分けた） */
   variant: { opened: number; changed: number; kept: number };
+  /** 同音異義語（§2.4(b)②）: 印を付けた文節 / 候補を開いた / 別の候補を選んだ / いまのまま */
+  homonym: { marked: number; opened: number; changed: number; kept: number };
 }
 
 export interface ComposerOptions {
@@ -97,6 +100,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     typo: { stops: 0, again: 0, through: 0, fixed: 0 },
     unsure: { checked: 0, marked: 0, opened: 0, changed: 0, kept: 0 },
     variant: { opened: 0, changed: 0, kept: 0 },
+    homonym: { marked: 0, opened: 0, changed: 0, kept: 0 },
   };
   const bump = (): void => opts.onStats?.(stats);
 
@@ -128,9 +132,11 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     void conn.convert(kana).then((segs) => {
       if (!segs) return;
       const out: Segment[] = segs.map((s) => ({
-        key: s.key, value: s.candidates?.[0] ?? s.key, candidates: s.candidates,
+        key: s.key, value: s.candidates?.[0] ?? s.key, candidates: s.candidates, costs: s.costs,
       }));
       flow.applyConversion(kana, out);
+      stats.homonym.marked += out.filter(isHomonymDoubt).length;
+      bump();
       render();
     }).catch(() => {});
     checkPaths(kana);
@@ -572,6 +578,10 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
   let popup: { selected: number } | null = null;
 
   /** 未確定の文の印へ入る（いちばん新しい印から）。印が無ければ false */
+  function statsOf(kind: string | null): { opened: number; changed: number; kept: number } {
+    return kind === "variant" ? stats.variant : kind === "homonym" ? stats.homonym : stats.unsure;
+  }
+
   function enterMarks(): boolean {
     const refs = flow.markRefs();
     if (!refs.length) return false;
@@ -587,7 +597,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
   }
 
   function choose(index: number): void {
-    const bucket = flow.focusedKind() === "variant" ? stats.variant : stats.unsure;
+    const bucket = statsOf(flow.focusedKind());
     if (flow.choose(index)) {
       if (index === 0) bucket.kept++;
       else bucket.changed++;
@@ -625,7 +635,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     } else if (e.key === " ") {
       // 印の上の Space = 候補（§2.6。Space の意味が変わる境目は「印の上かどうか」）
       popup = { selected: 0 };
-      (flow.focusedKind() === "variant" ? stats.variant : stats.unsure).opened++;
+      statsOf(flow.focusedKind()).opened++;
       bump();
     } else if (e.key === "Escape") {
       leaveMarks();
@@ -648,6 +658,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       stats.typo = { stops: 0, again: 0, through: 0, fixed: 0 };
       stats.unsure = { checked: 0, marked: 0, opened: 0, changed: 0, kept: 0 };
       stats.variant = { opened: 0, changed: 0, kept: 0 };
+      stats.homonym = { marked: 0, opened: 0, changed: 0, kept: 0 };
       bump();
     },
   };
