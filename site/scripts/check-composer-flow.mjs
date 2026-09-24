@@ -16,7 +16,7 @@ const srcPath = fileURLToPath(new URL("../src/composer/flow.ts", import.meta.url
 const js = ts.transpileModule(readFileSync(srcPath, "utf8"), {
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext },
 }).outputText;
-const { Flow, sentenceBreakAt, canBreak, endsWithSpace, afterStop, residueWithin, scanTarget, baseShare, shouldOfferAlternatives, unsureSpan, kanaToSurface } =
+const { Flow, sentenceBreakAt, canBreak, endsWithSpace, afterStop, residueWithin, scanTarget, baseShare, shouldOfferAlternatives, unsureSpan, kanaToSurface, alternativesIn, spliceSegments } =
   await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 
 let fail = 0;
@@ -63,8 +63,8 @@ eq("末尾が空白でない", endsWithSpace("けんさくご"), false);
   }
   eq("FIFO で古い順に出る", flushed, ["一。", "二。"]);
   eq("未確定は 2 文まで", f.view().settled, [
-    { text: "三。", filled: true, marks: [] },
-    { text: "四。", filled: true, marks: [] },
+    { text: "三。", filled: true, marks: [], focused: false },
+    { text: "四。", filled: true, marks: [], focused: false },
   ]);
 }
 
@@ -86,11 +86,11 @@ eq("末尾が空白でない", endsWithSpace("けんさくご"), false);
 {
   const f = new Flow(() => {});
   f.settle("あめだ。");
-  eq("未着はかなのまま", f.view().settled, [{ text: "あめだ。", filled: false, marks: [] }]);
+  eq("未着はかなのまま", f.view().settled, [{ text: "あめだ。", filled: false, marks: [], focused: false }]);
   f.applyConversion("あめだ。", seg([["あめだ。", "雨だ。"]]));
-  eq("届いたら埋まる", f.view().settled, [{ text: "雨だ。", filled: true, marks: [] }]);
+  eq("届いたら埋まる", f.view().settled, [{ text: "雨だ。", filled: true, marks: [], focused: false }]);
   f.applyConversion("あめだ。", seg([["あめだ。", "飴だ。"]]));
-  eq("2 度目は書き換えない", f.view().settled, [{ text: "雨だ。", filled: true, marks: [] }]);
+  eq("2 度目は書き換えない", f.view().settled, [{ text: "雨だ。", filled: true, marks: [], focused: false }]);
 }
 
 // --- 7. Enter は一段だけ進む（§2.3 の表） ---
@@ -203,6 +203,51 @@ eq("誤打が無ければ空", residueWithin([], "さか。"), []);
   f.applyUnsure("ここではきものをぬぐ", { start: 0, end: 8 });
   eq("印は表記の位置で出る", f.view().settled[0].marks, [{ start: 0, end: 7 }]);
   eq("表記は書き換えない", f.view().settled[0].text, "ここでは着物を脱ぐ");
+}
+
+// --- 12. 候補の提示（§2.5）。印の区間の中を区切りで並べ、選んだら区間だけ差し替える ---
+{
+  const P = (base, cost, pairs) => ({ base, cost, sizes: pairs.map(([k]) => [...k].length), segments: seg(pairs) });
+  const paths = [
+    P(false, 1100, [["ここで", "ここで"], ["はきものを", "履物を"], ["ぬぐ", "脱ぐ"]]),
+    P(true, 1000, [["ここでは", "ここでは"], ["きものを", "着物を"], ["ぬぐ", "脱ぐ"]]),
+    P(false, 1500, [["ここで", "此処で"], ["はきものを", "履物を"], ["ぬぐ", "脱ぐ"]]),
+    P(false, 1600, [["ここでは", "ここでは"], ["きものを", "着物を"], ["ぬぐ", "拭ぐ"]]),
+    P(false, 1700, [["ここ", "ここ"], ["では", "では"], ["きものをぬぐ", "着物を脱ぐ"]]),
+  ];
+  const span = { start: 0, end: 8 };
+  const alts = alternativesIn(paths, span);
+  eq("先頭はいまの区切り、以下コスト順", alts.map((a) => a.label), ["ここでは|着物を", "ここで|履物を", "此処で|履物を"]);
+  eq("区間の中が同じ経路はまとめる（語尾だけ違う経路は重複）", alts.length, 3);
+  const cliff = [
+    P(true, 17573, [["ここでは", "ここでは"], ["きものを", "着物を"], ["ぬぐ", "脱ぐ"]]),
+    P(false, 18294, [["ここで", "ここで"], ["はきものを", "履物を"], ["ぬぐ", "脱ぐ"]]),
+    P(false, 19978, [["ここで", "ここで"], ["はき", "破棄"], ["ものを", "者を"], ["ぬぐ", "脱ぐ"]]),
+    P(false, 23654, [["ここ", "個々"], ["で", "デ"], ["はきものを", "履物を"], ["ぬぐ", "脱ぐ"]]),
+  ];
+  eq("コストの崖の向こうは出さない（実測の値）", alternativesIn(cliff, span).map((a) => a.label), ["ここでは|着物を", "ここで|履物を"]);
+
+  const segs = seg([["ここでは", "ここでは"], ["きものを", "着物を"], ["ぬぐ", "脱ぐ"]]);
+  eq("区間だけ差し替える", spliceSegments(segs, span, alts[1].segments).map((s) => s.value).join("|"), "ここで|履物を|脱ぐ");
+  eq("境目に乗らなければ null", spliceSegments(segs, { start: 0, end: 5 }, alts[1].segments), null);
+
+  const f = new Flow(() => {});
+  const kana = "ここではきものをぬぐ";
+  f.applyConversion(kana, segs);
+  f.settle(kana);
+  f.applyUnsure(kana, span, paths);
+  eq("印を持つ文", f.markedIndexes(), [0]);
+  f.setFocus(0);
+  eq("吸い付いた印は見える", f.view().settled[0].focused, true);
+  eq("候補が並ぶ", f.alternatives().length, 3);
+  eq("選ぶと差し替わる", f.choose(1), true);
+  eq("表記が変わる", f.view().settled[0].text, "ここで履物を脱ぐ");
+  eq("印は消え、走査は終わる", [f.view().settled[0].marks, f.focused], [[], null]);
+
+  const g = new Flow(() => {});
+  g.applyConversion(kana, segs); g.settle(kana); g.applyUnsure(kana, span, paths); g.setFocus(0);
+  g.choose(0);
+  eq("いまの区切りを選んでも印は消える（確かめた）", [g.view().settled[0].text, g.view().settled[0].marks], ["ここでは着物を脱ぐ", []]);
 }
 
 if (fail) {

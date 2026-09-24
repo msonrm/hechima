@@ -31,6 +31,8 @@ export interface SettledView {
   filled: boolean;
   /** 区切りの揺れの印（§2.4(b)）。text の中の位置（コードポイント） */
   marks: KanaRange[];
+  /** 印に吸い付いている（← / → の走査。§2.4「マークへの到達」） */
+  focused: boolean;
 }
 
 /** かなの中の区間（コードポイント単位、end は含まない。配列エンジンの KanaRange と同じ形） */
@@ -61,6 +63,8 @@ interface Settled {
   segs?: Segment[];
   /** 区切りの揺れている区間（よみの位置）。null = 揺れていない / まだ届いていない */
   unsure: KanaRange | null;
+  /** 経路（候補の提示に使う。§2.5） */
+  paths?: PathFull[];
 }
 
 /**
@@ -125,6 +129,75 @@ export function baseShare(paths: PathLike[], lambda = 500): number {
 /** 代替の区切りを出す価値があるか（§4.2b: baseShare < 0.9 で 6 文に 1 文、救えるものの 9 割弱） */
 export function shouldOfferAlternatives(paths: PathLike[]): boolean {
   return paths.length >= 2 && baseShare(paths) < 0.9;
+}
+
+/** 候補の提示に要る分まで持った経路 */
+export interface PathFull extends PathLike {
+  segments: Segment[];
+}
+
+/** 候補 1 つ = 印の区間の中の文節の並び（§2.5「区切りでグループ化し、各グループの最良を代表に」） */
+export interface Alternative {
+  segments: Segment[];
+  /** 区切りを見せる表示（`ここで|履物を`） */
+  label: string;
+}
+
+/**
+ * 印の区間の中の候補（§2.5）。**先頭は base**（いまの区切り）、以下コストの小さい順。
+ * 区間の両端で切れていない経路は並べない（区間の外まで変わってしまう）。区間の中が同じなら 1 つにまとめる。
+ *
+ * **重みが最良の minWeight に満たない経路は出さない**（重みは baseShare と同じ λ のソフトマックス）。
+ * 経路のコストには崖があり（「ここではきものをぬぐ」で 2 位は差 721、3 位以降は差 2405〜）、
+ * 崖の向こうは「ここで|破棄|者を」「個々|デ|履物を」のような読めない候補になる（2026-09-25 実地）
+ */
+export function alternativesIn(paths: PathFull[], span: KanaRange, max = 9, minWeight = 0.02, lambda = 500): Alternative[] {
+  const min = Math.min(...paths.map((p) => p.cost));
+  const ordered = [...paths]
+    .filter((p) => p.base || Math.exp(-(p.cost - min) / lambda) >= minWeight)
+    .sort((a, b) => (a.base === b.base ? a.cost - b.cost : a.base ? -1 : 1));
+  const seen = new Set<string>();
+  const out: Alternative[] = [];
+  for (const p of ordered) {
+    const inside: Segment[] = [];
+    let k = 0, okStart = span.start === 0, okEnd = false;
+    for (const sg of p.segments) {
+      const from = k;
+      k += [...sg.key].length;
+      if (k === span.start) okStart = true;
+      if (from >= span.start && k <= span.end) inside.push(sg);
+      if (k === span.end) okEnd = true;
+    }
+    if (!okStart || !okEnd || inside.length === 0) continue;
+    const label = inside.map((sg) => sg.value).join("|");
+    const id = inside.map((sg) => `${sg.key}:${sg.value}`).join("|");
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({ segments: inside, label });
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/**
+ * 文節の並びのうち、よみの区間 span に当たる文節を replacement に差し替える。
+ * span の両端が文節の境目に乗っていなければ null
+ */
+export function spliceSegments(segs: Segment[], span: KanaRange, replacement: Segment[]): Segment[] | null {
+  const out: Segment[] = [];
+  let k = 0, inserted = false, okStart = span.start === 0, okEnd = false;
+  for (const sg of segs) {
+    const from = k;
+    k += [...sg.key].length;
+    if (k === span.start) okStart = true;
+    if (k === span.end) okEnd = true;
+    if (from >= span.start && k <= span.end) {
+      if (!inserted) { out.push(...replacement); inserted = true; }
+    } else {
+      out.push(sg);
+    }
+  }
+  return okStart && okEnd && inserted ? out : null;
 }
 
 /** 区切りの位置（先頭 0 と末尾を含む） */
@@ -268,10 +341,59 @@ export class Flow {
    * 区切りの揺れが届いた（§2.4(b)）。**印だけを付ける。表記は書き換えない**（§2.2）。
    * span = よみの区間（unsureSpan の結果）。null = 揺れていない
    */
-  applyUnsure(kana: string, span: KanaRange | null): void {
+  applyUnsure(kana: string, span: KanaRange | null, paths?: PathFull[]): void {
     for (const s of this.settled) {
-      if (s.kana === kana) s.unsure = span;
+      if (s.kana === kana) {
+        s.unsure = span;
+        s.paths = paths;
+      }
     }
+  }
+
+  // ---- 印への走査と候補の提示（§2.4「マークへの到達」/ §2.5） ----
+
+  /** 吸い付いている印の持ち主（settled の添字）。null = 走査していない */
+  private focus: number | null = null;
+
+  /** 印を持つ未確定の文の添字（古い順） */
+  markedIndexes(): number[] {
+    return this.settled.flatMap((s, i) => (marksOf(s).length ? [i] : []));
+  }
+
+  get focused(): number | null {
+    return this.focus !== null && this.markedIndexes().includes(this.focus) ? this.focus : null;
+  }
+
+  setFocus(i: number | null): void {
+    this.focus = i;
+  }
+
+  /** 吸い付いている印の候補。先頭がいまの区切り */
+  alternatives(): Alternative[] {
+    const i = this.focused;
+    const s = i === null ? null : this.settled[i];
+    if (!s || !s.unsure || !s.paths) return [];
+    return alternativesIn(s.paths, s.unsure);
+  }
+
+  /**
+   * 候補を選んだ（§2.5）。**書き換えはユーザーが選んだときだけ**（§2.2 の「自動修正はしない」は保たれる）。
+   * 先頭（いまの区切り）を選んだときも印は消す = 見て確かめた
+   */
+  choose(index: number): boolean {
+    const i = this.focused;
+    const s = i === null ? null : this.settled[i];
+    const alt = this.alternatives()[index];
+    if (!s || !s.unsure || !s.segs || !alt) return false;
+    if (index > 0) {
+      const next = spliceSegments(s.segs, s.unsure, alt.segments);
+      if (!next) return false;
+      s.segs = next;
+      s.text = join(next);
+    }
+    s.unsure = null;
+    this.focus = null;
+    return true;
   }
 
   /**
@@ -283,6 +405,7 @@ export class Flow {
       // 変換済み未確定の文を、その時の状態のままホストへ。**打鍵中の文は何も変わらない**
       for (const s of this.settled) this.onFlush(s.text);
       this.settled = [];
+      this.focus = null;
       return "settled";
     }
     if (this.kana || this.inflight) {
@@ -302,10 +425,9 @@ export class Flow {
     const at = Math.min(this.cursor ?? chars.length, chars.length);
     const n = [...this.inflight].length;
     return {
-      settled: this.settled.map((s) => {
-        const m = s.filled && s.segs && s.unsure ? kanaToSurface(s.segs, s.unsure) : null;
-        return { text: s.text, filled: s.filled, marks: m ? [m] : [] };
-      }),
+      settled: this.settled.map((s, i) => ({
+        text: s.text, filled: s.filled, marks: marksOf(s), focused: i === this.focused,
+      })),
       typing: chars.slice(0, at).join("") + this.inflight + chars.slice(at).join(""),
       // カーソルより後ろのマークはローマ字の途中の分だけ後ろへずれる
       typingMarks: this.marks.map((m) => m.start >= at
@@ -329,8 +451,16 @@ export class Flow {
   private drainFifo(): void {
     while (this.settled.length + 1 > BUFFER_SENTENCES && this.settled[0]!.filled) {
       this.onFlush(this.settled.shift()!.text);
+      // 添字がずれる。押し出された文に吸い付いていたなら走査は終わる
+      if (this.focus !== null) this.focus = this.focus > 0 ? this.focus - 1 : null;
     }
   }
+}
+
+/** 未確定の文の印（表記の位置）。変換が届いていて、区間が文節の境目に写せるときだけ */
+function marksOf(s: Settled): KanaRange[] {
+  const m = s.filled && s.segs && s.unsure ? kanaToSurface(s.segs, s.unsure) : null;
+  return m ? [m] : [];
 }
 
 function join(segs: Segment[]): string {

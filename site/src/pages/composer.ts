@@ -44,7 +44,9 @@ function renderStats(s: ComposerStats): void {
     // 句点で踏みとどまった後どうなったか（§2.4(a)）。「流れた」が多ければ、止めても見られていない
     + `／誤打で止めた ${s.typo.stops}（句点2回 ${s.typo.again}・流れた ${s.typo.through}・直した ${s.typo.fixed}）`
     // 区切りの揺れの印を付けた割合（§2.4(b)）。§4.2b の予想は 6 文に 1 文（17.8%）
-    + `／区切りの揺れ ${s.unsure.marked}/${s.unsure.checked} 文`;
+    + `／区切りの揺れ ${s.unsure.marked}/${s.unsure.checked} 文`
+    // 候補を開いて何を選んだか（§2.5）。「確かめた」= いまの区切りを選んだ = 印が空振りだった
+    + `（候補を開いた ${s.unsure.opened}・別の区切りを選んだ ${s.unsure.changed}・確かめた ${s.unsure.kept}）`;
 }
 renderStats(composer.stats);
 

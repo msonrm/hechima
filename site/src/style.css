@@ -867,6 +867,29 @@ table.km-roles td.note { font-size: 0.8rem; }
   border-radius: 2px;
 }
 
+/* 印に吸い付いている（← / → の走査。§2.4「マークへの到達」）。枠で「いまここ」を示す */
+.cmp-unsure.cmp-focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 候補一覧（§2.5）— 見た目は標準 IME の候補ポップアップ。区切りは | で見せる */
+.cmp-popup {
+  position: absolute;
+  z-index: 50;
+  min-width: 8em;
+  padding: 4px 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--fg) 18%, transparent);
+  font-family: var(--editor-font);
+  font-size: var(--cand-size);
+}
+.cmp-cand { display: flex; gap: 0.6em; padding: 2px 12px; white-space: nowrap; }
+.cmp-cand-sel { background: var(--focus-bg); }
+.cmp-cand-num { color: var(--muted); font-variant-numeric: tabular-nums; }
+
 /* 変換が届くまでの数ミリ秒だけ、かなのまま出ている状態 */
 .cmp-pending { color: var(--muted); }
 

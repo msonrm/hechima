@@ -3,7 +3,7 @@
 // この版で実装したのは **§2.1 全体の形 / §2.2 三層モデル / §2.3 テキストの流れ /
 // §2.6 キーの割り当て**（§7 の 4a''）と、**§2.4(a) 句点で踏みとどまる**（4b-1）、
 // **かなカーソル**（4b-0。← / → でマークの右端へ吸い付き、途中を直せる）、
-// **区切りの揺れの印**（§2.4(b) の一つ目。印だけで、走査と候補の提示 §2.5 はまだ無い）。
+// **区切りの揺れの印**（§2.4(b) の一つ目）と、**印への走査・候補の提示**（§2.5 / 4c）。
 //
 // 三層モデル（§2.2）は「場所」ではなく「状態」なので、この版が持つ層は見た目で分かれる:
 //   打鍵中の文   … 破線下線。ひらがな。**変換しない**（打鍵フィードバックのセーフガード）
@@ -61,8 +61,11 @@ export interface ComposerStats {
    * again = 句点 2 回で変換 / through = 次の文を打ち進めて誤打ごと流れた / fixed = BS 等で直しに入った
    */
   typo: { stops: number; again: number; through: number; fixed: number };
-  /** 区切りの揺れ（§2.4(b)）: 経路を調べた文 / 印を付けた文。§4.2b の予想は 6 文に 1 文 */
-  unsure: { checked: number; marked: number };
+  /**
+   * 区切りの揺れ（§2.4(b) / §2.5）: 経路を調べた文 / 印を付けた文 / 候補を開いた回数 /
+   * 別の区切りを選んだ / いまの区切りを選んだ（確かめた）
+   */
+  unsure: { checked: number; marked: number; opened: number; changed: number; kept: number };
 }
 
 export interface ComposerOptions {
@@ -89,7 +92,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     breaks: { punct: 0, key: 0, "double-space": 0 },
     enters: { settled: 0, typing: 0, newline: 0 },
     typo: { stops: 0, again: 0, through: 0, fixed: 0 },
-    unsure: { checked: 0, marked: 0 },
+    unsure: { checked: 0, marked: 0, opened: 0, changed: 0, kept: 0 },
   };
   const bump = (): void => opts.onStats?.(stats);
 
@@ -136,7 +139,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       stats.unsure.checked++;
       const span = shouldOfferAlternatives(ps) ? unsureSpan(ps) : null;
       if (span) stats.unsure.marked++;
-      flow.applyUnsure(kana, span);
+      flow.applyUnsure(kana, span, ps);
       bump();
       render();
     }).catch(() => {});
@@ -174,6 +177,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
         moveCaret(action.type === "moveLeft" ? -1 : 1);
         return true;
       }
+      if (action.type === "moveLeft" && enterMarks()) return true;
       return false;
     };
     engine = e;
@@ -293,6 +297,8 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
    */
   function moveCaret(dir: -1 | 1): void {
     if (!engine) return;
+    // 文頭で ← = 手前の未確定の文の印へ（§2.4「マークへの到達」。止まっている文の直しは別）
+    if (dir < 0 && cursorOf() === 0 && stopped === null && !fixing && enterMarks()) return;
     // 行き先は句点を消す前の位置で決める（誤打が句点の直前にあると、消した後では右端 = 文末になる）
     const target = scanTarget(visibleMarks(), cursorOf(), kanaLength(), dir);
     if (dir < 0) enterFix();
@@ -397,6 +403,16 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     if (e.metaKey || e.ctrlKey) return; // OS/ブラウザのショートカットは奪わない
     if (e.code === "AltRight") return;
     if (e.altKey) return;
+
+    if (flow.focused !== null && handleMarkKey(e)) {
+      e.preventDefault();
+      return;
+    }
+    // 打鍵中の文が無いときの ← = 未確定の文の印へ（無ければホストのキャレット移動）
+    if (e.key === "ArrowLeft" && !hasTyping() && enterMarks()) {
+      e.preventDefault();
+      return;
+    }
 
     if (e.code === "Convert") { // JIS の変換キー
       e.preventDefault();
@@ -538,7 +554,79 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
 
   /** 止まっているか直している最中は、打鍵中の文の破線を薄くして誤打の印を浮かせる */
   function render(): void {
-    inline.render(flow.view(), reviewing());
+    const items = popup ? flow.alternatives().map((a) => a.label) : [];
+    inline.render(flow.view(), reviewing(), popup && items.length ? { items, selected: popup.selected } : null);
+  }
+
+  // ---- 印への走査と候補の提示（§2.4「マークへの到達」/ §2.5 / 4c） ----
+
+  /** 候補一覧を開いている。null = 閉じている */
+  let popup: { selected: number } | null = null;
+
+  /** 未確定の文の印へ入る（いちばん新しい印から）。印が無ければ false */
+  function enterMarks(): boolean {
+    const marked = flow.markedIndexes();
+    if (!marked.length) return false;
+    flow.setFocus(marked[marked.length - 1]!);
+    render();
+    return true;
+  }
+
+  function leaveMarks(): void {
+    popup = null;
+    flow.setFocus(null);
+    render();
+  }
+
+  function choose(index: number): void {
+    if (flow.choose(index)) {
+      if (index === 0) stats.unsure.kept++;
+      else stats.unsure.changed++;
+    }
+    popup = null;
+    bump();
+    render();
+  }
+
+  /**
+   * 印に吸い付いている間のキー。true = 飲んだ。false = 走査を抜けたので通常の処理へ回す
+   * （文字を打てば打鍵中の文へ戻ってそのまま打てる）
+   */
+  function handleMarkKey(e: KeyboardEvent): boolean {
+    const i = flow.focused;
+    if (i === null) return false;
+    if (popup) {
+      const n = flow.alternatives().length;
+      if (e.key === " " || e.key === "ArrowDown") popup.selected = (popup.selected + 1) % n;
+      else if (e.key === "ArrowUp") popup.selected = (popup.selected - 1 + n) % n;
+      else if (e.key === "Enter") choose(popup.selected);
+      else if (/^[1-9]$/.test(e.key) && Number(e.key) <= n) choose(Number(e.key) - 1);
+      else if (e.key === "Escape") popup = null;
+      else { leaveMarks(); return false; }
+      render();
+      return true;
+    }
+    const marked = flow.markedIndexes();
+    if (e.key === "ArrowLeft") {
+      const prev = marked.filter((x) => x < i).pop();
+      if (prev !== undefined) flow.setFocus(prev);
+    } else if (e.key === "ArrowRight") {
+      const next = marked.find((x) => x > i);
+      if (next !== undefined) flow.setFocus(next);
+      else { leaveMarks(); return true; } // いちばん右の印から → で打鍵中の文へ戻る
+    } else if (e.key === " ") {
+      // 印の上の Space = 候補（§2.6。Space の意味が変わる境目は「印の上かどうか」）
+      popup = { selected: 0 };
+      stats.unsure.opened++;
+      bump();
+    } else if (e.key === "Escape") {
+      leaveMarks();
+    } else {
+      leaveMarks();
+      return false;
+    }
+    render();
+    return true;
   }
 
   render();
@@ -550,7 +638,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       stats.breaks = { punct: 0, key: 0, "double-space": 0 };
       stats.enters = { settled: 0, typing: 0, newline: 0 };
       stats.typo = { stops: 0, again: 0, through: 0, fixed: 0 };
-      stats.unsure = { checked: 0, marked: 0 };
+      stats.unsure = { checked: 0, marked: 0, opened: 0, changed: 0, kept: 0 };
       bump();
     },
   };
