@@ -190,6 +190,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     if (stopped !== null) pump();
     const kana = engine.getState().composingKana;
     if (!canBreak(kana)) return false; // 空白しか無い / 空
+    fixing = false;
     if (stopped === kana) {
       // 止めた文をもう一度区切った = 句点 2 回と同じ（誤打ではなかった・直さないの意思）
       stopped = null;
@@ -254,22 +255,53 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     return !!engine && cursorOf() < kanaLength();
   }
 
-  /** いま見せる誤打マーク。止まっているか、途中を直している間だけ（打鍵中は英字がそのまま見えている） */
+  /** 止まっているか、直している最中（§2.4(a)）。誤打マークを見せる間 */
+  function reviewing(): boolean {
+    return stopped !== null || fixing || editing();
+  }
+
+  /** いま見せる誤打マーク。reviewing の間だけ（ふだんの打鍵中は英字がそのまま見えている） */
   function visibleMarks(): KanaRange[] {
-    if (!engine || (stopped === null && !editing())) return [];
+    if (!engine || !reviewing()) return [];
     return engine.residueRanges();
   }
 
   /**
    * ← / →。**マークの右端へ吸い付き**、行き先のマークが無ければ 1 文字ずつ動く（flow.ts の scanTarget）。
-   * 文末へ戻ったら直し終わり = 句点があればその場で判定される（pump）
    */
   function moveCaret(dir: -1 | 1): void {
     if (!engine) return;
-    engine.setComposingCursor(scanTarget(visibleMarks(), cursorOf(), kanaLength(), dir));
+    // 行き先は句点を消す前の位置で決める（誤打が句点の直前にあると、消した後では右端 = 文末になる）
+    const target = scanTarget(visibleMarks(), cursorOf(), kanaLength(), dir);
+    if (dir < 0) enterFix();
+    engine.setComposingCursor(target);
     pump();
-    bump(); // 文末へ戻った判定で数が動くことがある
+    bump();
   }
+
+  /**
+   * 踏みとどまった文の直しに入る（← / Home で文末を離れた）。**末尾の句点を消す**。
+   *
+   * 句点を残したままだと「直し終わったら何をすればいいか」が見えない（実地・2026-09-24）。
+   * 消えた句点を打ち直すのが直し終わりの合図になる —— 標準 IME で句点を打つのと同じ動作なので、
+   * 教えなくても辿り着ける。「文を区切る」役で止めた文（句点なし）は消すものが無い
+   */
+  function enterFix(): void {
+    if (!engine || stopped === null || editing()) return;
+    const chars = [...engine.getState().composingKana];
+    if (chars.length > 0 && SENTENCE_END.test(chars[chars.length - 1]!)) {
+      engine.replaceDirectKana("", 1);
+    }
+    stopped = null;
+    fixing = true;
+    stats.typo.fixed++;
+  }
+
+  /**
+   * 直しに入ってから、次に文を判定するまで（句点・区切る・Enter）。
+   * カーソルが文末に戻っても（誤打が文末にあった等）マークを出し続けるために持つ
+   */
+  let fixing = false;
 
   // ---- 句点で踏みとどまる（§2.4(a)） ----
 
@@ -295,6 +327,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     if (result === "typing" && engine) {
       // 打鍵中のかなはエンジンが持っているので、こちらも捨てる
       engine.reset();
+      fixing = false;
       if (stopped !== null) {
         stopped = null; // 止めた文をひらがなのまま流した（Enter の二段目）
         stats.typo.through++;
@@ -354,7 +387,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       e.preventDefault();
       if (e.key === "ArrowLeft") moveCaret(-1);
       else if (e.key === "ArrowRight") moveCaret(1);
-      else if (e.key === "Home") { engine.setComposingCursor(0); pump(); }
+      else if (e.key === "Home") { enterFix(); engine.setComposingCursor(0); pump(); bump(); }
       else if (e.key === "End") { engine.setComposingCursor(kanaLength()); pump(); bump(); }
       // Delete: カーソルの後ろを消す口がエンジンに無い。飲むだけ
       return;
@@ -419,15 +452,17 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       }
     }
 
-    // 途中で句点を打った = 直し終わりの合図。**途中には入れず**、取り除いて文末へ戻る。
+    // 途中で句点を打った = 直し終わりの合図。**途中には入れず、文末へ移して**判定させる。
     // どの配列でも句点はかなとして来るので、キーではなく「カーソルの手前に句点が来たか」で見る
     if (editing()) {
       const st = engine.getState();
       const chars = [...st.composingKana];
       const at = cursorOf();
-      if (at > 0 && SENTENCE_END.test(chars[at - 1]!)) {
+      const mark = chars[at - 1];
+      if (at > 0 && SENTENCE_END.test(mark!)) {
         engine.replaceDirectKana("", 1);
         engine.setComposingCursor(chars.length - 1);
+        engine.appendDirectKana(mark!);
       }
     }
 
@@ -456,6 +491,7 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
       if (p < 0) break;
       const head = st.composingKana.slice(0, p + 1);
       const rest = st.composingKana.slice(p + 1);
+      fixing = false; // 文が判定に掛かった
       if (canBreak(head) && residueWithin(engine.residueRanges(), head).length > 0) {
         // 誤打がある = 変換せずに止める。文はエンジンに残したまま
         stop(head, "punct");
@@ -478,8 +514,9 @@ export function mountComposer(opts: ComposerOptions): ComposerHandle {
     render();
   }
 
+  /** 止まっているか直している最中は、打鍵中の文の破線を消して波線を浮かせる */
   function render(): void {
-    inline.render(flow.view());
+    inline.render(flow.view(), reviewing());
   }
 
   render();

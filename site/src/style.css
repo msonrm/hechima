@@ -849,10 +849,13 @@ table.km-roles td.note { font-size: 0.8rem; }
 }
 
 /* 誤打マーク（§2.4(a)）— 句点で踏みとどまったときだけ出る。**色は付けない**。
-   人を止める赤い波線ではなく、打鍵中の破線をその区間だけ波線に変える程度にとどめる */
+   破線の中に細い波線を置いても見分けられなかった（実地・2026-09-24）ので、
+   止まっている間は**文の破線を消し**、波線だけを太く残す。色ではなく対比で浮かせる */
+.cmp-typing.cmp-reviewing { text-decoration: none; }
 .cmp-typo {
   text-decoration: underline;
   text-decoration-style: wavy;
+  text-decoration-thickness: 2px;
   text-underline-offset: 4px;
 }
 
