@@ -16,7 +16,7 @@ const srcPath = fileURLToPath(new URL("../src/composer/flow.ts", import.meta.url
 const js = ts.transpileModule(readFileSync(srcPath, "utf8"), {
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext },
 }).outputText;
-const { Flow, sentenceBreakAt, canBreak, endsWithSpace, afterStop, residueWithin, scanTarget, baseShare, shouldOfferAlternatives, unsureSpan, kanaToSurface, alternativesIn, spliceSegments, shelfOf } =
+const { Flow, sentenceBreakAt, canBreak, endsWithSpace, afterStop, residueWithin, scanTarget, baseShare, shouldOfferAlternatives, unsureSpan, kanaToSurface, alternativesIn, spliceSegments, shelfOf, kanjiShare, isHomonymDoubt, segmentCandidates } =
   await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 
 let fail = 0;
@@ -292,6 +292,39 @@ eq("棚のよみが 1 字は入れない（見る / 身を / 実が を繋がな
   h.setFocus({ i: 1, key: "v0" });
   h.choose(0);
   eq("いまの表記のまま = 表記は変わらず印だけ消える", [h.view().settled[1].text, h.view().settled[1].marks], ["開設した。", []]);
+}
+
+// --- 14. 同音異義語（§2.4(b)②）。意味は判定せず、漢字の候補での 1 位の取り分 < 0.7 で印 ---
+{
+  const H = (key, cands, costs) => ({ key, value: cands[0], candidates: cands, costs });
+  const hakaru = H("はかる", ["図る", "測る", "はかる", "計る", "量る"], [5480, 6201, 6744, 7026, 7664]);
+  eq("実測の はかる は 0.77 = 印を出さない", [Math.round(kanjiShare(hakaru) * 100) / 100, isHomonymDoubt(hakaru)], [0.77, false]);
+  const seikaku = H("せいかくと", ["正確と", "性格と", "精確と", "せいかくと"], [1000, 1200, 3000, 3100]);
+  eq("拮抗していれば印", isHomonymDoubt(seikaku), true);
+  eq("かなの候補は迷いに数えない", kanjiShare(H("ぐ", ["具", "ぐ"], [100, 100])), null);
+  eq("句読点は測らない", kanjiShare(H("。", ["。", "．"], [1384, 1384])), null);
+  eq("コストが無ければ測らない", kanjiShare({ key: "あ", value: "亜", candidates: ["亜", "阿"] }), null);
+  eq("候補はコストの崖で切る（差 2000 = 重み 0.018 < 0.02 は出さない）", segmentCandidates(seikaku), ["正確と", "性格と"]);
+  eq("かなの候補も範囲に入れば出す", segmentCandidates(H("はし", ["橋", "はし", "箸"], [100, 300, 400])), ["橋", "はし", "箸"]);
+  eq("崖の向こうは出さない", segmentCandidates(H("き", ["木", "気", "樹"], [100, 200, 9000])), ["木", "気"]);
+
+  const f = new Flow(() => {});
+  const kana = "せいかくとたいど。";
+  f.applyConversion(kana, [seikaku, { key: "たいど。", value: "態度。" }]);
+  f.settle(kana);
+  eq("文節に印", f.view().settled[0].marks, [{ start: 0, end: 3, kind: "homonym", focused: false }]);
+  f.setFocus({ i: 0, key: "h0" });
+  eq("候補", f.alternatives().map((a) => a.label), ["正確と", "性格と"]);
+  eq("選び直す", f.choose(1), true);
+  eq("文節だけ差し替わり、印は消える", [f.view().settled[0].text, f.view().settled[0].marks], ["性格と態度。", []]);
+
+  // 優先: 同じ文節が表記の揺れでもあれば、表記の揺れの印を出す
+  const g = new Flow(() => {});
+  g.applyConversion("らんよう。", [{ key: "らんよう", value: "乱用", candidates: ["乱用"], costs: [100] }, { key: "。", value: "。" }]);
+  g.settle("らんよう。");
+  g.applyConversion("らんようだ。", [H("らんようだ", ["濫用だ", "乱用だ"], [100, 150]), { key: "。", value: "。" }]);
+  g.settle("らんようだ。");
+  eq("表記の揺れが同音異義語より優先", g.view().settled[1].marks.map((m) => m.kind), ["variant"]);
 }
 
 if (fail) {

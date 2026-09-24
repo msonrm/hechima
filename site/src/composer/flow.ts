@@ -25,10 +25,15 @@ export interface Segment {
   value: string;
   /** 変換の候補（先頭 = value）。表記の揺れの印（§8.1）が先例の表記を探すのに使う */
   candidates?: string[];
+  /** 候補と並走する Mozc のコスト（小さいほど良い）。同音異義語の印（§2.4(b)②）が迷いを測るのに使う */
+  costs?: number[];
 }
 
-/** 未確定の文の印の種類。unsure = 区切りの揺れ（§2.4(b)①）/ variant = 文書内の表記の揺れ（③・§8.1） */
-export type MarkKind = "unsure" | "variant";
+/**
+ * 未確定の文の印の種類。unsure = 区切りの揺れ（§2.4(b)①）/ variant = 文書内の表記の揺れ（③・§8.1）/
+ * homonym = 同音異義語（②。**意味が違うかは判定せず、Mozc が迷っているときだけ**出す）
+ */
+export type MarkKind = "unsure" | "variant" | "homonym";
 
 export interface SettledMark extends KanaRange {
   kind: MarkKind;
@@ -78,6 +83,8 @@ interface Settled {
   seq: number;
   /** 文書内の表記の揺れ（§8.1）。文節ごと */
   variants: Variant[];
+  /** 同音異義語で迷っている文節の添字（§2.4(b)②） */
+  homonyms: number[];
 }
 
 /** 表記の揺れ 1 件 = この文節は、この文書で先に別の表記で書いた語である */
@@ -96,8 +103,46 @@ interface Variant {
 export interface MarkRef {
   /** settled の添字 */
   i: number;
-  /** "u" = 区切りの揺れ / "v<文節>" = 表記の揺れ */
+  /** "u" = 区切りの揺れ / "v<文節>" = 表記の揺れ / "h<文節>" = 同音異義語 */
   key: string;
+}
+
+// ---- 同音異義語（§2.4(b)②） ----
+
+const KANJI = /[\u4e00-\u9fff々〆ヵヶ]/;
+
+/**
+ * 文節の中で Mozc が迷っているか = **漢字を含む候補**での 1 位の取り分（λ のソフトマックス）。
+ * 意味が違うかは判定しない（2026-09-25 決定）—— Mozc の中で判定すれば rewriter と同じ層のやり直しになり、
+ * 判定を持たなければ印をそのまま外部モデル（§5 の空席）へ渡せる。
+ * 漢字を含む候補に限るのは、句読点（「。」と「．」は同コスト）やかな書きへの言い換えを拾わないため。
+ * 1 位が漢字を含まない・漢字の候補が 1 つ・コストが無いときは null（迷いを測れない）
+ */
+export function kanjiShare(sg: Segment, lambda = 500): number | null {
+  const cands = sg.candidates ?? [], costs = sg.costs ?? [];
+  const ks = cands.flatMap((c, i) => (KANJI.test(c) && costs[i] !== undefined ? [costs[i]!] : []));
+  if (ks.length < 2 || !KANJI.test(cands[0] ?? "") || costs[0] === undefined) return null;
+  const min = Math.min(...ks);
+  const ws = ks.map((c) => Math.exp(-(c - min) / lambda));
+  return Math.exp(-(costs[0]! - min) / lambda) / ws.reduce((a, b) => a + b, 0);
+}
+
+/** 同音異義語の印を出すか（§4.9。しきい値 0.7 = 33% の文に印、印の 3 割が役立つ） */
+export function isHomonymDoubt(sg: Segment): boolean {
+  const x = kanjiShare(sg);
+  return x !== null && x < 0.7;
+}
+
+/** 文節の候補のうち、最良の minWeight 以上のもの（コストの崖で切る。§2.5）。先頭はいまの表記 */
+export function segmentCandidates(sg: Segment, max = 9, minWeight = 0.02, lambda = 500): string[] {
+  const cands = sg.candidates ?? [sg.value], costs = sg.costs ?? [];
+  const min = Math.min(...costs.filter((c) => c !== undefined));
+  const out: string[] = [];
+  cands.forEach((c, i) => {
+    const ok = i === 0 || costs[i] === undefined || Math.exp(-(costs[i]! - min) / lambda) >= minWeight;
+    if (ok && !out.includes(c) && out.length < max) out.push(c);
+  });
+  return out;
 }
 
 // ---- 文書内の一貫性の台帳（§8.1） ----
@@ -374,8 +419,8 @@ export class Flow {
   settle(kana: string): void {
     const segs = this.cache.get(kana);
     const s: Settled = segs
-      ? { kana, text: join(segs), filled: true, segs, unsure: null, seq: ++this.seq, variants: [] }
-      : { kana, text: kana, filled: false, unsure: null, seq: ++this.seq, variants: [] };
+      ? { kana, text: join(segs), filled: true, segs, unsure: null, seq: ++this.seq, variants: [], homonyms: [] }
+      : { kana, text: kana, filled: false, unsure: null, seq: ++this.seq, variants: [], homonyms: [] };
     this.settled.push(s);
     if (segs) this.observe(s);
     this.drainFifo();
@@ -408,6 +453,7 @@ export class Flow {
   private observe(s: Settled): void {
     if (!s.segs) return;
     s.variants = [];
+    s.homonyms = s.segs.flatMap((sg, j) => (isHomonymDoubt(sg) ? [j] : []));
     s.segs.forEach((sg, idx) => {
       const sh = shelfOf(sg.key, sg.value);
       if (!sh) return;
@@ -459,7 +505,7 @@ export class Flow {
   /** 吸い付いている印の種類 */
   focusedKind(): MarkKind | null {
     const f = this.focused;
-    return f ? (f.key === "u" ? "unsure" : "variant") : null;
+    return f ? (f.key === "u" ? "unsure" : f.key.startsWith("v") ? "variant" : "homonym") : null;
   }
 
   /** 吸い付いている印の候補。先頭がいまの表記 */
@@ -468,6 +514,10 @@ export class Flow {
     const s = f ? this.settled[f.i] : null;
     if (!f || !s) return [];
     if (f.key === "u") return s.unsure && s.paths ? alternativesIn(s.paths, s.unsure) : [];
+    if (f.key.startsWith("h")) {
+      const sg = s.segs?.[Number(f.key.slice(1))];
+      return sg ? segmentCandidates(sg).map((c) => ({ segments: [{ ...sg, value: c }], label: c })) : [];
+    }
     const v = this.variantOf(s, f.key);
     if (!v || !s.segs) return [];
     const sg = s.segs[v.seg]!;
@@ -509,8 +559,16 @@ export class Flow {
         s.segs = next;
         s.text = join(next);
         s.variants = []; // 文節が組み変わったので添字が合わない
+        s.homonyms = [];
       }
       s.unsure = null;
+    } else if (f.key.startsWith("h")) {
+      const j = Number(f.key.slice(1));
+      if (index > 0 && s.segs[j]) {
+        s.segs = s.segs.map((sg, k) => (k === j ? { ...sg, value: alt.label } : sg));
+        s.text = join(s.segs);
+      }
+      s.homonyms = s.homonyms.filter((x) => x !== j);
     } else {
       const v = this.variantOf(s, f.key);
       if (!v) return false;
@@ -592,7 +650,8 @@ export class Flow {
 
 /**
  * 未確定の文の印（表記の位置・位置順）。変換が届いていて、区間が文節の境目に写せるときだけ。
- * 表記の揺れが区切りの揺れの区間に重なるときは、区切りの揺れを優先する（区切りが変われば文節も変わる）
+ * 優先は 区切りの揺れ > 表記の揺れ > 同音異義語。区切りの揺れの区間に重なる文節の印は出さない
+ * （区切りが変われば文節も変わる）
  */
 function marksOf(s: Settled): (KanaRange & { kind: MarkKind; key: string })[] {
   if (!s.filled || !s.segs) return [];
@@ -604,9 +663,10 @@ function marksOf(s: Settled): (KanaRange & { kind: MarkKind; key: string })[] {
     const len = [...sg.value].length;
     const r = { start: at, end: at + len };
     at += len;
-    if (!s.variants.some((v) => v.seg === j)) return;
     if (u && r.start < u.end && u.start < r.end) return;
-    out.push({ ...r, kind: "variant", key: `v${j}` });
+    // 同じ文節なら表記の揺れを優先する（「この文書では」という手がかりを持っている）
+    if (s.variants.some((v) => v.seg === j)) out.push({ ...r, kind: "variant", key: `v${j}` });
+    else if (s.homonyms.includes(j)) out.push({ ...r, kind: "homonym", key: `h${j}` });
   });
   return out.sort((a, b) => a.start - b.start);
 }

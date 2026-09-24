@@ -48,7 +48,9 @@ function renderStats(s: ComposerStats): void {
     // 候補を開いて何を選んだか（§2.5）。「確かめた」= いまの区切りを選んだ = 印が空振りだった
     + `（候補を開いた ${s.unsure.opened}・別の区切りを選んだ ${s.unsure.changed}・確かめた ${s.unsure.kept}）`
     // 表記の揺れ（§8.1）。「わざと」が多ければ同音異義語を拾っている（§8.3 の留保）
-    + `／表記の揺れ: 候補を開いた ${s.variant.opened}・揃えた ${s.variant.changed}・わざと ${s.variant.kept}`;
+    + `／表記の揺れ: 候補を開いた ${s.variant.opened}・揃えた ${s.variant.changed}・わざと ${s.variant.kept}`
+    // 同音異義語（§2.4(b)②）。§4.9 の予想は 1 文あたり 0.46 個、印の 3 割が役立つ
+    + `／同音異義語: 印 ${s.homonym.marked}・候補を開いた ${s.homonym.opened}・選び直した ${s.homonym.changed}・そのまま ${s.homonym.kept}`;
 }
 renderStats(composer.stats);
 
