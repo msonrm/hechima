@@ -46,6 +46,7 @@ L.L.L. は生まれ故郷の logical-layout-labo と同じ）: **[https://luffa-
 | [/romaji/](https://luffa-lang-labo.dev/romaji/) 標準 IME | 素の hechima。ローマ字で打って Space で変換（差し替え: なし） |
 | [/flick/](https://luffa-lang-labo.dev/flick/) フリック入力 | スマホ標準のフリックをブラウザ上に再現（入力・キーマップ・表示） |
 | [/naginata/](https://luffa-lang-labo.dev/naginata/) 新配列サンプル | 薙刀式 v18 を設定なしで。iPad + 物理キーボードでも動く（キーマップ = JSON 一枚） |
+| [/hitaki-isuka/](https://luffa-lang-labo.dev/hitaki-isuka/) ひたき配列といすか配列（仮称） | 五十音図とフリック入力の並びをキーボードに広げたかな配列。説明図を見ながら切り替えて試す。子音を押すと行が薄く出て、押し直せる（キーマップ） |
 | [/tategaki/](https://luffa-lang-labo.dev/tategaki/) 縦書きエディタ | 縦書きの本文と、縦組で横並びに出る候補窓（表示） |
 | [/theme/](https://luffa-lang-labo.dev/theme/) テーマ連動 | 本文と一緒に候補窓も着替える。ダークテーマで候補窓だけ白く光らない（表示） |
 | [/candlayer/](https://luffa-lang-labo.dev/candlayer/) 候補の二層化 | 候補を「選ぶ層」と「探す層」に分ける。見えるのは 5 件、残りは Tab（表示） |
@@ -55,9 +56,7 @@ L.L.L. は生まれ故郷の logical-layout-labo と同じ）: **[https://luffa-
 
 ほかに `/coi-test/`（環境診断）と `/qr/`（**QR で受け取る** —— PortMaster で動く
 へちまエディタが出す QR を、カメラで続けて読んで本文に戻す。長い本文は圧縮して
-複数枚に割れるので、順不同で集める）、`/hitaki-isuka/`（**ひたき配列といすか配列** ——
-五十音図とフリック入力の並びをキーボードに広げたふたつのかな配列を、説明図を見ながら切り替えて
-試す。子音を押すと行が薄く出て、押し直せる）を隠しページとして置いてある。
+複数枚に割れるので、順不同で集める）を隠しページとして置いてある。
 
 ## ラボの外へ — Obsidian で使う
 
