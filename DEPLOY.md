@@ -85,6 +85,11 @@ npx wrangler deploy                   # site/dist を本番へ。数十秒で反
   仕様を撤去したら、**実装 → 運用書（本ファイル）→ 対外ドキュメント（README / EMBEDDING）**
   の 3 階層を順に確認すること。対外ドキュメントがいちばん実装から遠く、いちばん読まれる
 
+## 画面まわりを確かめる
+
+CSS の寸法やスクロールの挙動は `npm run build` の検査では見えない。ヘッドレス Chromium で打鍵・測定する
+確認スクリプトを `site/scripts/browser/` に置いてある（手で回す。準備と罠は同所の README.md）。
+
 ## 実験ページを足す
 
 `site/<page>/index.html`（他ページを複製して head の title/description・script src を変更）+
