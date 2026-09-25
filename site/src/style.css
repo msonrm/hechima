@@ -950,6 +950,9 @@ table.km-roles td.note { font-size: 0.8rem; }
    エディタはこのページだけ試し打ちに足りる 7rem に詰めて、そのぶん図に回す）。
    白地の図なので、暗い配色でも枠で区切る */
 .hi-page .editor { min-height: 7rem; }
+/* 状態表示が準備完了で長くなって折り返すと、エディタの位置を保とうとしてページが 35px 動き、
+   図の上端が押し出される。このページでは 1 行に収めて省略する */
+.hi-page #status { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hi-figure {
   display: block; max-width: 100%; width: auto; height: auto;
   max-height: max(16rem, calc(100vh - 18rem));
