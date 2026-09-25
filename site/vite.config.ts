@@ -19,6 +19,7 @@ export default defineConfig({
         romaji: fileURLToPath(new URL("./romaji/index.html", import.meta.url)),
         naginata: fileURLToPath(new URL("./naginata/index.html", import.meta.url)),
         keymaps: fileURLToPath(new URL("./keymaps/index.html", import.meta.url)),
+        hitakiIsuka: fileURLToPath(new URL("./hitaki-isuka/index.html", import.meta.url)),
         keymapsList: fileURLToPath(new URL("./keymaps/list/index.html", import.meta.url)),
         flick: fileURLToPath(new URL("./flick/index.html", import.meta.url)),
         tategaki: fileURLToPath(new URL("./tategaki/index.html", import.meta.url)),

@@ -928,3 +928,30 @@ table.km-roles td.note { font-size: 0.8rem; }
   font-size: 0.9rem;
 }
 .cmp-stats { color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1.6; }
+
+/* ひたき配列といすか配列（/hitaki-isuka/）: 説明図のタブ */
+.hi-layouts { margin: 0 0 1.2rem; }
+.hi-tabs { display: flex; gap: 0.4rem; border-bottom: 1px solid var(--line); }
+.hi-tabs button {
+  font: inherit; font-size: 0.95rem; color: var(--muted); background: none; cursor: pointer;
+  padding: 0.45rem 0.9rem; border: 1px solid transparent; border-bottom: none;
+  border-radius: 6px 6px 0 0; margin-bottom: -1px;
+}
+.hi-tabs button[aria-selected="true"] {
+  color: var(--fg); font-weight: 600; background: var(--bg); border-color: var(--line);
+}
+.hi-tabs button:disabled { cursor: progress; }
+.hi-tabs small { font-weight: normal; color: var(--muted); }
+.hi-panel { padding: 0.8rem 0 0; }
+.hi-lead { margin: 0 0 0.7rem; font-size: 0.95rem; }
+/* 説明図は白地なので、暗い配色でも枠で区切って浮かないようにする */
+.hi-figure {
+  display: block; width: 100%; height: auto; max-width: 820px;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff;
+}
+.hi-probe { margin: 0 0 1rem; font-size: 0.95rem; }
+.hi-probe h3 { margin: 0 0 0.3rem; font-size: 1.05rem; }
+.hi-probe p { margin: 0.4rem 0; }
+.hi-probe ul { margin: 0.3rem 0; padding-left: 1.3rem; }
+#hi-status { color: var(--muted); font-size: 0.85rem; min-height: 1.2em; }
+

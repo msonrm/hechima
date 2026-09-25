@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>ひたき配列といすか配列 — へちま言語ラボ</title>
+    <meta name="description" content="五十音図とフリック入力。多くの人がすでに頭に持っているかなの並びを、そのままキーボードに広げたふたつのかな配列。子音を押して確かめながら打てます。" />
+    <script>
+      /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
+         app.js 自体が読めないケースがあるため、外部取得に依存しないインラインに置く */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/keymap-engine/keymap-engine.js"></script>
+    <script src="/vendor/hechima/hechima.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; ひたき配列といすか配列</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>知っている並びで打つ — ひたき配列といすか配列</h2>
+        <p>新しいキー配列を始めるとき、いちばん重いのは配列図を頭に入れることです。
+          ここで紹介するふたつのかな配列は、その「覚える」をできるだけ省くことを狙いました。</p>
+        <p>日本語を使う人の多くは、かなの並びをもう頭の中に持っています。
+          「あかさたな」と「あいうえお」の<b>五十音図</b>、そしてスマホの<b>フリック入力</b>です。
+          ひたき配列は五十音図を、いすか配列はフリック入力を、そのままキーボードの上に広げました。
+          並びの理屈は最初から知っているので、新しく覚えるのは「どのキーがどの行か」くらいです。</p>
+      </section>
+
+      <section class="hi-layouts">
+        <div class="hi-tabs" role="tablist" aria-label="配列">
+          <button type="button" role="tab" id="hi-tab-hitaki" data-id="hitaki" aria-controls="hi-panel-hitaki" aria-selected="true">ひたき配列<small>（仮称）</small></button>
+          <button type="button" role="tab" id="hi-tab-isuka" data-id="isuka" aria-controls="hi-panel-isuka" aria-selected="false">いすか配列<small>（仮称）</small></button>
+        </div>
+
+        <div class="hi-panel" role="tabpanel" id="hi-panel-hitaki" aria-labelledby="hi-tab-hitaki">
+          <p class="hi-lead"><b>五十音図を、そのままキーボードに。</b>
+            左手で行（か・さ・た・な…）、右手で段（あ・い・う・え・お）を選びます。
+            左手の真下の段は濁音の行、右手の上の段は小書きです。</p>
+          <img class="hi-figure" src="/img/hitaki.webp" width="2196" height="1992" loading="lazy"
+            alt="ひたき配列の説明図。左手の 3 段に行（ま や ら わ ぱ / か さ た な は / が ざ だ ん ば）、右手の中段に あいうえお、上段に小書き、下段に っ ー 、「 ？。規則の一覧と、子音＋右手上段の組み合わせ表つき。" />
+        </div>
+
+        <div class="hi-panel" role="tabpanel" id="hi-panel-isuka" aria-labelledby="hi-tab-isuka" hidden>
+          <p class="hi-lead"><b>フリック入力を、そのままキーボードに。</b>
+            左手はフリックのテンキー面の格子、右手はフリックの上下左右の十字（真ん中が「あ」）です。
+            「゛゜小」のキーもフリックと同じように使えます。</p>
+          <img class="hi-figure" src="/img/isuka.webp" width="2112" height="1480" loading="lazy"
+            alt="いすか配列の説明図。左手に ん・か行・さ行 / た行・な行・は行・わ行 / ま行・や行・ら行・゛゜小、右手に あ を中心とした い う え お の十字と ゃ ゅ ょ、っ ー 、 ？。T と Y でカーソル左右、U で後退。規則の一覧つき。" />
+        </div>
+      </section>
+
+      <section class="hi-probe">
+        <h3>さぐりながら打てる</h3>
+        <p>どちらの配列も、ローマ字入力と同じように<b>子音、母音の順</b>に押して 1 文字です。</p>
+        <ul>
+          <li>子音のキーを押すと、その行の文字（「か」など）が<b>薄く</b>出ます。</li>
+          <li>違う行だったら、別の子音のキーを押し直すだけ。前の子音は消えて、母音を押すまで何も入りません。</li>
+          <li>何も割り当てていないキーは、押しても何も起きません。</li>
+        </ul>
+        <p>図を見比べて覚えるより先に、まず指で探ってみてください。</p>
+        <p id="hi-status" class="note" aria-live="polite"></p>
+      </section>
+
+      <div id="app"></div>
+
+      <section class="hints">
+        <p>PC あるいはキーボードを繋いだタブレット等で打鍵してください（OS 側の日本語 IME はオフ = 英数直接入力で）。
+          キーは物理的な位置で読むので、JIS キーボードでも US キーボードでも同じ場所です。
+          変換・学習・テキストの保存はすべてブラウザ内で完結し、打鍵は一切外部へ送信されません。</p>
+        <ul>
+          <li><b>Space</b> = 変換 / 次候補、<b>Enter</b> = 確定、<b>Esc</b> = 戻す（そのほかの操作は<a href="/romaji/">標準IME</a>と同じ）</li>
+          <li><b>英数</b> / <b>かな</b>キー = 英字と日本語の切り替え</li>
+          <li>どちらも名前は仮称で、配置や規則はこれから変わることがあります</li>
+          <li>配列の定義 JSON（<a href="/vendor/keymaps/hitaki.json" download="hitaki.json">hitaki.json</a> /
+            <a href="/vendor/keymaps/isuka.json" download="isuka.json">isuka.json</a>）は、
+            <a href="/keymaps/">配列JSONを読み込んで試す</a>ページや <a href="/obsidian/">Obsidian のプラグイン</a>でも使えます</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/hitaki-isuka.ts"></script>
+  </body>
+</html>
