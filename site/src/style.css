@@ -201,6 +201,7 @@ header h1 .formal { font-size: 0.85rem; font-weight: normal; color: var(--muted)
 /* 未確定表示（へちま蔓の SegmentView.kind に対応） */
 .composition { caret-color: transparent; }
 .seg-yomi { text-decoration: underline dotted; }
+.seg-pending { opacity: 0.4; }  /* よみの末尾の待ち（まだかなになっていない打鍵） */
 .seg-focus { background: var(--focus-bg); text-decoration: underline; }
 .seg-other { text-decoration: underline; }
 

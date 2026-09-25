@@ -3,9 +3,21 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.23.0";
+	const HECHIMA_VERSION = "0.24.0";
 	//#endregion
 	//#region src/hechima/session.ts
+	/** よみの表示文節。末尾の待ち（仮表示）があれば、その文字数を `pending` に添える */
+	function yomiView(settled, pending) {
+		const n = [...pending].length;
+		return n > 0 ? {
+			text: settled + pending,
+			kind: "yomi",
+			pending: n
+		} : {
+			text: settled,
+			kind: "yomi"
+		};
+	}
 	const ROMAJI = {
 		a: "あ",
 		i: "い",
@@ -440,10 +452,7 @@
 					...addlSel !== null ? { additionalIndex: addlSel } : {}
 				} : {}
 			})));
-			else if (composing()) cb.show([{
-				text: kana + pend,
-				kind: "yomi"
-			}]);
+			else if (composing()) cb.show([yomiView(kana, pend)]);
 			else cb.hide();
 			maybeSuggest();
 		}
@@ -703,10 +712,7 @@
 				return;
 			}
 			const st = engine.getState();
-			if (st.isComposing) cb.show([{
-				text: kana + st.composingKana + st.pendingDisplay,
-				kind: "yomi"
-			}]);
+			if (st.isComposing) cb.show([yomiView(kana + st.composingKana, st.pendingDisplay)]);
 			else if (!(kana || pend)) cb.hide();
 		}
 		function navCandidates(tap) {
