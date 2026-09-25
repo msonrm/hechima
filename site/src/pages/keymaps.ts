@@ -107,7 +107,8 @@ function renderRuns(json: Record<string, unknown>, level: string, diags: Diag[])
   const cfg = (behavior.config ?? {}) as Record<string, unknown>;
   const kind = behavior.type === "chord" ? "同時打鍵" : "逐次入力";
   const judgment = cfg.judgment === "mutual" ? "相互シフト（時間を見ない状態ベース）"
-    : cfg.judgment === "window" ? "時間窓" : null;
+    : cfg.judgment === "window" ? "時間窓"
+    : behavior.unusedPrefix === "drop" ? "続きの来なかった前置打鍵は捨てる（押して確かめてよい）" : null;
 
   // requires は名前を並べても大半の人には意味が無い。**結論だけ**を出し、名前は畳む
   const supported = new Set(
