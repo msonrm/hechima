@@ -741,7 +741,8 @@
 		"postModify",
 		"roles",
 		"layouts",
-		"positionalBase"
+		"positionalBase",
+		"unusedPrefix:drop"
 	];
 	/**
 	* `requires` を検証する。理解できない名前が 1 つでもあればエラー。
@@ -857,13 +858,21 @@
 				value: v
 			});
 		}
+		const unusedPrefix = decodeUnusedPrefix(behavior.unusedPrefix);
 		return {
 			...common,
 			behavior: {
 				type: "sequential",
-				characterMap
+				characterMap,
+				...unusedPrefix ? { unusedPrefix } : {}
 			}
 		};
+	}
+	/** behavior.unusedPrefix。未知の値は黙って既定に倒さず拒否する（decodeJudgment と同じ理由） */
+	function decodeUnusedPrefix(raw) {
+		if (raw === void 0 || raw === null) return void 0;
+		if (raw === "emit" || raw === "drop") return raw;
+		throw new Error(`KeymapEngine: 非対応の unusedPrefix "${String(raw)}"（"emit" / "drop" のみ）`);
 	}
 	/** Decode modeKeys from JSON string keys like "ctrl+space" */
 	function decodeModeKeys(raw, opts) {
@@ -1599,6 +1608,7 @@
 			inputMappings,
 			prefixSet,
 			displayRawKeys,
+			dropUnusedPrefix: def.behavior.type === "sequential" && def.behavior.unusedPrefix === "drop",
 			characterMap,
 			modeKeys: def.modeKeys ?? [],
 			keyRemap: def.keyRemap ?? {},
@@ -1932,7 +1942,7 @@
 	}
 	//#endregion
 	//#region src/engine/version.ts
-	const ENGINE_VERSION = "2.7.0";
+	const ENGINE_VERSION = "2.8.0";
 	//#endregion
 	//#region src/engine/key-router.ts
 	/** Route a KeyEvent to a KeyAction based on the expanded keymap */
@@ -2076,13 +2086,15 @@
 			this.mappings = {};
 			this.prefixSet = /* @__PURE__ */ new Set();
 			this.displayRawKeys = /* @__PURE__ */ new Set();
+			this.dropUnusedPrefix = false;
 			this.resolvedKana = "";
 		}
 		/** Update the mapping tables (call when keymap changes) */
-		setMappings(mappings, prefixSet, displayRawKeys = /* @__PURE__ */ new Set()) {
+		setMappings(mappings, prefixSet, displayRawKeys = /* @__PURE__ */ new Set(), dropUnusedPrefix = false) {
 			this.mappings = mappings;
 			this.prefixSet = prefixSet;
 			this.displayRawKeys = displayRawKeys;
+			this.dropUnusedPrefix = dropUnusedPrefix;
 			this.buffer = "";
 			this.resolvedKana = "";
 		}
@@ -2174,7 +2186,7 @@
 						}
 					}
 					if (!resolved) {
-						output += buffer[0];
+						if (!(this.dropUnusedPrefix && this.prefixSet.has(buffer[0]))) output += buffer[0];
 						buffer = buffer.slice(1);
 					}
 				}
@@ -2650,14 +2662,14 @@
 			this.onHostAction = null;
 			this.hostPhase = null;
 			this.keymap = keymap;
-			this.buffer.setMappings(keymap.inputMappings, keymap.prefixSet, keymap.displayRawKeys);
+			this.buffer.setMappings(keymap.inputMappings, keymap.prefixSet, keymap.displayRawKeys, keymap.dropUnusedPrefix);
 			this.setupChordBuffer(keymap);
 		}
 		/** Switch to a different keymap */
 		setKeymap(keymap) {
 			this.confirmComposition();
 			this.keymap = keymap;
-			this.buffer.setMappings(keymap.inputMappings, keymap.prefixSet, keymap.displayRawKeys);
+			this.buffer.setMappings(keymap.inputMappings, keymap.prefixSet, keymap.displayRawKeys, keymap.dropUnusedPrefix);
 			this.chordBuffer?.reset();
 			this.setupChordBuffer(keymap);
 		}
