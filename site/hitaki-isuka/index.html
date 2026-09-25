@@ -34,7 +34,7 @@
     <script src="/vendor/keymap-engine/keymap-engine.js"></script>
     <script src="/vendor/hechima/hechima.js"></script>
   </head>
-  <body>
+  <body class="hi-page">
     <header>
       <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
       <nav class="breadcrumb"><a href="/">TOP</a> &gt; ひたき配列といすか配列</nav>
@@ -49,12 +49,15 @@
           「あかさたな」と「あいうえお」の<b>五十音図</b>、そしてスマホの<b>フリック入力</b>です。
           ひたき配列は五十音図を、いすか配列はフリック入力を、そのままキーボードの上に広げました。
           並びの理屈は最初から知っているので、新しく覚えるのは「どのキーがどの行か」くらいです。</p>
+        <p>どちらもローマ字入力と同じく、子音、母音の順に押して 1 文字。子音のキーを押すと、その行の文字が<b>薄く</b>出ます。
+          違う行なら別の子音を押し直すだけなので、図を覚える前に、まず指で探ってみてください。</p>
       </section>
 
       <section class="hi-layouts">
         <div class="hi-tabs" role="tablist" aria-label="配列">
           <button type="button" role="tab" id="hi-tab-hitaki" data-id="hitaki" aria-controls="hi-panel-hitaki" aria-selected="true">ひたき配列<small>（仮称）</small></button>
           <button type="button" role="tab" id="hi-tab-isuka" data-id="isuka" aria-controls="hi-panel-isuka" aria-selected="false">いすか配列<small>（仮称）</small></button>
+          <span id="hi-status" aria-live="polite"></span>
         </div>
 
         <div class="hi-panel" role="tabpanel" id="hi-panel-hitaki" aria-labelledby="hi-tab-hitaki">
@@ -72,18 +75,6 @@
           <img class="hi-figure" src="/img/isuka.webp" width="2112" height="1480" loading="lazy"
             alt="いすか配列の説明図。左手に ん・か行・さ行 / た行・な行・は行・わ行 / ま行・や行・ら行・゛゜小、右手に あ を中心とした い う え お の十字と ゃ ゅ ょ、っ ー 、 ？。T と Y でカーソル左右、U で後退。規則の一覧つき。" />
         </div>
-      </section>
-
-      <section class="hi-probe">
-        <h3>さぐりながら打てる</h3>
-        <p>どちらの配列も、ローマ字入力と同じように<b>子音、母音の順</b>に押して 1 文字です。</p>
-        <ul>
-          <li>子音のキーを押すと、その行の文字（「か」など）が<b>薄く</b>出ます。</li>
-          <li>違う行だったら、別の子音のキーを押し直すだけ。前の子音は消えて、母音を押すまで何も入りません。</li>
-          <li>何も割り当てていないキーは、押しても何も起きません。</li>
-        </ul>
-        <p>図を見比べて覚えるより先に、まず指で探ってみてください。</p>
-        <p id="hi-status" class="note" aria-live="polite"></p>
       </section>
 
       <div id="app"></div>

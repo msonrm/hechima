@@ -12,7 +12,7 @@ const NAMES: Record<LayoutId, string> = { hitaki: "ひたき配列", isuka: "い
 
 const initial: LayoutId = location.hash === "#isuka" ? "isuka" : "hitaki";
 const tabs = IDS.map((id) => document.getElementById(`hi-tab-${id}`) as HTMLButtonElement);
-const status = document.getElementById("hi-status") as HTMLParagraphElement;
+const status = document.getElementById("hi-status") as HTMLSpanElement;
 
 /** タブと説明図だけを切り替える（配列の差し替えは別。エンジンの準備前でも図は見られる） */
 function show(id: LayoutId): void {
