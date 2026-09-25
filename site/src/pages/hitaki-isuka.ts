@@ -30,6 +30,7 @@ status.textContent = "準備しています…";
 initLabPage({
   keymap: initial,
   flick: "off",
+  keepScrollOnStart: true, // 説明図が上にあるので、起動時のフォーカスでページを下へ飛ばさない
   onKeymapControl(control) {
     const cache = new Map<LayoutId, unknown>();
     let current = initial;
@@ -53,7 +54,7 @@ initLabPage({
         status.textContent = `${NAMES[id]}を読み込めませんでした: ${(e as Error).message}`;
         show(current);
       }
-      document.getElementById("editor")?.focus();
+      document.getElementById("editor")?.focus({ preventScroll: true }); // 図を見たまま打ち続けられるように
     }
 
     for (const tab of tabs) {

@@ -96,6 +96,12 @@ export interface LabPageConfig {
     load(json: unknown, layout?: string, roleOverrides?: Map<string, string[]>): Promise<void>;
   }): void;
   /**
+   * 起動時にエディタへフォーカスするとき、ページをスクロールしない（既定 false = スクロールする）。
+   * エディタより上に見せたいもの（説明図など）があるページ用。エディタが画面外にあると、
+   * フォーカスの既定動作でページが下へ飛び、上のものが画面から押し出される（/hitaki-isuka/）
+   */
+  keepScrollOnStart?: boolean;
+  /**
    * フリックキーボード:
    *   "on"  = ページを開いたら即表示（/flick/ 実験ページ）
    *   "off" = なし（既定。物理キーボード / ゲームパッド専用ページ）
@@ -1983,7 +1989,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     ensureEofBr(); // 空文書でもセンチネルを立てる
     updateCounts();
     refreshStatus();
-    editorEl.focus();
+    editorEl.focus({ preventScroll: config.keepScrollOnStart === true });
     if (vertical) {
       // 起動直後はフォント/レイアウト確定前でキャレット測定がずれることがある → 確定後に再測
       requestAnimationFrame(() => updateVCaret());
