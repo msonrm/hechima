@@ -742,7 +742,8 @@
 		"roles",
 		"layouts",
 		"positionalBase",
-		"unusedPrefix:drop"
+		"unusedPrefix:drop",
+		"pendingLabels"
 	];
 	/**
 	* `requires` を検証する。理解できない名前が 1 つでもあればエラー。
@@ -859,14 +860,32 @@
 			});
 		}
 		const unusedPrefix = decodeUnusedPrefix(behavior.unusedPrefix);
+		const pendingLabels = decodePendingLabels(behavior.pendingLabels, opts);
 		return {
 			...common,
 			behavior: {
 				type: "sequential",
 				characterMap,
-				...unusedPrefix ? { unusedPrefix } : {}
+				...unusedPrefix ? { unusedPrefix } : {},
+				...pendingLabels ? { pendingLabels } : {}
 			}
 		};
+	}
+	/** behavior.pendingLabels。表示だけの宣言なので、壊れた項目は診断して捨てる（読み込みは止めない） */
+	function decodePendingLabels(raw, opts) {
+		if (raw === void 0 || raw === null) return void 0;
+		const out = {};
+		for (const [k, v] of Object.entries(raw)) {
+			if (k.startsWith("_comment")) continue;
+			if (typeof v === "string" && v.length > 0 && k.length > 0) out[k] = v;
+			else opts.onDiagnostic?.({
+				code: "pending-label-invalid",
+				message: `pendingLabels の値は 1 文字以上の文字列である必要があります: "${k}"`,
+				where: "behavior.pendingLabels",
+				key: k
+			});
+		}
+		return out;
 	}
 	/** behavior.unusedPrefix。未知の値は黙って既定に倒さず拒否する（decodeJudgment と同じ理由） */
 	function decodeUnusedPrefix(raw) {
@@ -1594,6 +1613,16 @@
 		const { mappings: inputMappings, baseOnlyKeys } = expandInputMappings(def.inputBase, def.suffixRules, def.inputMappings);
 		const prefixSet = buildPrefixSet(inputMappings);
 		const displayRawKeys = buildDisplayRawKeys(baseOnlyKeys, prefixSet);
+		const pendingLabels = def.behavior.type === "sequential" ? def.behavior.pendingLabels ?? {} : {};
+		for (const key of Object.keys(pendingLabels)) {
+			if (prefixSet.has(key)) continue;
+			opts.onDiagnostic?.({
+				code: "pending-label-unreachable",
+				message: `pendingLabels の "${key}" は続きを待つ打鍵列ではないので、表示されることがありません`,
+				where: "behavior.pendingLabels",
+				key
+			});
+		}
 		const charMapBase = def.inputBase === "romaji" ? h2zMapUS : {};
 		const characterMap = def.behavior.type === "sequential" ? {
 			...charMapBase,
@@ -1609,6 +1638,7 @@
 			prefixSet,
 			displayRawKeys,
 			dropUnusedPrefix: def.behavior.type === "sequential" && def.behavior.unusedPrefix === "drop",
+			pendingLabels,
 			characterMap,
 			modeKeys: def.modeKeys ?? [],
 			keyRemap: def.keyRemap ?? {},
@@ -1942,7 +1972,7 @@
 	}
 	//#endregion
 	//#region src/engine/version.ts
-	const ENGINE_VERSION = "2.8.0";
+	const ENGINE_VERSION = "2.9.0";
 	//#endregion
 	//#region src/engine/key-router.ts
 	/** Route a KeyEvent to a KeyAction based on the expanded keymap */
@@ -2087,14 +2117,16 @@
 			this.prefixSet = /* @__PURE__ */ new Set();
 			this.displayRawKeys = /* @__PURE__ */ new Set();
 			this.dropUnusedPrefix = false;
+			this.pendingLabels = {};
 			this.resolvedKana = "";
 		}
 		/** Update the mapping tables (call when keymap changes) */
-		setMappings(mappings, prefixSet, displayRawKeys = /* @__PURE__ */ new Set(), dropUnusedPrefix = false) {
+		setMappings(mappings, prefixSet, displayRawKeys = /* @__PURE__ */ new Set(), dropUnusedPrefix = false, pendingLabels = {}) {
 			this.mappings = mappings;
 			this.prefixSet = prefixSet;
 			this.displayRawKeys = displayRawKeys;
 			this.dropUnusedPrefix = dropUnusedPrefix;
+			this.pendingLabels = pendingLabels;
 			this.buffer = "";
 			this.resolvedKana = "";
 		}
@@ -2140,6 +2172,8 @@
 			if (rest.length === 0) return kana;
 			const exact = this.mappings[rest];
 			if (exact !== void 0 && !this.displayRawKeys.has(rest)) return kana + exact;
+			const label = Object.hasOwn(this.pendingLabels, rest) ? this.pendingLabels[rest] : void 0;
+			if (label !== void 0) return kana + label;
 			return kana + rest;
 		}
 		/** Whether the buffer is empty */
@@ -2662,14 +2696,14 @@
 			this.onHostAction = null;
 			this.hostPhase = null;
 			this.keymap = keymap;
-			this.buffer.setMappings(keymap.inputMappings, keymap.prefixSet, keymap.displayRawKeys, keymap.dropUnusedPrefix);
+			this.buffer.setMappings(keymap.inputMappings, keymap.prefixSet, keymap.displayRawKeys, keymap.dropUnusedPrefix, keymap.pendingLabels);
 			this.setupChordBuffer(keymap);
 		}
 		/** Switch to a different keymap */
 		setKeymap(keymap) {
 			this.confirmComposition();
 			this.keymap = keymap;
-			this.buffer.setMappings(keymap.inputMappings, keymap.prefixSet, keymap.displayRawKeys, keymap.dropUnusedPrefix);
+			this.buffer.setMappings(keymap.inputMappings, keymap.prefixSet, keymap.displayRawKeys, keymap.dropUnusedPrefix, keymap.pendingLabels);
 			this.chordBuffer?.reset();
 			this.setupChordBuffer(keymap);
 		}

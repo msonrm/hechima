@@ -984,7 +984,18 @@ export function initLabPage(config: LabPageConfig = {}): void {
       ...segments.map((s) => {
         const span = document.createElement("span");
         span.className = `seg-${s.kind}`;
-        span.textContent = s.text;
+        // よみの末尾のまだ続きを待っている打鍵（ローマ字の途中の k、行段配列の子音「ま」）は薄く描く。
+        // 確定したかなではないことを見分けるため（hechima v0.24.0+ の pending）
+        const n = s.pending ?? 0;
+        if (n > 0) {
+          const cps = [...s.text];
+          const tail = document.createElement("span");
+          tail.className = "seg-pending";
+          tail.textContent = cps.slice(-n).join("");
+          span.append(cps.slice(0, -n).join(""), tail);
+        } else {
+          span.textContent = s.text;
+        }
         return span;
       }),
     );

@@ -1,4 +1,4 @@
-// Hechima v0.23.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// Hechima v0.24.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 2.0.0（keymap v2。配列は roles で役を宣言し、物理キーへの割当は
 // layouts + ホストの roleOverrides で決まる。**v1 のキーマップは読めない**）。
 // v0.19.0 は engine の局面問い合わせ（InputEngine.hostPhase）を配線する。
@@ -18,6 +18,13 @@
 export interface SegmentView {
   text: string;
   kind: "yomi" | "focus" | "other";
+  /**
+   * よみの末尾のうち、まだ続きを待っている打鍵の仮表示の文字数（v0.24.0+、kind yomi のみ・
+   * 0 のときは載らない）。ローマ字の途中の `k`、行段系の子音を行の代表で見せた「ま」など。
+   * UI はここを薄く描くなどして、確定したかなと見分けられるようにする。変換には流れない。
+   * 数えるのはコードポイント
+   */
+  pending?: number;
   /**
    * この文節の候補一覧（v0.5.0+、候補選択中 = kind focus/other のときのみ）。
    * 候補 UI（ポップアップ等）の描画用。読み取り専用（コピー）。
