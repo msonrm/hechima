@@ -743,7 +743,8 @@
 		"layouts",
 		"positionalBase",
 		"unusedPrefix:drop",
-		"pendingLabels"
+		"pendingLabels",
+		"sequential:specialActions"
 	];
 	/**
 	* `requires` を検証する。理解できない名前が 1 つでもあればエラー。
@@ -794,7 +795,9 @@
 		"inputMappings",
 		"prefixShiftKeys",
 		"modeKeys",
-		"extensions"
+		"extensions",
+		"postModifyCycles",
+		"postModifyYouon"
 	]);
 	const IGNORED_FIELDS = /* @__PURE__ */ new Set(["controlBindings"]);
 	/** Parse a raw JSON object into a KeymapDefinition */
@@ -825,7 +828,8 @@
 			inputMappings: filterComments(json.inputMappings),
 			prefixShiftKeys,
 			modeKeys,
-			extensions: json.extensions
+			extensions: json.extensions,
+			...decodePostModifyConfig(json, opts)
 		};
 		if (behavior.type === "chord") {
 			const config = behavior.config;
@@ -867,9 +871,37 @@
 				type: "sequential",
 				characterMap,
 				...unusedPrefix ? { unusedPrefix } : {},
-				...pendingLabels ? { pendingLabels } : {}
+				...pendingLabels ? { pendingLabels } : {},
+				...behavior.specialActions !== void 0 ? { specialActions: behavior.specialActions } : {}
 			}
 		};
+	}
+	/**
+	* postModifyCycles / postModifyYouon（トップレベル・v2.10.0+）。
+	* サイクル表は flickmap と同じ形（文字列 = 押すたびに次の字へ）。壊れたエントリは診断して捨てる
+	*/
+	function decodePostModifyConfig(json, opts) {
+		const out = {};
+		const rawCycles = json.postModifyCycles;
+		if (rawCycles !== void 0) {
+			if (!Array.isArray(rawCycles)) throw new Error("KeymapEngine: postModifyCycles は文字列の配列である必要があります");
+			out.postModifyCycles = rawCycles.filter((c) => {
+				const ok = typeof c === "string" && [...c].length >= 2;
+				if (!ok) opts.onDiagnostic?.({
+					code: "post-modify-cycle-invalid",
+					message: `postModifyCycles の各要素は 2 文字以上の文字列である必要があります: ${JSON.stringify(c)}`,
+					where: "postModifyCycles",
+					value: String(c)
+				});
+				return ok;
+			});
+		}
+		const youon = json.postModifyYouon;
+		if (youon !== void 0) {
+			if (youon !== "tail" && youon !== "base") throw new Error(`KeymapEngine: 非対応の postModifyYouon "${String(youon)}"（"tail" / "base" のみ）`);
+			out.postModifyYouon = youon;
+		}
+		return out;
 	}
 	/** behavior.pendingLabels。表示だけの宣言なので、壊れた項目は診断して捨てる（読み込みは止めない） */
 	function decodePendingLabels(raw, opts) {
@@ -1639,6 +1671,9 @@
 			displayRawKeys,
 			dropUnusedPrefix: def.behavior.type === "sequential" && def.behavior.unusedPrefix === "drop",
 			pendingLabels,
+			...expandSequentialActions(def, opts),
+			postModifyCycles: def.postModifyCycles ?? DEFAULT_POST_MODIFY_CYCLES,
+			postModifyYouon: def.postModifyYouon ?? "tail",
 			characterMap,
 			modeKeys: def.modeKeys ?? [],
 			keyRemap: def.keyRemap ?? {},
@@ -1710,6 +1745,41 @@
 		const keys = /* @__PURE__ */ new Set();
 		for (const k of baseOnlyKeys) if (prefixSet.has(k)) keys.add(k);
 		return keys;
+	}
+	/**
+	* 逐次系の behavior.specialActions（1 文字 → アクション。日本語入力中だけ効く）。
+	* 語彙と面は chord の specialActions と同じ（`keymap.specialActions`）
+	*/
+	function expandSequentialActions(def, opts) {
+		const sequentialActions = /* @__PURE__ */ new Map();
+		const sequentialActionGuards = /* @__PURE__ */ new Map();
+		const raw = def.behavior.type === "sequential" ? def.behavior.specialActions ?? {} : {};
+		const where = "behavior.specialActions";
+		for (const [key, rawAction] of Object.entries(raw)) {
+			if (key.startsWith("_comment")) continue;
+			const label = typeof rawAction === "string" ? rawAction : JSON.stringify(rawAction);
+			if ([...key].length !== 1) {
+				opts.onDiagnostic?.({
+					code: "sequential-action-key-invalid",
+					message: `specialActions のキーは 1 文字である必要があります（逐次系）: "${key}"`,
+					where,
+					key,
+					value: label
+				});
+				continue;
+			}
+			const parsed = parseKeyActionResult(rawAction, "keymap.specialActions");
+			if (!parsed.ok) {
+				reportActionRejection(opts.onDiagnostic, parsed.reason, where, key, label);
+				continue;
+			}
+			sequentialActions.set(key, parsed.action);
+			if (parsed.when) sequentialActionGuards.set(key, parsed.when);
+		}
+		return {
+			sequentialActions,
+			sequentialActionGuards
+		};
 	}
 	/** Build a set of all prefixes of mapping keys (for greedy longest-match) */
 	function buildPrefixSet(mappings) {
@@ -1972,7 +2042,7 @@
 	}
 	//#endregion
 	//#region src/engine/version.ts
-	const ENGINE_VERSION = "2.9.0";
+	const ENGINE_VERSION = "2.10.0";
 	//#endregion
 	//#region src/engine/key-router.ts
 	/** Route a KeyEvent to a KeyAction based on the expanded keymap */
@@ -1993,7 +2063,7 @@
 			type: "insertSpace",
 			shifted: !!(event.modifiers & KeyModifierFlags.SHIFT)
 		};
-		return routeSequential(event, keymap, isComposing, isDirectEnglishMode);
+		return routeSequential(event, keymap, isComposing, isDirectEnglishMode, phase);
 	}
 	/** Match modeKeys triggers */
 	function matchModeKey(event, keymap, phase) {
@@ -2030,7 +2100,7 @@
 		}
 	}
 	/** Sequential input routing */
-	function routeSequential(event, keymap, isComposing, isDirectEnglishMode) {
+	function routeSequential(event, keymap, isComposing, isDirectEnglishMode, phase) {
 		if (isDirectEnglishMode) {
 			const chars = event.characters;
 			if (chars.length === 1 && isPrintable(chars)) return {
@@ -2043,6 +2113,8 @@
 		if (chars.length !== 1) return { type: "pass" };
 		const c = chars;
 		const logical = keymap.keyRemap[c] ?? c;
+		const seqAction = keymap.sequentialActions.get(logical);
+		if (seqAction && !(event.modifiers & (KeyModifierFlags.CONTROL | KeyModifierFlags.ALT | KeyModifierFlags.META)) && isActiveIn(keymap.sequentialActionGuards.get(logical), phase)) return seqAction;
 		if (keymap.characterMap[logical] || isLetter(logical) || isComposing && isDigit(logical)) return {
 			type: "printable",
 			char: c
@@ -2684,6 +2756,14 @@
 	};
 	//#endregion
 	//#region src/engine/input-engine.ts
+	/** 拗音の小書き（postModifyYouon: "base" で基字へ効かせる対象） */
+	const SMALL_YOUON = /* @__PURE__ */ new Set([
+		"ゃ",
+		"ゅ",
+		"ょ"
+	]);
+	/** 拗音の基字（い段の子音）。これ以外の字 + ゃ（「あゃ」など）は拗音ではないので末尾に効かせる */
+	const YOUON_BASE = /* @__PURE__ */ new Set([..."きぎしじちぢにひびぴみり"]);
 	var InputEngine = class {
 		constructor(keymap) {
 			this.confirmedText = "";
@@ -2854,8 +2934,17 @@
 		*/
 		applyPostModify(op) {
 			if (this.cursor === 0) return this.getState();
-			const target = [...this.composingKana][this.cursor - 1];
-			const next = postModify(target, op);
+			const chars = [...this.composingKana];
+			const target = chars[this.cursor - 1];
+			const cycles = this.keymap.postModifyCycles;
+			if (this.keymap.postModifyYouon === "base" && op !== "small" && SMALL_YOUON.has(target) && this.cursor >= 2 && YOUON_BASE.has(chars[this.cursor - 2])) {
+				const base = postModify(chars[this.cursor - 2], op, cycles);
+				if (base === null) return this.getState();
+				this.deleteBeforeCursor(2);
+				this.insertAtCursor(base + target);
+				return this.getState();
+			}
+			const next = postModify(target, op, cycles);
 			if (next === null) return this.getState();
 			this.deleteBeforeCursor(1);
 			this.insertAtCursor(next);
