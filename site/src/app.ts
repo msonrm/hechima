@@ -22,7 +22,7 @@ declare const KeymapEngine: {
   keyEventFromBrowser(tap: Hechima.KeyTap): Hechima.KeyEvent | null;
 };
 
-type FlickOp =
+export type FlickOp =
   | { type: "kana"; text: string; replace: number }
   | { type: "key"; tap: Hechima.KeyTap }
   | { type: "text"; text: string }
@@ -32,6 +32,13 @@ type FlickOp =
 type GamepadOp =
   | { type: "kana"; text: string; replace: number }
   | { type: "key"; tap: Hechima.KeyTap };
+
+/** フリックキーボードの実装（`FlickEngine.mount` と同じ形。ページ側で差し替えられる） */
+export type FlickMount = (
+  container: HTMLElement,
+  map: unknown,
+  opts: { onOp(op: FlickOp): void; getComposingTail?: () => string },
+) => { setComposing(on: boolean): void; destroy(): void };
 
 declare const FlickEngine: {
   version: string;
@@ -107,6 +114,12 @@ export interface LabPageConfig {
    *   "off" = なし（既定。物理キーボード / ゲームパッド専用ページ）
    */
   flick?: "on" | "off";
+  /**
+   * フリックキーボードの盤面そのものを差し替える（既定は `FlickEngine.mount`）。
+   * 判定結果の受け渡し（onOp）と候補バー・変換は共通のまま、見た目と指の判定だけを
+   * ページ側で持つ口（/scroll-flick/）
+   */
+  flickMount?: FlickMount;
   /**
    * ゲームパッド日本語入力（gamepad-engine 駆動。日本語のみ）:
    *   "on"  = ページを開いたらビジュアライザ + polling を起動（ゲームパッド実験ページ）
@@ -1785,7 +1798,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
     if (flickKbd) return;
     const res = await fetch("/vendor/flick/flick_standard.json");
     const map = FlickEngine.decodeFlickmap(await res.json());
-    flickKbd = FlickEngine.mount(flickArea, map, {
+    flickKbd = (config.flickMount ?? FlickEngine.mount)(flickArea, map, {
       getComposingTail: () => flickComposingText,
       onOp(op) {
         if (op.type === "kana") fep.insertKana(op.text, op.replace);

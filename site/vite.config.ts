@@ -22,6 +22,7 @@ export default defineConfig({
         hitakiIsuka: fileURLToPath(new URL("./hitaki-isuka/index.html", import.meta.url)),
         keymapsList: fileURLToPath(new URL("./keymaps/list/index.html", import.meta.url)),
         flick: fileURLToPath(new URL("./flick/index.html", import.meta.url)),
+        scrollFlick: fileURLToPath(new URL("./scroll-flick/index.html", import.meta.url)),
         tategaki: fileURLToPath(new URL("./tategaki/index.html", import.meta.url)),
         gamepad: fileURLToPath(new URL("./gamepad/index.html", import.meta.url)),
         candlayer: fileURLToPath(new URL("./candlayer/index.html", import.meta.url)),

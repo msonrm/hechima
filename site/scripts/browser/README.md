@@ -22,6 +22,7 @@ PW_DIR=/tmp/pw node site/scripts/browser/check-hitaki-isuka.mjs
 | | 見るもの |
 |---|---|
 | `check-hitaki-isuka.mjs [base]` | `/hitaki-isuka/`: 両配列の打鍵（子音が薄く出る・空きキーは無反応）、説明図とエディタが一画面に収まるか、読み込み中にページが勝手に動かないか |
+| `check-scroll-flick.mjs [base]` | `/scroll-flick/`: 静止中のタップ、盤面が右へ動く間の押下 = 左フリック、下へ動く間 = 上フリック（盤面は 26 秒周期で勝手に動くので、動き出しを待って押す。実行に十数秒かかる） |
 
 `base` の既定は `http://localhost:4789`（`cd site && npm run build && npx vite preview --port 4789 --strictPort`）。
 本番（`https://luffa-lang-labo.dev`）にも向けられる。

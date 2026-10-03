@@ -1,0 +1,149 @@
+/* 動くフリック入力（/scroll-flick/）: 1984 年のアーケード・ファミコンの迷路ゲームの壁のような、
+   面取りで立体に見えるブロックのキー。色は面ごとに 3 色ほどに絞り、ぼかし・丸め・グラデーションは使わない。
+   面取りは border の色分け（上下左右で別の色にすると角が 45 度の継ぎ目になる）で作る */
+
+/* キーを厳密な正方形にするため、盤面は 5 列 × 4 行のマス（5:4）にする */
+body.scroll-flick .flick-area {
+  max-width: 26rem;
+  aspect-ratio: 5 / 4;
+  max-height: none;
+}
+body.scroll-flick.flick-on main { padding-bottom: calc(min(100vw - 16px, 26rem) * 0.8 + 6rem); }
+
+body.scroll-flick .flick-panel {
+  background: #000;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-top: 3px solid #000;
+}
+
+.sf-root {
+  --bw: min(1.1vw, 5px);
+  /* 面ごとの配色（既定 = 青紫の面）。上=明るい / 左=やや明るい / 右=暗い / 下=いちばん暗い */
+  --face: #4538d8;
+  --b-top: #d0d0ff;
+  --b-left: #a89cff;
+  --b-right: #2a20a0;
+  --b-bottom: #1c1478;
+  --ink: #fff;
+  /* キーのすき間 = 面の色の、ずっと暗い版（迷路の床） */
+  --dark: #26207e;
+  --gap: min(2vw, 9px);
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template: repeat(4, minmax(0, 1fr)) / repeat(5, minmax(0, 1fr));
+  background: var(--dark);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  image-rendering: pixelated;
+  font: 700 min(4.4vw, 22px) / 1 "DotGothic16", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+}
+.sf-root[data-layer="eiji"] {
+  --face: #38868e;
+  --b-top: #c8fcfc;
+  --b-left: #98e0e0;
+  --b-right: #1c5860;
+  --b-bottom: #144048;
+  --dark: #10444c;
+}
+.sf-root[data-layer="digit"] {
+  --face: #8c8c8c;
+  --b-top: #f4f4f4;
+  --b-left: #d0d0d0;
+  --b-right: #606060;
+  --b-bottom: #444;
+  --ink: #101010;
+  --dark: #383838;
+}
+
+.sf-key {
+  box-sizing: border-box;
+  margin: var(--gap);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--face);
+  color: var(--ink);
+  border: var(--bw) solid;
+  border-color: var(--b-top) var(--b-right) var(--b-bottom) var(--b-left);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* 3 文字以上のラベル（゛゜小・pqrs など）は小さくして、キーに収める */
+.sf-key.sf-long { font-size: 0.7em; }
+.sf-root[data-layer="digit"] .sf-key { text-shadow: none; }
+
+/* 左右の固定キーは煉瓦色（盤面の上下の縁のレンガ帯）。動く部分と見分けるため */
+.sf-key.sf-fn {
+  --face: #d97a20;
+  background: var(--face);
+  color: #fff;
+  border-color: #f8d098 #983800 #682800 #f8b868;
+  font-size: 0.78em;
+  text-shadow: 1px 1px 0 #3a1800;
+}
+/* 押している間は面取りを逆にして凹ませる */
+.sf-key.sf-fn.sf-down {
+  border-color: #682800 #f8b868 #f8d098 #983800;
+  background: #b86010;
+}
+
+.sf-viewport {
+  grid-column: 2 / 5;
+  grid-row: 1 / 5;
+  position: relative;
+  overflow: hidden;
+  background: var(--dark);
+}
+.sf-field {
+  position: absolute;
+  left: -100%;
+  top: -100%;
+  width: 300%;
+  height: 300%;
+  display: grid;
+  grid-template: repeat(3, minmax(0, 1fr)) / repeat(3, minmax(0, 1fr));
+  will-change: transform;
+}
+.sf-tile {
+  display: grid;
+  grid-template: repeat(4, minmax(0, 1fr)) / repeat(3, minmax(0, 1fr));
+}
+
+/* 押したキー: 盤面と一緒に流れていく目印 */
+.sf-press {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+.sf-press::after {
+  content: "";
+  position: absolute;
+  inset: var(--gap);
+  box-sizing: border-box;
+  border: 3px solid #fff;
+  background: rgba(255, 255, 255, 0.28);
+}
+/* いま離したらこの文字になる、の表示（指で隠れないよう枠の上端に出す） */
+.sf-bubble {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 2.4em;
+  padding: 0.25em 0.5em;
+  box-sizing: border-box;
+  text-align: center;
+  background: #000;
+  color: #fff;
+  border: 2px solid #fff;
+  pointer-events: none;
+}
+.sf-bubble[hidden] { display: none; }
