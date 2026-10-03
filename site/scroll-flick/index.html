@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>動くフリック入力のご提案 — へちま言語ラボ</title>
+    <meta name="description" content="フリック入力は指に無理な動きを強いる。ならば盤面のほうを動かせばよい。指は定位置に置いたまま、盤面がスクロールすることでフリックが成立する、新しいフリック入力のご提案です。" />
+    <meta property="og:title" content="動くフリック入力のご提案 — へちま言語ラボ" />
+    <meta property="og:description" content="指ではなく盤面が動く。定位置を押すだけでフリックができる、新しいフリック入力のご提案。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://luffa-lang-labo.dev/scroll-flick/" />
+    <meta property="og:site_name" content="へちま言語ラボ" />
+    <meta name="twitter:card" content="summary" />
+    <script>
+      /* Safari の COI × キャッシュ事象でアセット読込が壊れたときの自動復旧（1 回だけリロード）。
+         app.js 自体が読めないケースがあるため、外部取得に依存しないインラインに置く */
+      (function () {
+        var failed = false;
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && t.tagName) {
+            failed = true;
+            try {
+              if (!sessionStorage.getItem("lll-heal")) {
+                sessionStorage.setItem("lll-heal", "1");
+                location.reload();
+              }
+            } catch (err) { /* storage 不可環境 */ }
+          }
+        }, true);
+        addEventListener("load", function () {
+          if (!failed) {
+            try { sessionStorage.removeItem("lll-heal"); } catch (err) { /* 同上 */ }
+          }
+        });
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/keymap-engine/keymap-engine.js"></script>
+    <script src="/vendor/hechima/hechima.js"></script>
+    <script src="/vendor/flick/flick-engine.js"></script>
+  </head>
+  <body class="scroll-flick">
+    <header>
+      <h1><a href="/">🧽 へちま言語ラボ <span class="formal">luffa lang labo</span></a></h1>
+      <nav class="breadcrumb"><a href="/">TOP</a> &gt; 動くフリック入力</nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h2>動くフリック入力のご提案</h2>
+        <p>フリック入力は、指を動かして文字を選ぶ入力方式です。しかしこの「指を動かす」という動作は、
+          親指に少なからぬ無理を強いています。そこで発想を逆転しました。<b>指ではなく、盤面のほうを動かします。</b></p>
+        <p>キーボードの中央 3 列は常にゆっくりスクロールしています。画面を適切に押して離すだけでフリック入力ができます。たとえば「か」を押したまま盤面が上へ流れれば、
+          指は相対的に下へ動いたことになり、「こ」が入力されます。盤面は端でつながっているので、スクロールは止まりません。</p>
+        <p>さらに、目をつぶって適当に押して離すと、<b>ランダムな文字が入力できます。</b>
+          お告げ（占い）や、インスピレーションを得る用途にもご活用いただけます。</p>
+      </section>
+
+      <div id="app"></div>
+
+      <section class="hints">
+        <p>下のキーボードで試せます（PC ではマウスでも動きます）。</p>
+        <ul>
+          <li>盤面の動き: 3 秒静止 → 右へ 3 秒 → 3 秒静止 → 下へ 4 秒 → 3 秒静止 → 左へ 3 秒 → 3 秒静止 → 上へ 4 秒、の繰り返し。
+            1 マス/秒で動くので、横は 3 秒・縦は 4 秒で元の位置に戻ります</li>
+          <li><b>すばやく押して離す</b> = ふつうのタップ（中央の文字）。盤面が動いていても、押している間のずれが小さければタップです</li>
+          <li><b>盤面が右へ動いている間に押す</b> = 指から見て盤面が左へ動くので「左フリック」。
+            同じように、下へ動いている間は「上」、左なら「右」、上なら「下」のフリックになります</li>
+          <li>押している間、いま離したら入力される文字が上端に出ます。押したキーは盤面と一緒に流れていきます</li>
+          <li>変換・確定・候補の扱いは通常のフリック入力と同じです</li>
+        </ul>
+        <p class="src">このページ固有のソース：<a href="https://github.com/msonrm/hechima/blob/main/site/src/pages/scroll-flick.ts" rel="noopener"><code>site/src/pages/scroll-flick.ts</code></a></p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        へちま言語ラボ（正式名 <i>luffa lang labo</i>）。
+        変換エンジン: <a href="https://github.com/google/mozc" rel="noopener">Mozc</a> の
+        WebAssembly ビルド — <b>powered by Mozc</b>（BSD-3-Clause）。
+        配列エンジン / 変換セッション層 = <a href="https://github.com/msonrm/hechima" rel="noopener">hechima</a>（MIT）。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/pages/scroll-flick.ts"></script>
+  </body>
+</html>
