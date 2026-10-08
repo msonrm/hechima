@@ -115,6 +115,12 @@ export interface LabPageConfig {
   onKeyControl?(control: {
     down(tap: Hechima.KeyTap): void;
     up(tap: Hechima.KeyTap): void;
+    /**
+     * フリック表示中の候補の出し方。"bar" = キーボード上部の帯（既定。打ちながら候補も出す）、
+     * "popup" = 物理キーボードと同じカーソル近くのポップアップ。`/remote/` は盤面が別の端末に
+     * あるので、配列図で打つときはポップアップにする（帯は盤面と干渉しないための作法）
+     */
+    setCandidateStyle(style: "bar" | "popup"): void;
   }): void;
   /**
    * 起動時にエディタへフォーカスするとき、ページをスクロールしない（既定 false = スクロールする）。
@@ -1082,7 +1088,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
   function renderCandidatePopup(segments: Hechima.SegmentView[]): void {
     // フリック中はポップアップ（縦長でキーボードと干渉する）の代わりに
     // キーボード上部の候補バーへ出す
-    if (flickKbd) {
+    if (candBar()) {
       popupEl.hidden = true;
       lastFlickSegments = segments;
       renderFlickCandBar(segments);
@@ -1298,13 +1304,17 @@ export function initLabPage(config: LabPageConfig = {}): void {
   // サジェストは候補バーの**もう 1 つの段**として出すので、届いたら描き直す
   let flickSuggest: string[] = [];
   let lastFlickSegments: Hechima.SegmentView[] = [];
+  /** フリック表示中でも候補をポップアップに出す（onKeyControl の setCandidateStyle） */
+  let candPopupInFlick = false;
+  /** 候補を帯に出すか（フリック表示中で、ポップアップに切り替えていないとき） */
+  const candBar = () => !!flickKbd && !candPopupInFlick;
 
   const fep = Hechima.createFep({
     // よみが変わるたびに届く。**候補バーが受け皿**なので、フリック中だけ有効にする
     // （setSuggest。打鍵のたびに cb.convert が走るため）
     suggest: (items) => {
       flickSuggest = items;
-      if (flickKbd) renderFlickCandBar(lastFlickSegments);
+      if (candBar()) renderFlickCandBar(lastFlickSegments);
     },
     show: (segments) => {
       config.recordSink?.show?.(segments);
@@ -1825,6 +1835,16 @@ export function initLabPage(config: LabPageConfig = {}): void {
     up(tap) {
       fep.feedUp(tap);
     },
+    setCandidateStyle(style) {
+      const popup = style === "popup";
+      if (popup === candPopupInFlick) return;
+      candPopupInFlick = popup;
+      // 打ちながら候補は帯が受け皿。ポップアップでは出さない（打鍵ごとの変換も止める）
+      if (flickKbd) fep.setSuggest(!popup);
+      flickSuggest = [];
+      flickCandsEl.replaceChildren();
+      if (!popup) popupEl.hidden = true;
+    },
   });
 
   async function enableFlick(): Promise<void> {
@@ -1843,7 +1863,7 @@ export function initLabPage(config: LabPageConfig = {}): void {
         else if (op.type === "text") { snapshot(); insertTextAtCaret(op.text); afterEdit(); }
       },
     });
-    fep.setSuggest(true); // 打ちながら候補を出す（候補バーが受け皿になる）
+    fep.setSuggest(!candPopupInFlick); // 打ちながら候補を出す（候補バーが受け皿になる）
     flickPanel.hidden = false;
     document.body.classList.add("flick-on");
     editorEl.setAttribute("inputmode", "none");
