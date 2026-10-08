@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>キーボード — へちま言語ラボ</title>
+    <meta name="description" content="別の端末をキーボードにする、のキーボード側。ここで打った文字は、つないだ端末に入って変換されます。" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <script src="/vendor/flick/flick-engine.js"></script>
+  </head>
+  <body class="remote-keyboard">
+    <div class="kb-status" role="status">読み込み中…</div>
+    <div class="kb-body"><div class="kb-area"></div></div>
+    <script type="module" src="/src/pages/remote-keyboard.ts"></script>
+  </body>
+</html>

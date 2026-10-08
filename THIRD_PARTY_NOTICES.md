@@ -9,7 +9,8 @@
 自作部分（サイトと、`hechima` / `hechima-keymap` / `flick-engine` / `gamepad-engine` の
 各バンドル）のライセンスは [LICENSE](LICENSE)（MIT、Copyright (c) 2026 msonrm）です。
 
-`/qr/`（QR で受け取る）のページには **jsQR** を同梱しています（下記）。
+`/qr/`（QR で受け取る）のページには **jsQR** を、`/remote/`（別の端末をキーボードにする）のページには
+**QR Code Generator** を同梱しています（下記）。
 
 ## Mozc（変換エンジン本体・wasm バイナリのコード部分）
 
@@ -168,4 +169,26 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+```
+
+## QR Code Generator（`/remote/` の QR 生成）
+
+`/remote/` のページに、キーボード側の端末へ渡す URL を QR コードにするために同梱しています
+（npm の `qrcode-generator`。ビルド時にページのバンドルへ取り込まれます）。
+
+- **Repository:** https://github.com/kazuhikoarase/qrcode-generator
+- **License:** MIT
+- **Version:** 1.4.4
+
+```
+Copyright (c) 2009 Kazuhiko Arase
+
+URL: http://www.d-project.com/
+
+Licensed under the MIT license:
+  http://www.opensource.org/licenses/mit-license.php
+
+The word 'QR Code' is registered trademark of
+DENSO WAVE INCORPORATED
+  http://www.denso-wave.com/qrcode/faqpatent-e.html
 ```

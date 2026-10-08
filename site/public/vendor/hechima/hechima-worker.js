@@ -1,6 +1,6 @@
 (function() {
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.24.0";
+	const HECHIMA_VERSION = "0.25.0";
 	//#endregion
 	//#region src/hechima/worker-main.ts
 	let M = null;
@@ -59,13 +59,14 @@
 			saveLearning();
 		}, 3e3);
 	}
-	let lastYomi = null;
 	let lastKeys = null;
+	let lastLearned = null;
+	/** resize の keys が使える形か（空でない文字列の、空でない配列） */
+	function validKeys(keys) {
+		return Array.isArray(keys) && keys.length > 0 && keys.every((k) => typeof k === "string" && k.length > 0);
+	}
 	function rememberSegments(segments) {
-		if (segments && segments.length) {
-			lastKeys = segments.map((s) => s.key);
-			lastYomi = lastKeys.join("");
-		}
+		if (segments && segments.length) lastKeys = segments.map((s) => s.key);
 	}
 	/**
 	* 辞書を取得する。事前圧縮版（`<dataUrl>.gz`）があればそちらを使う。
@@ -197,7 +198,7 @@
 	* （制約は伸縮した文節まで。以降は Mozc の自由分節 = 実 IME と同じ挙動）。
 	* 旧 wasm（v0.2.0）では従来の hechima_resize（wasm 内 static 状態）にフォールバックする。
 	*/
-	function handleResize(id, segIdx, offset, maxCands) {
+	function handleResize(id, segIdx, offset, maxCands, keys) {
 		if (!M) {
 			self.postMessage({
 				type: "result",
@@ -207,9 +208,10 @@
 			});
 			return;
 		}
+		const baseKeys = validKeys(keys) ? keys : lastKeys;
 		try {
-			if (typeof M._hechima_convert2 === "function" && lastYomi && lastKeys) {
-				if (segIdx < 0 || segIdx >= lastKeys.length) {
+			if (typeof M._hechima_convert2 === "function" && baseKeys) {
+				if (segIdx < 0 || segIdx >= baseKeys.length) {
 					self.postMessage({
 						type: "result",
 						id,
@@ -218,7 +220,7 @@
 					});
 					return;
 				}
-				const lens = lastKeys.map((k) => Array.from(k).length);
+				const lens = baseKeys.map((k) => Array.from(k).length);
 				const target = lens[segIdx] + offset;
 				if (target < 1 || target > 255) {
 					self.postMessage({
@@ -234,7 +236,7 @@
 					"string",
 					"number"
 				], [
-					lastYomi,
+					baseKeys.join(""),
 					sizes.join(","),
 					maxCands | 0
 				]));
@@ -385,6 +387,10 @@
 				sizesCsv,
 				values.join("	")
 			]) === 0;
+			lastLearned = ok ? {
+				kana,
+				values: [...values]
+			} : null;
 			if (ok) scheduleSave();
 			self.postMessage({
 				type: "learned",
@@ -503,8 +509,12 @@
 			});
 		}
 	}
-	/** 直近の learn を取り消す（確定アンドゥの学習巻き戻し）。成功したら保存も更新する */
-	function handleRevert(id) {
+	/**
+	* 直近の learn を取り消す（確定アンドゥの学習巻き戻し）。成功したら保存も更新する。
+	* kana / values 付き（v0.25.0+）なら、最後に成立した learn と内容が一致するときだけ戻す
+	* （共有 worker で別のホストの学習を巻き戻さないため）。
+	*/
+	function handleRevert(id, kana, values) {
 		if (!M || !learningEnabled || typeof M._hechima_revert !== "function") {
 			self.postMessage({
 				type: "learned",
@@ -513,8 +523,19 @@
 			});
 			return;
 		}
+		if (kana !== void 0 || values !== void 0) {
+			if (!(!!lastLearned && kana === lastLearned.kana && Array.isArray(values) && values.length === lastLearned.values.length && values.every((v, i) => v === lastLearned.values[i]))) {
+				self.postMessage({
+					type: "learned",
+					id,
+					ok: false
+				});
+				return;
+			}
+		}
 		try {
 			const ok = M.ccall("hechima_revert", "number", [], []) === 0;
+			lastLearned = null;
 			if (ok) scheduleSave();
 			self.postMessage({
 				type: "learned",
@@ -580,11 +601,11 @@
 				});
 			});
 		} else if (m.type === "convert") handleConvert(m.id, m.kana, m.maxCands ?? 9);
-		else if (m.type === "resize") handleResize(m.id, m.segIdx, m.offset, m.maxCands ?? 9);
+		else if (m.type === "resize") handleResize(m.id, m.segIdx, m.offset, m.maxCands ?? 9, m.keys);
 		else if (m.type === "reconvert") handleReconvert(m.id, m.surface, m.maxCands ?? 9);
 		else if (m.type === "paths") handlePaths(m.id, m.kana, m.maxPaths ?? 10, m.expand ?? 0);
 		else if (m.type === "learn") handleLearn(m.id, m.kana, m.sizes, m.values);
-		else if (m.type === "revert") handleRevert(m.id);
+		else if (m.type === "revert") handleRevert(m.id, m.kana, m.values);
 		else if (m.type === "clearLearning") handleClearLearning(m.id);
 		else if (m.type === "dictList") handleDictList(m.id);
 		else if (m.type === "dictAdd") handleDictAdd(m.id, m.reading, m.word, m.pos ?? 1);

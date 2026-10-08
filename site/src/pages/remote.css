@@ -1,0 +1,88 @@
+/* 別の端末をキーボードにする（/remote/ と /remote/keyboard/） */
+
+/* ---- 受け手: フリックの盤面の場所に、つなぐための QR と状態を出す ---- */
+
+/* 盤面の縦横比（5 / 3.2）は要らない。中身の高さに合わせる */
+body.remote-page .flick-area.remote-host {
+  aspect-ratio: auto;
+  max-height: none;
+}
+/* 盤面ぶんの下余白も要らない（QR が引っ込めば数行の高さしか無い） */
+body.remote-page.flick-on main { padding-bottom: 16rem; }
+/* フリックを隠すボタンは出さない（隠すと回線ごと閉じてしまう） */
+body.remote-page #flick-toggle { display: none !important; }
+
+.remote-status {
+  font-size: 0.9rem;
+  padding: 0.25rem 0;
+  text-align: center;
+}
+.remote-pair {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.25rem 0 0.5rem;
+}
+/* つながったら QR は引っ込める（画面を本文に返す。部屋はそのまま） */
+.remote-host.is-open .remote-pair { display: none; }
+.remote-qr {
+  flex: 0 0 auto;
+  width: 9rem;
+  height: 9rem;
+  background: #fff; /* 暗い配色でも読めるよう、QR の地は常に白 */
+  border-radius: 6px;
+}
+.remote-qr svg { width: 100%; height: 100%; display: block; }
+.remote-pair-text { font-size: 0.85rem; min-width: 0; }
+.remote-pair-text p { margin: 0.25rem 0; }
+.remote-url { overflow-wrap: anywhere; }
+.remote-url a { color: var(--accent); }
+
+/* ---- 送り手: 画面いっぱいのキーボード ---- */
+
+body.remote-keyboard {
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  background: var(--bg);
+  color: var(--fg);
+}
+.kb-status {
+  flex: 0 0 auto;
+  padding: calc(0.4rem + env(safe-area-inset-top)) 0.75rem 0.4rem;
+  font-size: 0.9rem;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}
+.kb-status::before {
+  content: "●";
+  margin-right: 0.4em;
+  color: var(--muted);
+}
+.kb-status[data-state="open"]::before { color: var(--accent); }
+.kb-status[data-state="failed"]::before { color: #c0392b; }
+/* つながっていないのに打ったとき */
+.kb-status.is-flash { animation: kb-flash 0.6s; }
+@keyframes kb-flash {
+  from { background: color-mix(in srgb, #c0392b 35%, transparent); }
+  to { background: transparent; }
+}
+.kb-body {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  min-height: 0;
+}
+.kb-area {
+  width: min(100%, 44rem, calc((100dvh - 4rem) * 5 / 3.2));
+  aspect-ratio: 5 / 3.2;
+}
