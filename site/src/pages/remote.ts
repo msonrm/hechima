@@ -15,7 +15,11 @@ import { connect, isRoom, newRoom, keyboardUrl, type Link, type LinkStatus } fro
 
 // ---- 配列図キーボードの受け口（initLabPage から渡される） ----
 
-type KeyControl = { down(tap: Hechima.KeyTap): void; up(tap: Hechima.KeyTap): void };
+type KeyControl = {
+  down(tap: Hechima.KeyTap): void;
+  up(tap: Hechima.KeyTap): void;
+  setCandidateStyle(style: "bar" | "popup"): void;
+};
 type KeymapControl = { load(json: unknown, layout?: string): Promise<void> };
 let keyControl: KeyControl | null = null;
 let keymapControl: KeymapControl | null = null;
@@ -136,6 +140,9 @@ const remoteMount: FlickMount = (container, _map, opts) => {
     if (s === "open") {
       lastSeq = 0;
       sendState();
+      // 打った文字が見えるところへ。キーは別の端末から来るのでフォーカスもスクロールも動かず、
+      // 説明文が長い画面ではエディタが下端の帯の裏に隠れたままになる
+      document.getElementById("editor")?.scrollIntoView({ block: "center" });
     }
   }
 
@@ -157,6 +164,9 @@ const remoteMount: FlickMount = (container, _map, opts) => {
       onStatus,
       onMessage(m) {
         if (m.t === "layout") {
+          // 候補の出し方はキーボードの種類に合わせる: フリックは帯（/flick/ と同じ。打ちながら候補も）、
+          // 配列図は物理キーボードと同じポップアップ（こちらの画面に盤面は無いので干渉しない）
+          keyControl?.setCandidateStyle(m.keymap === null ? "bar" : "popup");
           if (m.keymap === null) return; // フリック = かなで届くので配列は要らない
           if (keymapControl) applyLayout?.(m.keymap, m.layout);
           else pendingLayout = { keymap: m.keymap, layout: m.layout };

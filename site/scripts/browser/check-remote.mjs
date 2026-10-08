@@ -119,7 +119,12 @@ await host.waitForTimeout(300);
 check("薙刀式: F+J 同時押し → が", (await editor()).includes("あいのが"), JSON.stringify(await editor()));
 // スペース単打 = 変換、Enter = 確定
 await press("Space"); await host.waitForTimeout(1500);
-check("薙刀式: スペース単打で変換（受け手に候補）", (await host.$$("#cand-popup .cand, .flick-cands .fcand")).length > 0);
+// 配列図の候補は物理キーボードと同じポップアップに出る（帯ではない）
+const popupShown = await host.evaluate(() => {
+  const pop = document.getElementById("candidates");
+  return { bar: document.querySelectorAll(".flick-cands .fcand").length, popup: !!pop && !pop.hidden && !!pop.textContent };
+});
+check("薙刀式: スペース単打で変換、候補はポップアップに（帯ではない）", popupShown.popup && popupShown.bar === 0, JSON.stringify(popupShown));
 await press("Enter"); await host.waitForTimeout(300);
 const nagDoc = await editor();
 check("薙刀式: Enter で確定（よみのままではない）", nagDoc.length > 0 && !nagDoc.includes("あいのが"), JSON.stringify(nagDoc));
