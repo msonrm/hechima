@@ -36,8 +36,12 @@ const waitText = async (p, sel, re, ms = 15000) => { const t0 = Date.now(); let 
 check("送り手: つながる", /つながりました/.test(await waitText(kb, ".kb-status", /つながりました/)));
 check("受け手: つながる", /つながりました/.test(await waitText(host, ".remote-status", /つながりました/)));
 check("受け手: つながったら QR が引っ込む", await host.$eval(".remote-pair", (e) => getComputedStyle(e).display === "none"));
-// mozc の読み込みを待つ（受け手）
-await host.waitForTimeout(500);
+// mozc の読み込みを待つ（受け手）。★時間で待たない —— 本番は辞書（gz で 12.8MB）を回線から取るので、
+// 0.5 秒待つだけだと**読み込みが間に合った回だけ通る**（デプロイ直後の本番で 2 回に 1 回落ちた）
+const engineReady = async () =>
+  check("受け手: 変換エンジンの準備完了", /準備完了/.test(await waitText(host, "#status", /準備完了/, 60000)),
+    await host.$eval("#status", (e) => e.textContent ?? "").catch(() => ""));
+await engineReady();
 const keyBox = async (label) => {
   const h = await kb.evaluateHandle((label) => {
     const els = [...document.querySelectorAll(".fe-root *")].filter((e) => e.children.length === 0 && e.textContent === label);
@@ -76,7 +80,7 @@ await host.waitForSelector(".remote-url a");
 check("受け手は同じ部屋を覚えている", (await host.$eval(".remote-url a", (a) => a.href)) === url);
 check("受け手の読み込み直し後、送り手が再びつながる", /つながりました/.test(await waitText(kb, ".kb-status", /つながりました/)));
 check("受け手側も再びつながる", /つながりました/.test(await waitText(host, ".remote-status", /つながりました/)));
-await host.waitForTimeout(800);
+await engineReady(); // 読み込み直したので辞書から取り直している
 await tap("さ"); await host.waitForTimeout(400);
 check("受け手の再接続後も入る", (await editor()).includes("さ"), JSON.stringify(await editor()));
 // 5) 配列図（理想的な物理キーボード）: 薙刀式。押した・離したを送り、受け手の配列エンジンが解く
