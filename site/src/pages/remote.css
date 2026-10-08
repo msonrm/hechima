@@ -54,13 +54,31 @@ body.remote-keyboard {
   background: var(--bg);
   color: var(--fg);
 }
-.kb-status {
+.kb-bar {
   flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: center;
+  justify-content: space-between;
   padding: calc(0.4rem + env(safe-area-inset-top)) 0.75rem 0.4rem;
-  font-size: 0.9rem;
-  text-align: center;
   border-bottom: 1px solid var(--line);
 }
+.kb-status {
+  font-size: 0.9rem;
+  min-width: 0;
+}
+.kb-controls { display: flex; gap: 0.5rem; }
+.kb-controls select {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.2rem 0.4rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.kb-controls select[hidden] { display: none; }
 .kb-status::before {
   content: "●";
   margin-right: 0.4em;
@@ -82,7 +100,17 @@ body.remote-keyboard {
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   min-height: 0;
 }
+/* 盤面の縦横比はページが --kb-ratio で渡す（フリック 5/3.2、配列図はプロファイルの寸法） */
 .kb-area {
-  width: min(100%, 44rem, calc((100dvh - 4rem) * 5 / 3.2));
-  aspect-ratio: 5 / 3.2;
+  --kb-ratio: 1.5625;
+  width: min(100%, calc((100dvh - 4.5rem) * var(--kb-ratio)));
+  aspect-ratio: var(--kb-ratio);
+}
+/* フリックは大きすぎると指が届かないので上限を置く。配列図は横いっぱいに使う */
+body[data-mode="flick"] .kb-area { max-width: 44rem; }
+/* 配列図の色（ReplayEngine の rk-* が読む変数） */
+body[data-mode="keys"] .kb-area {
+  --rk-key-bg: color-mix(in srgb, var(--line) 25%, var(--bg));
+  --rk-key-on: var(--accent);
+  touch-action: none;
 }

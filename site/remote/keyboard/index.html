@@ -10,9 +10,17 @@
     <meta name="description" content="別の端末をキーボードにする、のキーボード側。ここで打った文字は、つないだ端末に入って変換されます。" />
     <link rel="stylesheet" href="/src/style.css" />
     <script src="/vendor/flick/flick-engine.js"></script>
+    <script src="/vendor/keymap-engine/keymap-engine.js"></script>
+    <script src="/vendor/replay/replay-engine.js"></script>
   </head>
   <body class="remote-keyboard">
-    <div class="kb-status" role="status">読み込み中…</div>
+    <div class="kb-bar">
+      <div class="kb-status" role="status">読み込み中…</div>
+      <div class="kb-controls">
+        <select class="kb-mode" aria-label="キーボード"></select>
+        <select class="kb-profile" aria-label="物理配置"></select>
+      </div>
+    </div>
     <div class="kb-body"><div class="kb-area"></div></div>
     <script type="module" src="/src/pages/remote-keyboard.ts"></script>
   </body>

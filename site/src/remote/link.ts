@@ -5,12 +5,18 @@
  * 中継（/api/pair/<room>。worker/index.js）を通す。打った文字は中継を通らない。
  *
  * 流れるもの（DataChannel の上）:
- *   送り手 → 受け手  { t: "op", seq, op }    op = FlickOp（kana / key / text）そのもの
+ *   送り手 → 受け手  { t: "op", seq, op }
+ *     op は 2 系統ある:
+ *       - フリック = FlickOp（kana / key / text）。**盤面そのものが配列**なので、送り手で
+ *         かなまで解決して送る
+ *       - 配列図   = keydown / keyup（KeyTap）。送り手は「理想的な物理キーボード」として
+ *         押した・離したを送るだけで、**配列エンジンは受け手で動く**。未確定の途中の表示・
+ *         同時打鍵・編集操作が、物理キーボードと同じ実装のまま効く
+ *   送り手 → 受け手  { t: "layout", keymap, layout }
+ *     配列図で打つ配列の宣言（keymap = /vendor/keymaps/<id>.json、null = フリック）。
+ *     どの配列で打つかはキーボード側が決め、受け手はそれに従う
  *   受け手 → 送り手  { t: "state", ack, composing, tail }
  *     キーボードの表示と ゛゜小 のための状態。候補は送らない（候補を見るのは受け手の画面）
- *
- * ★**配列の解決は送り手で終わっている**。受け手が受け取るのは「かな / 機能キー / 文字」だけ
- *   なので、どんなキーボードを作っても受け手は変わらない（notes: 別の端末をキーボードにする）。
  *
  * シグナリングは非トリクル（候補を集め切ってから SDP を 1 通で送る）。同じ LAN なら
  * ホスト候補だけで直結するので、集めるのは一瞬で済む。
@@ -18,12 +24,31 @@
 
 import type { FlickOp } from "../app";
 
-/** 回線に載せる操作（FlickOp のうち layer を除いたもの。layer は送り手の盤面の中で閉じる） */
-export type WireOp = Exclude<FlickOp, { type: "layer" }>;
+/**
+ * 回線に載せる操作。FlickOp のうち layer を除いたもの（layer は送り手の盤面の中で閉じる）と、
+ * 配列図のキーの押下・解放
+ */
+export type WireOp =
+  | Exclude<FlickOp, { type: "layer" }>
+  | { type: "keydown"; tap: Hechima.KeyTap }
+  | { type: "keyup"; tap: Hechima.KeyTap };
 
 export type PeerMsg =
   | { t: "op"; seq: number; op: WireOp }
+  | { t: "layout"; keymap: string | null; layout: string }
   | { t: "state"; ack: number; composing: boolean; tail: string };
+
+/**
+ * 配列図で打てる配列（`/vendor/keymaps/<id>.json`）。受け手はここに無いものを読まない。
+ * 表示名は JSON の name から取る
+ */
+export const REMOTE_KEYMAPS = [
+  "naginata", "azik", "romaji", "nicola", "tsuki2-263", "oyayubi_pyun_1key", "hitaki", "isuka",
+] as const;
+
+export function isRemoteKeymap(id: unknown): id is (typeof REMOTE_KEYMAPS)[number] {
+  return typeof id === "string" && (REMOTE_KEYMAPS as readonly string[]).includes(id);
+}
 
 export type Role = "host" | "keyboard";
 
@@ -80,6 +105,20 @@ function str(v: unknown, max: number): v is string {
   return typeof v === "string" && v.length <= max;
 }
 
+/** KeyTap の検査（知らないフィールドは落とす） */
+function parseTap(x: unknown): Hechima.KeyTap | null {
+  if (!x || typeof x !== "object") return null;
+  const t = x as Record<string, unknown>;
+  if (!str(t.key, 32) || !t.key) return null;
+  const tap: Hechima.KeyTap = { key: t.key };
+  if (str(t.code, 32)) tap.code = t.code;
+  if (t.shiftKey === true) tap.shiftKey = true;
+  if (t.ctrlKey === true) tap.ctrlKey = true;
+  if (t.altKey === true) tap.altKey = true;
+  if (t.metaKey === true) tap.metaKey = true;
+  return tap;
+}
+
 /** 操作の検査。形が違えば null */
 export function parseOp(x: unknown): WireOp | null {
   if (!x || typeof x !== "object") return null;
@@ -91,16 +130,12 @@ export function parseOp(x: unknown): WireOp | null {
   if (o.type === "text" && str(o.text, 64) && o.text) {
     return { type: "text", text: o.text };
   }
-  if (o.type === "key" && o.tap && typeof o.tap === "object") {
-    const t = o.tap as Record<string, unknown>;
-    if (!str(t.key, 32) || !t.key) return null;
-    const tap: Hechima.KeyTap = { key: t.key };
-    if (str(t.code, 32)) tap.code = t.code;
-    if (t.shiftKey === true) tap.shiftKey = true;
-    if (t.ctrlKey === true) tap.ctrlKey = true;
-    if (t.altKey === true) tap.altKey = true;
-    if (t.metaKey === true) tap.metaKey = true;
-    return { type: "key", tap };
+  if (o.type === "key" || o.type === "keydown" || o.type === "keyup") {
+    const tap = parseTap(o.tap);
+    if (!tap) return null;
+    // 配列図のキーは code が要る（配列エンジンは code で引く）
+    if (o.type !== "key" && !tap.code) return null;
+    return { type: o.type, tap };
   }
   return null;
 }
@@ -118,6 +153,10 @@ function parsePeerMsg(data: unknown): PeerMsg | null {
   if (m.t === "op" && typeof m.seq === "number" && Number.isInteger(m.seq)) {
     const op = parseOp(m.op);
     return op ? { t: "op", seq: m.seq, op } : null;
+  }
+  if (m.t === "layout" && (m.keymap === null || isRemoteKeymap(m.keymap)) &&
+      (m.layout === "jis" || m.layout === "us")) {
+    return { t: "layout", keymap: m.keymap, layout: m.layout };
   }
   if (m.t === "state" && typeof m.ack === "number" && typeof m.composing === "boolean" && str(m.tail, 1024)) {
     return { t: "state", ack: m.ack, composing: m.composing, tail: m.tail };
