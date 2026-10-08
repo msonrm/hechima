@@ -15,7 +15,7 @@ npm run dev      # dev サーバー（COOP/COEP は 2026-07-25 に撤去 = 単�
 npm run build    # tsc --noEmit + vite build → site/dist/
 ```
 
-## デプロイ（Cloudflare Workers 静的アセット）
+## デプロイ（Cloudflare Workers 静的アセット + `/api/*` の Worker）
 
 **正規手段**（毎回これ。CI は無い）。リポジトリルートの `wrangler.jsonc` が `./site/dist` を
 本番ドメイン **luffa-lang-labo.dev**（custom domain・DNS/証明書自動）+ hechima-lab.msonrm.workers.dev
@@ -37,6 +37,15 @@ npx wrangler deploy                   # site/dist を本番へ。数十秒で反
   通常のキャッシュ（`max-age=0, must-revalidate` = ETag 再検証）に戻した。
   戻す必要が出るのはマルチスレッド wasm に回帰する場合だけ。
 - 1 ファイル 25MiB 制限: 辞書 `mozc.data` は 18.9MB で現状クリア。
+- **Worker 本体（`worker/index.js`）と Durable Object（`PairRoom`）がある**（2026-10-08〜。
+  `/remote/` のシグナリング中継 = `/api/pair/<room>`）。`run_worker_first: ["/api/*"]` なので
+  Worker が呼ばれるのは `/api/*` だけで、他のページは従来どおり静的アセットが直接返る。
+  Durable Object を足す・名前を変えるときは `wrangler.jsonc` の `migrations` に**新しいタグ**を
+  足す（既存のタグを書き換えない）。仕様 = [docs/remote.md](docs/remote.md)
+- ★**`npx wrangler dev` は aarch64 / 39 ビット仮想アドレスの機械（Chromebook の Linux など）では
+  起動しない**（workerd の tcmalloc が 48 ビットを前提にしていて、起動直後に落ちる）。
+  `/remote/` をローカルで通すときは Worker の代役 `site/scripts/browser/relay-local.mjs` を使い、
+  本物の Worker は**デプロイ後に `check-remote.mjs` を本番へ向けて**確かめる
 - （任意）Cloudflare ダッシュボードの Workers Builds（Git 連携）にビルド
   `cd site && npm ci && npm run build` / デプロイ `npx wrangler deploy` を設定すると push=デプロイ。
 
