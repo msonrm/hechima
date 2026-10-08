@@ -23,6 +23,8 @@ PW_DIR=/tmp/pw node site/scripts/browser/check-hitaki-isuka.mjs
 |---|---|
 | `check-hitaki-isuka.mjs [base]` | `/hitaki-isuka/`: 両配列の打鍵（子音が薄く出る・空きキーは無反応）、説明図とエディタが一画面に収まるか、読み込み中にページが勝手に動かないか |
 | `check-scroll-flick.mjs [base]` | `/scroll-flick/`: 静止中のタップ、盤面が右へ動く間の押下 = 左フリック、下へ動く間 = 上フリック（盤面は 26 秒周期で勝手に動くので、動き出しを待って押す。実行に十数秒かかる） |
+| `check-remote.mjs [base]` | `/remote/`: 受け手の QR の URL を送り手で開いてつながる・盤面のタップが受け手に入る・゛゜小が受け手の末尾に効く・変換と確定・**どちらを読み込み直してもつなぎ直せる**。2 ページを同じ機械で開くので、2 台の直結（mDNS 等）は見えない。既定の base は本番 |
+| `relay-local.mjs [dist] [port]` | `check-remote.mjs` 用の Worker の代役（静的配信 + `/api/pair/<room>` の中継）。**workerd が 39 ビット環境で起動しない**ので置いた。`ws` が要る（`npm i ws` を `PW_DIR` に） |
 
 `base` の既定は `http://localhost:4789`（`cd site && npm run build && npx vite preview --port 4789 --strictPort`）。
 本番（`https://luffa-lang-labo.dev`）にも向けられる。

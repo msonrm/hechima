@@ -1,8 +1,8 @@
 // Cloudflare Workers（静的アセット配信）の設定。
 // デプロイ: サイトをビルドしてから `npx wrangler deploy`
 //   cd site && npm ci && npm run build && cd .. && npx wrangler deploy
-// COOP/COEP ヘッダは site/public/_headers（→ site/dist/_headers）が全ページに付与する
-// （hechima-wasm は -pthread = SharedArrayBuffer 必須のため）。
+// ヘッダは site/public/_headers（→ site/dist/_headers）が全ページに付与する
+// （COOP/COEP は 2026-07-25 の単スレッド化で撤去済み。いまは CORP のみ）。
 {
   "name": "hechima-lab",
   "compatibility_date": "2026-07-01",
@@ -12,7 +12,17 @@
   ],
   // routes を書くと workers.dev が既定で無効になるため、旧 URL 併存のため明示的に有効化
   "workers_dev": true,
+  // Worker 本体は /api/* だけを受ける（今は /api/pair/<room> = /remote/ のシグナリング中継のみ）。
+  // それ以外は従来どおり静的アセットが直接返り、Worker は呼ばれない。
+  "main": "worker/index.js",
   "assets": {
-    "directory": "./site/dist"
-  }
+    "directory": "./site/dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "PAIR_ROOM", "class_name": "PairRoom" }]
+  },
+  // 無料プランの Durable Object は SQLite 版でしか作れない（storage は使っていない）
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PairRoom"] }]
 }

@@ -32,6 +32,8 @@ export default defineConfig({
         coiTest: fileURLToPath(new URL("./coi-test/index.html", import.meta.url)),
         theme: fileURLToPath(new URL("./theme/index.html", import.meta.url)),
         obsidian: fileURLToPath(new URL("./obsidian/index.html", import.meta.url)),
+        remote: fileURLToPath(new URL("./remote/index.html", import.meta.url)),
+        remotePad: fileURLToPath(new URL("./remote/pad/index.html", import.meta.url)),
       },
     },
   },
