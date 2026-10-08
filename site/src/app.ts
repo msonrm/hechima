@@ -103,6 +103,20 @@ export interface LabPageConfig {
     load(json: unknown, layout?: string, roleOverrides?: Map<string, string[]>): Promise<void>;
   }): void;
   /**
+   * **キーの押下・解放を外から流し込む口**を呼び出し側へ渡す（`/remote/` 用）。
+   * 起動時に 1 度だけ呼ばれる。
+   *
+   * 別の端末に出した配列図のキーボードは「理想的な物理キーボード」として振る舞い、
+   * 押した・離したを `KeyTap`（`code` はブラウザの KeyboardEvent.code）で送ってくる。
+   * `down` はセッションへ `feed` し、飲まれなければ文書の操作（BS・矢印・改行・文字の挿入）に
+   * 落とす —— 物理キーボードの keydown と同じ二重経路。`up` は `feedUp`（同時打鍵の判定に要る）。
+   * 配列そのものの差し替えは `onKeymapControl` の `load` を使う。
+   */
+  onKeyControl?(control: {
+    down(tap: Hechima.KeyTap): void;
+    up(tap: Hechima.KeyTap): void;
+  }): void;
+  /**
    * 起動時にエディタへフォーカスするとき、ページをスクロールしない（既定 false = スクロールする）。
    * エディタより上に見せたいもの（説明図など）があるページ用。エディタが画面外にあると、
    * フォーカスの既定動作でページが下へ飛び、上のものが画面から押し出される（/hitaki-isuka/）
@@ -1793,6 +1807,25 @@ export function initLabPage(config: LabPageConfig = {}): void {
     else if (tap.key === "ArrowUp") { if (canModify) sel.modify(alter, "backward", "line"); }
     else if (tap.key === "ArrowDown") { if (canModify) sel.modify(alter, "forward", "line"); }
   }
+
+  // 外から流し込まれるキー（/remote/ の配列図キーボード）。物理キーボードの keydown と同じく、
+  // セッションが飲まなければ文書の操作へ落とす。印字キーの直接入力は native に任せられない
+  // （合成イベントでは既定動作が起きない）ので、ここで挿入する
+  config.onKeyControl?.({
+    down(tap) {
+      if (fep.feed(tap)) return;
+      if (tap.key.length === 1 && tap.key !== " " && !tap.ctrlKey && !tap.altKey && !tap.metaKey) {
+        snapshot();
+        insertTextAtCaret(tap.key);
+        afterEdit();
+        return;
+      }
+      applyFlickHostKey(tap);
+    },
+    up(tap) {
+      fep.feedUp(tap);
+    },
+  });
 
   async function enableFlick(): Promise<void> {
     if (flickKbd) return;

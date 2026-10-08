@@ -49,8 +49,12 @@
         <ol>
           <li>この端末と、キーボードにする端末を<b>同じ Wi-Fi</b> につなぐ</li>
           <li>キーボードにする端末のカメラで、下に出ている QR を読む（キーボードのページが開きます）</li>
-          <li>「つながりました」と出たら、あちらでフリック入力。変換・候補送り・確定もあちらのキーで</li>
+          <li>「つながりました」と出たら、あちらで打つ。変換・候補送り・確定もあちらのキーで</li>
         </ol>
+        <p>キーボードは 2 種類あります。<b>フリック</b>と、<b>配列図</b>（薙刀式・AZIK・NICOLA・月配列など。
+          物理配置は JIS / US / 格子）です。配列図は「理想的な物理キーボード」として押した・離したを送るだけで、
+          配列はこちらで解いています。だから複数の指での同時押しも、打ちかけの文字が薄く出るのも、
+          つないだ物理キーボードと同じです。</p>
       </section>
 
       <section class="layers">
@@ -61,8 +65,8 @@
           <span class="blk">表示</span>
         </div>
         <p><b>別の端末へ出した層：入力・キーマップ</b> ／ <span class="kept">こちらに残した層：変換・表示</span></p>
-        <p>あちらから届くのは<b>キーマップを通した後の結果</b>（かな・機能キー・英数字）だけです。
-          だからキーボードの形をどう変えても、こちらは何も変わりません。
+        <p>フリックはあちらでかなにしてから送り、配列図は押したキーをそのまま送ってこちらの配列エンジンが解きます。
+          どちらにしても、どの配列で打つかを決めるのはキーボード側です。
           2 台は WebRTC で直接つながり、打った文字はサーバーを通りません（最初の接続の手続きだけラボの中継を通ります）。</p>
         <p class="src">このページ固有のソース：<a href="https://github.com/msonrm/hechima/blob/main/site/src/pages/remote.ts" rel="noopener"><code>site/src/pages/remote.ts</code></a>
           ／ <a href="https://github.com/msonrm/hechima/blob/main/site/src/remote/link.ts" rel="noopener"><code>site/src/remote/link.ts</code></a></p>

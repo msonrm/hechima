@@ -12,6 +12,16 @@
 import qrcode from "qrcode-generator";
 import { initLabPage, type FlickMount } from "../app";
 import { connect, isRoom, newRoom, keyboardUrl, type Link, type LinkStatus } from "../remote/link";
+
+// ---- 配列図キーボードの受け口（initLabPage から渡される） ----
+
+type KeyControl = { down(tap: Hechima.KeyTap): void; up(tap: Hechima.KeyTap): void };
+type KeymapControl = { load(json: unknown, layout?: string): Promise<void> };
+let keyControl: KeyControl | null = null;
+let keymapControl: KeymapControl | null = null;
+/** 配列の宣言がエンジンの準備より先に届いたとき、準備ができてから当てる */
+let pendingLayout: { keymap: string; layout: string } | null = null;
+let applyLayout: ((keymap: string, layout: string) => void) | null = null;
 import "./remote.css";
 
 const ROOM_KEY = "lll-remote-room";
@@ -64,6 +74,47 @@ const remoteMount: FlickMount = (container, _map, opts) => {
   let link: Link | null = null;
   // 受け取った最後の操作の番号（送り手は回線ごとに 1 から振る）
   let lastSeq = 0;
+  /** 押されたまま届いているキー。回線が切れたら離したことにする（同時打鍵の状態を残さない） */
+  const held = new Map<string, Hechima.KeyTap>();
+  let layoutText = "";
+  let statusText = STATUS_TEXT.signal;
+  const showStatus = () => {
+    if (statusEl) statusEl.textContent = layoutText ? `${statusText}（${layoutText}）` : statusText;
+  };
+
+  /** 配列を読む（JSON は一度読んだら覚えておく）。宣言が続けて来たら最後のものだけ当てる */
+  const jsonCache = new Map<string, unknown>();
+  let layoutToken = 0;
+  applyLayout = (keymap, layout) => {
+    const token = ++layoutToken;
+    void (async () => {
+      try {
+        let json = jsonCache.get(keymap);
+        if (!json) {
+          const res = await fetch(`/vendor/keymaps/${keymap}.json`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          json = await res.json();
+          jsonCache.set(keymap, json);
+        }
+        if (token !== layoutToken || !keymapControl) return;
+        await keymapControl.load(json, layout);
+        const name = (json as { name?: unknown }).name;
+        layoutText = `${typeof name === "string" ? name : keymap}・${layout.toUpperCase()}`;
+      } catch (e) {
+        layoutText = `配列を読めませんでした: ${keymap}（${String((e as Error)?.message ?? e)}）`;
+      }
+      showStatus();
+    })();
+  };
+  if (pendingLayout && keymapControl) {
+    applyLayout(pendingLayout.keymap, pendingLayout.layout);
+    pendingLayout = null;
+  }
+
+  function releaseHeld(): void {
+    for (const tap of held.values()) keyControl?.up(tap);
+    held.clear();
+  }
   let composing = false;
   let stateQueued = false;
 
@@ -78,8 +129,10 @@ const remoteMount: FlickMount = (container, _map, opts) => {
   }
 
   function onStatus(s: LinkStatus): void {
-    if (statusEl) statusEl.textContent = STATUS_TEXT[s];
+    statusText = STATUS_TEXT[s];
+    showStatus();
     container.classList.toggle("is-open", s === "open");
+    if (s !== "open") releaseHeld();
     if (s === "open") {
       lastSeq = 0;
       sendState();
@@ -103,9 +156,24 @@ const remoteMount: FlickMount = (container, _map, opts) => {
     link = connect(room, "host", {
       onStatus,
       onMessage(m) {
+        if (m.t === "layout") {
+          if (m.keymap === null) return; // フリック = かなで届くので配列は要らない
+          if (keymapControl) applyLayout?.(m.keymap, m.layout);
+          else pendingLayout = { keymap: m.keymap, layout: m.layout };
+          return;
+        }
         if (m.t !== "op" || m.seq <= lastSeq) return; // 重複・古い回線の残り
         lastSeq = m.seq;
-        opts.onOp(m.op);
+        const op = m.op;
+        if (op.type === "keydown") {
+          if (op.tap.code) held.set(op.tap.code, op.tap);
+          keyControl?.down(op.tap);
+        } else if (op.type === "keyup") {
+          if (op.tap.code) held.delete(op.tap.code);
+          keyControl?.up(op.tap);
+        } else {
+          opts.onOp(op);
+        }
         sendState();
       },
     });
@@ -120,6 +188,8 @@ const remoteMount: FlickMount = (container, _map, opts) => {
       sendState();
     },
     destroy() {
+      releaseHeld();
+      applyLayout = null;
       link?.close();
       link = null;
       container.replaceChildren();
@@ -128,4 +198,16 @@ const remoteMount: FlickMount = (container, _map, opts) => {
   };
 };
 
-initLabPage({ keymap: "romaji", flick: "on", flickMount: remoteMount });
+initLabPage({
+  keymap: "romaji",
+  flick: "on",
+  flickMount: remoteMount,
+  onKeyControl: (c) => { keyControl = c; },
+  onKeymapControl: (c) => {
+    keymapControl = c;
+    if (pendingLayout && applyLayout) {
+      applyLayout(pendingLayout.keymap, pendingLayout.layout);
+      pendingLayout = null;
+    }
+  },
+});

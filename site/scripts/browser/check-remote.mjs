@@ -79,6 +79,57 @@ check("受け手側も再びつながる", /つながりました/.test(await wa
 await host.waitForTimeout(800);
 await tap("さ"); await host.waitForTimeout(400);
 check("受け手の再接続後も入る", (await editor()).includes("さ"), JSON.stringify(await editor()));
+// 5) 配列図（理想的な物理キーボード）: 薙刀式。押した・離したを送り、受け手の配列エンジンが解く
+await kb.selectOption(".kb-mode", "naginata");
+await kb.selectOption(".kb-profile", "jis");
+check("受け手が薙刀式を読む", /薙刀式/.test(await waitText(host, ".remote-status", /薙刀式/)));
+await host.$eval("#editor", (e) => { e.textContent = ""; });
+// 盤面の座標系（u）からキーの中心を画面の座標へ。指ごとに pointerId を分けて多指を再現する
+const keyPoint = (code) => kb.evaluate((code) => {
+  const svg = document.querySelector(".kb-area svg");
+  const p = ReplayEngine.findProfile(document.querySelector(".kb-profile").value);
+  const k = p.keys.find((k) => k.code === code);
+  const r = svg.getBoundingClientRect(); const vb = svg.viewBox.baseVal; const u = vb.width / p.width;
+  return { x: r.left + ((k.x + k.w / 2) * u - vb.x) * r.width / vb.width, y: r.top + ((k.y + k.h / 2) * u - vb.y) * r.height / vb.height };
+}, code);
+const finger = async (type, code, id) => {
+  const pt = await keyPoint(code);
+  await kb.evaluate(({ type, pt, id }) => {
+    document.querySelector(".kb-area").dispatchEvent(new PointerEvent(type, { pointerId: id, clientX: pt.x, clientY: pt.y, bubbles: true, isPrimary: id === 1 }));
+  }, { type, pt, id });
+  await kb.waitForTimeout(60);
+};
+const press = async (code) => { await finger("pointerdown", code, 1); await finger("pointerup", code, 1); };
+await press("KeyJ"); await press("KeyK");
+await host.waitForTimeout(300);
+check("薙刀式: J K → あい", (await editor()).includes("あい"), JSON.stringify(await editor()));
+// 親指（スペース）を押したまま J = の（センターシフト）
+await finger("pointerdown", "Space", 1); await finger("pointerdown", "KeyJ", 2);
+await finger("pointerup", "KeyJ", 2); await finger("pointerup", "Space", 1);
+await host.waitForTimeout(300);
+check("薙刀式: スペース押しながら J → の（多指）", (await editor()).includes("あいの"), JSON.stringify(await editor()));
+// F と J の同時押し = が
+await finger("pointerdown", "KeyF", 1); await finger("pointerdown", "KeyJ", 2);
+await finger("pointerup", "KeyJ", 2); await finger("pointerup", "KeyF", 1);
+await host.waitForTimeout(300);
+check("薙刀式: F+J 同時押し → が", (await editor()).includes("あいのが"), JSON.stringify(await editor()));
+// スペース単打 = 変換、Enter = 確定
+await press("Space"); await host.waitForTimeout(1500);
+check("薙刀式: スペース単打で変換（受け手に候補）", (await host.$$("#cand-popup .cand, .flick-cands .fcand")).length > 0);
+await press("Enter"); await host.waitForTimeout(300);
+const nagDoc = await editor();
+check("薙刀式: Enter で確定（よみのままではない）", nagDoc.length > 0 && !nagDoc.includes("あいのが"), JSON.stringify(nagDoc));
+
+// 6) AZIK: 逐次系。待っている打鍵（k）が受け手に見えて、z で「かん」になる
+await kb.selectOption(".kb-mode", "azik");
+check("受け手が AZIK を読む", /AZIK/.test(await waitText(host, ".remote-status", /AZIK/)));
+await host.$eval("#editor", (e) => { e.textContent = ""; });
+await press("KeyK"); await host.waitForTimeout(300);
+check("AZIK: k が受け手に見える（待っている打鍵）", (await editor()).includes("k"), JSON.stringify(await editor()));
+await press("KeyZ"); await host.waitForTimeout(300);
+check("AZIK: k z → かん", (await editor()).includes("かん"), JSON.stringify(await editor()));
+await press("Escape"); await host.waitForTimeout(200);
+
 await browser.close();
 console.log(failed ? `${failed} 件失敗` : "すべて ok");
 process.exit(failed ? 1 : 0);
