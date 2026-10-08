@@ -1,4 +1,4 @@
-// Hechima v0.24.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
+// Hechima v0.25.0 — 変換セッション層 単体バンドルの型定義（手書き。cb 契約の明文化）。
 // 要 KeymapEngine >= 2.0.0（keymap v2。配列は roles で役を宣言し、物理キーへの割当は
 // layouts + ホストの roleOverrides で決まる。**v1 のキーマップは読めない**）。
 // v0.19.0 は engine の局面問い合わせ（InputEngine.hostPhase）を配線する。
@@ -106,6 +106,9 @@ export interface FoldOptions {
  *   省略可。segmentIndex 文節のよみを offset（よみ文字数、±）だけ伸縮し再変換後の全文節を
  *   返す。null/空/失敗 = 伸縮不能（現状維持）。候補選択中の editSegmentLeft/Right
  *   （薙刀式 space+T/Y 等）がこれを使う。未提供なら editSegment* は無害に飲まれる。
+ *   第 3 引数 keys（v0.25.0+）= セッションが持つ**いまの**文節よみ列。実装は自分が覚えている
+ *   「直近の変換結果」より keys を優先すること（候補タップで前半だけ確定した後・確定アンドゥの
+ *   後・1 つのエンジンを複数セッションで共有するときに食い違う）。
  */
 export interface SessionCallbacks {
   show(segments: SegmentView[]): void;
@@ -113,7 +116,7 @@ export interface SessionCallbacks {
   commit(text: string): void;
   hostKey?(name: string): void;
   convert?(yomi: string): Promise<ConvertSegment[] | null> | ConvertSegment[] | null;
-  resize?(segmentIndex: number, offset: number): Promise<ConvertSegment[] | null> | ConvertSegment[] | null;
+  resize?(segmentIndex: number, offset: number, keys?: string[]): Promise<ConvertSegment[] | null> | ConvertSegment[] | null;
   /**
    * 確定内容の学習通知（v0.8.0+、省略可・fire-and-forget）。候補選択中（Phase 2）の確定時に
    * 各文節の「よみ + 確定表示値」の列で呼ばれる（英字合成の確定では呼ばれない）。
@@ -138,8 +141,12 @@ export interface SessionCallbacks {
    * それを取り除いて true（一致しない = その後に編集があった等なら false = アンドゥ不成立）。
    */
   retract?(text: string): boolean;
-  /** 確定アンドゥ時の学習巻き戻し（v0.9.0+、省略可）。connectWorker の callbacks() で Mozc RevertConversion に流れる */
-  unlearn?(): void;
+  /**
+   * 確定アンドゥ時の学習巻き戻し（v0.9.0+、省略可）。connectWorker の callbacks() で Mozc RevertConversion に流れる。
+   * segments（v0.25.0+）= 取り消す確定で cb.learn に渡したのと同じ列。最後に学習した内容と一致するときだけ
+   * 戻すのが推奨（共有エンジンで別のセッションの学習を戻さない。connectWorker はそうしている）
+   */
+  unlearn?(segments?: { key: string; value: string }[]): void;
 }
 
 /** feed / feedUp が読む KeyboardEvent 互換の最小形（DOM 型に依存しない） */
@@ -316,13 +323,15 @@ export interface InitRequest { type: "init"; wasmJs?: string; dataUrl?: string; 
 /** ホスト → Worker: かな漢字変換 */
 export interface ConvertRequest { type: "convert"; id: number; kana: string; maxCands?: number }
 /** ホスト → Worker: 文節伸縮（worker が接続固有状態から境界制約に翻訳。v0.7.0+ はステートレス wasm 経由） */
-export interface ResizeRequest { type: "resize"; id: number; segIdx: number; offset: number; maxCands?: number }
+/** keys（v0.25.0+）= 呼び元の文節よみ列。渡すとステートレス（worker の直近の変換に依存しない） */
+export interface ResizeRequest { type: "resize"; id: number; segIdx: number; offset: number; keys?: string[]; maxCands?: number }
 /** ホスト → Worker: 確定内容の学習（v0.8.0+。値はエンジン中立 = 表示値） */
 export interface LearnRequest { type: "learn"; id: number; kana: string; sizes: number[]; values: string[] }
 /** ホスト → Worker: OPFS の学習保存分を削除（v0.8.0+） */
 export interface ClearLearningRequest { type: "clearLearning"; id: number }
 /** ホスト → Worker: 直近の learn の取り消し（v0.9.0+。確定アンドゥの学習巻き戻し） */
-export interface RevertRequest { type: "revert"; id: number }
+/** kana / values（v0.25.0+）= 照合付き。worker が最後に成立させた learn と一致するときだけ戻す */
+export interface RevertRequest { type: "revert"; id: number; kana?: string; values?: string[] }
 /** ホスト → Worker: 再変換（v0.10.0+。表記 → 逆変換でよみ → 変換。応答は result で keys がよみ） */
 export interface ReconvertRequest { type: "reconvert"; id: number; surface: string; maxCands?: number }
 /** 区切りの異なる経路の列挙（v0.23.0+。hechima_paths 入りの wasm が要る）。ステートレス */
@@ -390,16 +399,16 @@ export interface WorkerConnection {
   init(paths?: WorkerInitPaths): Promise<ReadyInfo>;
   /** かな→文節/候補。ready まで待機して送る。失敗・init 失敗時は null（cb.convert 互換） */
   convert(yomi: string): Promise<ConvertSegment[] | null>;
-  /** 文節伸縮。wasm 未対応（features.resize=false）・失敗時は null（cb.resize 互換） */
-  resize(segmentIndex: number, offset: number): Promise<ConvertSegment[] | null>;
+  /** 文節伸縮。wasm 未対応（features.resize=false）・失敗時は null（cb.resize 互換）。keys（v0.25.0+）= ステートレス化 */
+  resize(segmentIndex: number, offset: number, keys?: string[]): Promise<ConvertSegment[] | null>;
   /** 確定内容の学習（v0.8.0+）。true = 学習した（対応が取れない場合は false = 無害な no-op） */
   learn(segments: { key: string; value: string }[]): Promise<boolean>;
   /** 再変換（v0.10.0+、cb.reconvert 互換）。不能・未対応は null */
   reconvert(surface: string): Promise<ConvertSegment[] | null>;
   /** 区切りの異なる経路の列挙（v0.23.0+）。features.paths=false の wasm・失敗は null */
   paths(kana: string, opts?: { maxPaths?: number; expand?: number }): Promise<WirePath[] | null>;
-  /** 直近の learn の取り消し（v0.9.0+ = 確定アンドゥの学習巻き戻し） */
-  revert(): Promise<boolean>;
+  /** 直近の learn の取り消し（v0.9.0+ = 確定アンドゥの学習巻き戻し）。segments（v0.25.0+）= 一致するときだけ戻す */
+  revert(segments?: { key: string; value: string }[]): Promise<boolean>;
   /** OPFS の学習保存分を削除（v0.8.0+。メモリ内の学習は再ロードまで残る） */
   clearLearning(): Promise<boolean>;
   /** ユーザー辞書の一覧（v0.11.0+）。未対応は null */
@@ -411,10 +420,10 @@ export interface WorkerConnection {
   /** createFep の cb にスプレッドできる形: { ...conn.callbacks(), show, hide, commit } */
   callbacks(): {
     convert: (yomi: string) => Promise<ConvertSegment[] | null>;
-    resize: (segmentIndex: number, offset: number) => Promise<ConvertSegment[] | null>;
+    resize: (segmentIndex: number, offset: number, keys?: string[]) => Promise<ConvertSegment[] | null>;
     reconvert: (surface: string) => Promise<ConvertSegment[] | null>;
     learn: (segments: { key: string; value: string }[]) => void;
-    unlearn: () => void;
+    unlearn: (segments?: { key: string; value: string }[]) => void;
   };
 }
 

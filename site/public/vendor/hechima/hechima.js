@@ -3,7 +3,7 @@
 })(this, function(exports) {
 	Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 	//#region src/hechima/version.ts
-	const HECHIMA_VERSION = "0.24.0";
+	const HECHIMA_VERSION = "0.25.0";
 	//#endregion
 	//#region src/hechima/session.ts
 	/** よみの表示文節。末尾の待ち（仮表示）があれば、その文字数を `pending` に添える */
@@ -523,12 +523,12 @@
 		const joined = () => (segs ?? []).map((s, i) => segText(s, i)).join("");
 		let lastCommit = null;
 		function commit(text) {
-			const learned = !!(segs && cb.learn && !eiji);
-			if (learned && segs) try {
-				cb.learn(segs.map((s, i) => ({
-					key: s.key,
-					value: segText(s, i)
-				})));
+			const learned = segs && cb.learn && !eiji ? segs.map((s, i) => ({
+				key: s.key,
+				value: segText(s, i)
+			})) : null;
+			if (learned) try {
+				cb.learn(learned);
 			} catch {}
 			lastCommit = segs ? {
 				text,
@@ -613,7 +613,7 @@
 			genId++;
 			resetAddl();
 			if (lastCommit.learned) try {
-				cb.unlearn?.();
+				cb.unlearn?.(lastCommit.learned);
 			} catch {}
 			lastCommit = null;
 			render();
@@ -675,7 +675,8 @@
 			if (!segs || !cb.resize) return;
 			const idx = focus;
 			const gen = ++genId;
-			Promise.resolve(cb.resize(idx, offset)).then((result) => {
+			const keys = segs.map((s) => s.key);
+			Promise.resolve(cb.resize(idx, offset, keys)).then((result) => {
 				if (gen !== genId || !segs) return;
 				if (!result || !result.length) return;
 				segs = result.map(ingestSegment);
@@ -1194,7 +1195,7 @@
 				});
 			});
 		}
-		async function resize(segmentIndex, offset) {
+		async function resize(segmentIndex, offset, keys) {
 			const info = await whenReady();
 			if (!info || !info.features.resize) return null;
 			return new Promise((resolve) => {
@@ -1205,7 +1206,8 @@
 					id,
 					segIdx: segmentIndex,
 					offset,
-					maxCands
+					maxCands,
+					...keys && keys.length ? { keys: [...keys] } : {}
 				});
 			});
 		}
@@ -1252,14 +1254,18 @@
 				});
 			});
 		}
-		async function revert() {
+		async function revert(segments) {
 			if (!await whenReady()) return false;
 			return new Promise((resolve) => {
 				const id = ++seq;
 				pendingLearn.set(id, resolve);
 				worker.postMessage({
 					type: "revert",
-					id
+					id,
+					...segments && segments.length ? {
+						kana: segments.map((s) => s.key).join(""),
+						values: segments.map((s) => s.value)
+					} : {}
 				});
 			});
 		}
@@ -1326,8 +1332,8 @@
 				learn: (segments) => {
 					learn(segments);
 				},
-				unlearn: () => {
-					revert();
+				unlearn: (segments) => {
+					revert(segments);
 				}
 			})
 		};
