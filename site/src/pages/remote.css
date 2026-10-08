@@ -48,8 +48,12 @@ body.remote-keyboard {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  touch-action: none;
+  /* ページ全体は manipulation（ダブルタップの拡大だけ止めて、ピンチは残す）。
+     ★none にしていたら、拡大されたときにピンチで戻せなくなった（実機）。
+     盤面だけは none（指の動きをスクロールや拡大に取られない） */
+  touch-action: manipulation;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   user-select: none;
   background: var(--bg);
   color: var(--fg);
