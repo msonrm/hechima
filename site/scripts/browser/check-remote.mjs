@@ -120,6 +120,17 @@ await press("Enter"); await host.waitForTimeout(300);
 const nagDoc = await editor();
 check("薙刀式: Enter で確定（よみのままではない）", nagDoc.length > 0 && !nagDoc.includes("あいのが"), JSON.stringify(nagDoc));
 
+// 連打がダブルタップの拡大に化けない（iPad の実機で BS 連打 → 拡大 → 戻せない、を踏んだ）。
+// 拡大そのものは headless では起きないので、盤面が touchend の既定動作を止めているかを見る
+const zoomBlocked = await kb.evaluate(() => {
+  if (typeof TouchEvent === "undefined") return null;
+  const ev = new TouchEvent("touchend", { cancelable: true, bubbles: true });
+  return !document.querySelector(".kb-area svg").dispatchEvent(ev);
+});
+check("配列図: touchend の既定動作を止める（連打で拡大しない）", zoomBlocked === true, String(zoomBlocked));
+const pinchable = await kb.evaluate(() => getComputedStyle(document.body).touchAction);
+check("ページ全体はピンチできる（拡大されても戻せる）", pinchable === "manipulation", pinchable);
+
 // 6) AZIK: 逐次系。待っている打鍵（k）が受け手に見えて、z で「かん」になる
 await kb.selectOption(".kb-mode", "azik");
 check("受け手が AZIK を読む", /AZIK/.test(await waitText(host, ".remote-status", /AZIK/)));

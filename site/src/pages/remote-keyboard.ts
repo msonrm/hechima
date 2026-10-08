@@ -271,6 +271,14 @@ async function main(): Promise<void> {
     // 長押しのメニューや拡大鏡を出さない
     const noMenu = (e: Event) => e.preventDefault();
     area.addEventListener("contextmenu", noMenu);
+    // ★**連打がダブルタップの拡大に化ける**（iPad の実機で BS を連打して拡大され、戻せなくなった）。
+    // touch-action だけでは止まらないので、FlickEngine（v1.1.1）と同じく touchend の既定動作を止める。
+    // 配列図は pointer イベントだけで動いていて click を使わないので、止めても失うものは無い
+    const noZoom = (e: Event) => {
+      if (e.cancelable) e.preventDefault();
+    };
+    area.addEventListener("touchend", noZoom, { passive: false });
+    area.addEventListener("dblclick", noZoom);
 
     return {
       setComposing() { /* 配列図は表示を切り替えない */ },
@@ -282,6 +290,8 @@ async function main(): Promise<void> {
         area.removeEventListener("pointerup", onUp);
         area.removeEventListener("pointercancel", onUp);
         area.removeEventListener("contextmenu", noMenu);
+        area.removeEventListener("touchend", noZoom);
+        area.removeEventListener("dblclick", noZoom);
         kbd.destroy();
       },
     };
