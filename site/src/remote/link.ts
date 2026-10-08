@@ -1,6 +1,6 @@
 /* 別の端末をキーボードにする（/remote/）の接続層。
  *
- * 受け手（Chromebook 等。変換エンジンを持つ）と送り手（iPad 等。キーボードだけ）を
+ * 受け手（Chromebook 等。変換エンジンを持つ）と送り手（タブレット・スマホ等。キーボードだけ）を
  * WebRTC DataChannel で直接つなぐ。最初の接続情報（SDP）の受け渡しだけ、ラボの Worker の
  * 中継（/api/pair/<room>。worker/index.js）を通す。打った文字は中継を通らない。
  *
@@ -25,7 +25,7 @@ export type PeerMsg =
   | { t: "op"; seq: number; op: WireOp }
   | { t: "state"; ack: number; composing: boolean; tail: string };
 
-export type Role = "host" | "pad";
+export type Role = "host" | "keyboard";
 
 export type LinkStatus =
   | "signal" // 中継へつないでいる
@@ -63,8 +63,8 @@ export function isRoom(s: string | null | undefined): s is string {
 }
 
 /** 送り手のページの URL（部屋はフラグメントに置く = サーバーのログに残らない） */
-export function padUrl(room: string): string {
-  return `${location.origin}/remote/pad/#r=${room}`;
+export function keyboardUrl(room: string): string {
+  return `${location.origin}/remote/keyboard/#r=${room}`;
 }
 
 export function roomFromHash(): string | null {
@@ -144,7 +144,7 @@ function waitGathering(pc: RTCPeerConnection): Promise<void> {
 }
 
 /**
- * 部屋につなぐ。host（受け手）は相手が来たら offer を出し、pad（送り手）はそれに answer で応える。
+ * 部屋につなぐ。host（受け手）は相手が来たら offer を出し、keyboard（送り手）はそれに answer で応える。
  * 中継の WebSocket は切れたらつなぎ直す（相手が読み込み直したときの再接続もこれで回る）。
  */
 export function connect(
@@ -245,7 +245,7 @@ export function connect(
         setStatus("waiting");
       }
       // 直接の回線が生きていれば、中継から相手が抜けても（iOS が裏で WS を切った等）そのまま使う
-    } else if (m.t === "offer" && role === "pad" && str(m.sdp, 16384)) {
+    } else if (m.t === "offer" && role === "keyboard" && str(m.sdp, 16384)) {
       void answer(m.sdp).catch(() => setStatus("failed"));
     } else if (m.t === "answer" && role === "host" && str(m.sdp, 16384)) {
       if (pc && pc.signalingState === "have-local-offer") {

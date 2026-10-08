@@ -25,27 +25,27 @@ let failed = 0;
 const check = (name, ok, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${name}${detail ? "  " + detail : ""}`); if (!ok) failed++; };
 const browser = await chromium.launch({ executablePath: findChrome() });
 const host = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
-const pad = await (await browser.newContext({ viewport: { width: 1024, height: 768 }, hasTouch: false })).newPage();
-for (const [n, p] of [["host", host], ["pad", pad]]) { p.on("pageerror", (e) => check(`${n}: ページエラーなし`, false, e.message)); }
+const kb = await (await browser.newContext({ viewport: { width: 1024, height: 768 }, hasTouch: false })).newPage();
+for (const [n, p] of [["host", host], ["kb", kb]]) { p.on("pageerror", (e) => check(`${n}: ページエラーなし`, false, e.message)); }
 await host.goto(`${base}/remote/?cb=${Date.now()}`);
-await host.waitForSelector(".remote-url a[href*='/remote/pad/#r=']");
+await host.waitForSelector(".remote-url a[href*='/remote/keyboard/#r=']");
 const url = await host.$eval(".remote-url a", (a) => a.href);
 check("受け手が QR と URL を出す", (await host.$(".remote-qr svg")) !== null, url);
-await pad.goto(url);
+await kb.goto(url);
 const waitText = async (p, sel, re, ms = 15000) => { const t0 = Date.now(); let t = ""; while (Date.now() - t0 < ms) { t = await p.$eval(sel, (e) => e.textContent ?? "").catch(() => ""); if (re.test(t)) return t; await p.waitForTimeout(100); } return t; };
-check("送り手: つながる", /つながりました/.test(await waitText(pad, ".pad-status", /つながりました/)));
+check("送り手: つながる", /つながりました/.test(await waitText(kb, ".kb-status", /つながりました/)));
 check("受け手: つながる", /つながりました/.test(await waitText(host, ".remote-status", /つながりました/)));
 check("受け手: つながったら QR が引っ込む", await host.$eval(".remote-pair", (e) => getComputedStyle(e).display === "none"));
 // mozc の読み込みを待つ（受け手）
 await host.waitForTimeout(500);
 const keyBox = async (label) => {
-  const h = await pad.evaluateHandle((label) => {
+  const h = await kb.evaluateHandle((label) => {
     const els = [...document.querySelectorAll(".fe-root *")].filter((e) => e.children.length === 0 && e.textContent === label);
     return els[0]?.closest(".fe-root > * , .fe-root *") ?? null;
   }, label);
   const el = h.asElement(); if (!el) return null; return el.boundingBox();
 };
-const tap = async (label) => { const b = await keyBox(label); if (!b) { check(`キー「${label}」がある`, false); return; } await pad.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await pad.mouse.down(); await pad.mouse.up(); await pad.waitForTimeout(150); };
+const tap = async (label) => { const b = await keyBox(label); if (!b) { check(`キー「${label}」がある`, false); return; } await kb.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await kb.mouse.down(); await kb.mouse.up(); await kb.waitForTimeout(150); };
 const editor = () => host.$eval("#editor", (e) => e.textContent ?? "");
 // 1) かな → 濁点 → 改行（合成中は「確定」）
 await tap("た");
@@ -66,15 +66,15 @@ await tap("確定"); await host.waitForTimeout(300);
 const doc = await editor();
 check("変換して確定", /仮名|かな|カナ|家内/.test(doc.replace("だ", "")), JSON.stringify(doc));
 // 3) 送り手を読み込み直しても、つなぎ直せる
-await pad.reload();
-check("読み込み直した送り手が再びつながる", /つながりました/.test(await waitText(pad, ".pad-status", /つながりました/)));
+await kb.reload();
+check("読み込み直した送り手が再びつながる", /つながりました/.test(await waitText(kb, ".kb-status", /つながりました/)));
 await tap("あ"); await host.waitForTimeout(300);
 check("再接続後も入る", (await editor()).includes("あ"), JSON.stringify(await editor()));
 // 4) 受け手を読み込み直しても、同じ部屋で送り手がつなぎ直す
 await host.reload();
 await host.waitForSelector(".remote-url a");
 check("受け手は同じ部屋を覚えている", (await host.$eval(".remote-url a", (a) => a.href)) === url);
-check("受け手の読み込み直し後、送り手が再びつながる", /つながりました/.test(await waitText(pad, ".pad-status", /つながりました/)));
+check("受け手の読み込み直し後、送り手が再びつながる", /つながりました/.test(await waitText(kb, ".kb-status", /つながりました/)));
 check("受け手側も再びつながる", /つながりました/.test(await waitText(host, ".remote-status", /つながりました/)));
 await host.waitForTimeout(800);
 await tap("さ"); await host.waitForTimeout(400);

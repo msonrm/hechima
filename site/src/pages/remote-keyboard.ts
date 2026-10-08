@@ -1,4 +1,4 @@
-/* 別の端末をキーボードにする — 送り手（iPad 等。キーボードだけ）。
+/* 別の端末をキーボードにする — 送り手（タブレット・スマホ等。キーボードだけ）。
  *
  * 変換エンジンは持たない（wasm も辞書も読まない）。フリックの盤面を出し、FlickEngine が
  * 解決した操作（かな / 機能キー / 文字）をそのまま受け手へ送る。変換・候補は受け手の画面で
@@ -31,8 +31,8 @@ const STATUS_TEXT: Record<LinkStatus, string> = {
   failed: "直接つながりませんでした。同じ Wi-Fi にいるか確かめてください",
 };
 
-const statusEl = document.querySelector<HTMLElement>(".pad-status");
-const areaEl = document.querySelector<HTMLElement>(".pad-area");
+const statusEl = document.querySelector<HTMLElement>(".kb-status");
+const areaEl = document.querySelector<HTMLElement>(".kb-area");
 const room = roomFromHash();
 
 /** 画面を消さない（打っている間にスリープしないように）。対応していなければ何もしない */
@@ -117,7 +117,7 @@ async function main(): Promise<void> {
     statusEl?.classList.add("is-flash");
   }
 
-  const link = connect(room, "pad", {
+  const link = connect(room, "keyboard", {
     onStatus,
     onMessage(m) {
       if (m.t !== "state") return;

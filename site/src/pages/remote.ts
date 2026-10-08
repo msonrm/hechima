@@ -5,13 +5,13 @@
  * 変換・候補・確定までラボの配線がそのまま動く（/flick/ と同じ経路）。ここでは盤面を
  * 描く代わりに、送り手から届いた FlickOp を onOp に流す。
  *
- * 盤面の場所には、つなぐための QR と状態を出す。送り手は iPad のカメラでこの QR を読むと
- * /remote/pad/ が開いて、そのままつながる。部屋の名前は localStorage に覚えておくので、
+ * 盤面の場所には、つなぐための QR と状態を出す。送り手（タブレットやスマホ）がカメラでこの QR を読むと
+ * /remote/keyboard/ が開いて、そのままつながる。部屋の名前は localStorage に覚えておくので、
  * こちらを読み込み直しても送り手はつなぎ直せる。
  */
 import qrcode from "qrcode-generator";
 import { initLabPage, type FlickMount } from "../app";
-import { connect, isRoom, newRoom, padUrl, type Link, type LinkStatus } from "../remote/link";
+import { connect, isRoom, newRoom, keyboardUrl, type Link, type LinkStatus } from "../remote/link";
 import "./remote.css";
 
 const ROOM_KEY = "lll-remote-room";
@@ -37,7 +37,7 @@ function saveRoom(room: string): string {
 
 const STATUS_TEXT: Record<LinkStatus, string> = {
   signal: "中継につないでいます…",
-  waiting: "キーボード側を待っています。iPad などのカメラで QR を読んでください",
+  waiting: "キーボード側を待っています。キーボードにする端末のカメラで QR を読んでください",
   connecting: "キーボード側が来ました。直接つないでいます…",
   open: "つながりました。キーボード側で打つと、ここに入ります",
   failed: "直接つながりませんでした。2 台が同じ Wi-Fi にいるか確かめてください",
@@ -88,7 +88,7 @@ const remoteMount: FlickMount = (container, _map, opts) => {
 
   function start(room: string): void {
     link?.close();
-    const url = padUrl(room);
+    const url = keyboardUrl(room);
     if (urlEl) {
       urlEl.href = url;
       urlEl.textContent = url;

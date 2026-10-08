@@ -1,4 +1,4 @@
-/* 別の端末をキーボードにする（/remote/ と /remote/pad/） */
+/* 別の端末をキーボードにする（/remote/ と /remote/keyboard/） */
 
 /* ---- 受け手: フリックの盤面の場所に、つなぐための QR と状態を出す ---- */
 
@@ -40,7 +40,7 @@ body.remote-page #flick-toggle { display: none !important; }
 
 /* ---- 送り手: 画面いっぱいのキーボード ---- */
 
-body.remote-pad {
+body.remote-keyboard {
   margin: 0;
   padding: 0;
   max-width: none;
@@ -54,27 +54,27 @@ body.remote-pad {
   background: var(--bg);
   color: var(--fg);
 }
-.pad-status {
+.kb-status {
   flex: 0 0 auto;
   padding: calc(0.4rem + env(safe-area-inset-top)) 0.75rem 0.4rem;
   font-size: 0.9rem;
   text-align: center;
   border-bottom: 1px solid var(--line);
 }
-.pad-status::before {
+.kb-status::before {
   content: "●";
   margin-right: 0.4em;
   color: var(--muted);
 }
-.pad-status[data-state="open"]::before { color: var(--accent); }
-.pad-status[data-state="failed"]::before { color: #c0392b; }
+.kb-status[data-state="open"]::before { color: var(--accent); }
+.kb-status[data-state="failed"]::before { color: #c0392b; }
 /* つながっていないのに打ったとき */
-.pad-status.is-flash { animation: pad-flash 0.6s; }
-@keyframes pad-flash {
+.kb-status.is-flash { animation: kb-flash 0.6s; }
+@keyframes kb-flash {
   from { background: color-mix(in srgb, #c0392b 35%, transparent); }
   to { background: transparent; }
 }
-.pad-body {
+.kb-body {
   flex: 1 1 auto;
   display: flex;
   align-items: flex-end;
@@ -82,7 +82,7 @@ body.remote-pad {
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   min-height: 0;
 }
-.pad-area {
+.kb-area {
   width: min(100%, 44rem, calc((100dvh - 4rem) * 5 / 3.2));
   aspect-ratio: 5 / 3.2;
 }

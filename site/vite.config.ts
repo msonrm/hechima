@@ -33,7 +33,7 @@ export default defineConfig({
         theme: fileURLToPath(new URL("./theme/index.html", import.meta.url)),
         obsidian: fileURLToPath(new URL("./obsidian/index.html", import.meta.url)),
         remote: fileURLToPath(new URL("./remote/index.html", import.meta.url)),
-        remotePad: fileURLToPath(new URL("./remote/pad/index.html", import.meta.url)),
+        remoteKeyboard: fileURLToPath(new URL("./remote/keyboard/index.html", import.meta.url)),
       },
     },
   },
