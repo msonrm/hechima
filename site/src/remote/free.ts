@@ -23,6 +23,8 @@
  *   入力なので）。調整はバーのボタンからだけ入る。
  */
 
+import type { Labeler } from "./layers";
+
 export interface KeyGeom { code: string; x: number; y: number; w: number; h: number; label?: string }
 export interface KeyboardProfile { id: string; name: string; width: number; height: number; keys: KeyGeom[] }
 
@@ -39,7 +41,13 @@ export interface FreeLayout {
   /** 登録したときのビューポート（違えば知らせる） */
   viewport: { w: number; h: number };
   keys: FreeKey[];
+  /** 配列ビジュアライザ（カード）の位置と幅（左上・CSS ピクセル）。無ければ右下に出す */
+  card?: FreeCard;
 }
+
+/** 配列ビジュアライザのカード。高さは画面の縦横比で決まる */
+export interface FreeCard { x: number; y: number; w: number; hidden?: boolean }
+export const CARD_MIN_W = 160;
 
 export const FREE_SIZE_MIN = 40;
 export const FREE_SIZE_MAX = 160;
@@ -136,7 +144,11 @@ export function parseFreeLayout(data: unknown): FreeLayout | null {
   }
   const size = num(d.size) ? Math.min(FREE_SIZE_MAX, Math.max(FREE_SIZE_MIN, d.size)) : FREE_SIZE_DEFAULT;
   const vp = d.viewport && num(d.viewport.w) && num(d.viewport.h) ? { w: d.viewport.w, h: d.viewport.h } : { w: 0, h: 0 };
-  return { format: "lll-free-1", profile: d.profile, size, viewport: vp, keys };
+  const c = d.card as Partial<FreeCard> | undefined;
+  const card = c && num(c.x) && num(c.y) && num(c.w)
+    ? { x: c.x, y: c.y, w: Math.max(CARD_MIN_W, c.w), ...(c.hidden === true ? { hidden: true } : {}) }
+    : undefined;
+  return { format: "lll-free-1", profile: d.profile, size, viewport: vp, keys, ...(card ? { card } : {}) };
 }
 
 // ---------------------------------------------------------------------------
@@ -147,8 +159,10 @@ export interface FreeBoardOpts {
   steps: Step[];
   /** 保存してあった配置（無ければ登録から始める） */
   saved: FreeLayout | null;
-  /** キーに刻む文字（配列の刻印。無ければ物理の刻印） */
-  labels: ReadonlyMap<string, string>;
+  /** キーに刻む文字（素の刻印と、押下の状態に応じた配列ビジュアライザの刻印） */
+  labeler: Labeler;
+  /** 物理の刻印（Q・Enter・無変換…） */
+  physical(code: string): string;
   /** 操作（登録の案内・調整の道具）を出す場所。バーの中 */
   tools: HTMLElement;
   onSave(layout: FreeLayout): void;
@@ -186,16 +200,11 @@ export function mountFree(area: HTMLElement, opts: FreeBoardOpts): FreeBoard {
   area.appendChild(layer);
   const els = new Map<string, HTMLElement>();
 
-  const mainLabel = (code: string) => {
-    const l = opts.labels.get(code);
-    if (l) return l;
-    const g = geom.get(code)?.label ?? "";
-    return code === "Space" ? "空白" : g || code;
-  };
+  const mainLabel = (code: string) => opts.labeler.idle(code) || opts.physical(code) || code;
   /** 配列の刻印と物理の刻印が違えば、物理を小さく添える（登録のときにどのキーか分かるように） */
   const subLabel = (code: string) => {
-    const g = code === "Space" ? "Space" : geom.get(code)?.label ?? "";
-    return opts.labels.has(code) && g !== mainLabel(code) ? g : "";
+    const g = code === "Space" ? "Space" : opts.physical(code);
+    return g && g.toUpperCase() !== mainLabel(code).toUpperCase() ? g : "";
   };
 
   function save(): void {
@@ -258,6 +267,111 @@ export function mountFree(area: HTMLElement, opts: FreeBoardOpts): FreeBoard {
       }
     }
     for (const k of layout.keys) keyEl(k);
+    renderCard();
+  }
+
+  // ---- 配列ビジュアライザ（カード） ----
+  // 画面全体を縮めた図に、置いたキーを同じ位置で描く。刻印は押下の状態に応じて替わる
+  // （親指を押せばシフト面・ローマ字の k のあとは か き く け こ）。打っている間は指を通す
+  // （カードの下にキーがあっても押せる）。調整のときだけ掴んで動かし、角で大きさを変える
+  const card = document.createElement("div");
+  card.className = "fx-card";
+  const cardBody = document.createElement("div");
+  cardBody.className = "fx-card-body";
+  const screen = document.createElement("div");
+  screen.className = "fx-card-screen";
+  const self = document.createElement("div");
+  self.className = "fx-card-self";
+  const cardStatus = document.createElement("div");
+  cardStatus.className = "fx-card-status";
+  const cardDel = document.createElement("div");
+  cardDel.className = "fx-del";
+  cardDel.textContent = "−";
+  cardDel.setAttribute("aria-label", "配列図を隠す");
+  const resizer = document.createElement("div");
+  resizer.className = "fx-card-resize";
+  screen.append(self);
+  cardBody.append(screen, cardStatus, cardDel, resizer);
+  card.append(cardBody);
+  layer.appendChild(card);
+  const minis = new Map<string, { el: HTMLElement; text: HTMLElement }>();
+
+  function cardGeom(): FreeCard & { h: number } {
+    const v = vp();
+    const ratio = v.h / Math.max(1, v.w);
+    const c: FreeCard = layout.card ?? (() => {
+      const w = Math.round(Math.min(360, v.w * 0.4));
+      return { x: v.w - w - 16, y: v.h - Math.round(w * ratio) - 16, w };
+    })();
+    const w = Math.min(Math.max(CARD_MIN_W, c.w), v.w);
+    const h = Math.round(w * ratio);
+    // 画面の外へ出ていたら（向きを変えた・大きさを変えた）内側へ寄せる
+    const x = Math.min(Math.max(0, c.x), Math.max(0, v.w - w));
+    const y = Math.min(Math.max(0, c.y), Math.max(0, v.h - h));
+    return { x, y, w, h, ...(c.hidden ? { hidden: true } : {}) };
+  }
+
+  function renderCard(): void {
+    const g = cardGeom();
+    const v = vp();
+    card.hidden = !!g.hidden;
+    card.style.left = `${g.x}px`;
+    card.style.top = `${g.y}px`;
+    card.style.width = `${g.w}px`;
+    card.style.height = `${g.h}px`;
+    const scale = g.w / Math.max(1, v.w);
+    card.style.setProperty("--m", `${Math.max(14, layout.size * scale)}px`);
+    // カード自身の位置（図の中の「ここ」）
+    self.style.left = `${(g.x / v.w) * 100}%`;
+    self.style.top = `${(g.y / v.h) * 100}%`;
+    self.style.width = `${(g.w / v.w) * 100}%`;
+    self.style.height = `${(g.h / v.h) * 100}%`;
+    const live = new Set(layout.keys.map((k) => k.code));
+    for (const [code, m] of minis) {
+      if (!live.has(code)) {
+        m.el.remove();
+        minis.delete(code);
+      }
+    }
+    for (const k of layout.keys) {
+      let m = minis.get(k.code);
+      if (!m) {
+        const el = document.createElement("div");
+        el.className = "fx-mini";
+        el.dataset.code = k.code;
+        const text = document.createElement("span");
+        el.append(text);
+        screen.append(el);
+        m = { el, text };
+        minis.set(k.code, m);
+      }
+      m.el.style.left = `${(k.x / v.w) * 100}%`;
+      m.el.style.top = `${(k.y / v.h) * 100}%`;
+    }
+    updateCard();
+  }
+
+  /** 押下の状態に応じて刻印を替える */
+  function updateCard(): void {
+    const pressed = new Set(typing.values());
+    const caps = opts.labeler.caps([...minis.keys()], pressed);
+    for (const [code, m] of minis) {
+      const cap = caps.get(code);
+      const text = cap?.text ?? "";
+      m.text.textContent = text;
+      m.el.classList.toggle("is-on", pressed.has(code));
+      m.el.classList.toggle("is-shift", !!cap?.shifted);
+      m.el.classList.toggle("is-none", text === "");
+      const len = Array.from(text).length;
+      if (len > 1) m.text.dataset.len = String(Math.min(len, 4));
+      else delete m.text.dataset.len;
+    }
+    cardStatus.textContent = opts.labeler.status(pressed);
+  }
+
+  function setCard(c: FreeCard): void {
+    layout = { ...layout, card: c };
+    renderCard();
   }
 
   /** 押した手応え: 波紋を 2 重に（2 つ目は少し遅れて・薄く） */
@@ -313,6 +427,7 @@ export function mountFree(area: HTMLElement, opts: FreeBoardOpts): FreeBoard {
 
   function setMode(m: FreeMode): void {
     mode = m;
+    opts.labeler.reset();
     layer.dataset.mode = m;
     selected = null;
     pending = null;
@@ -513,6 +628,14 @@ export function mountFree(area: HTMLElement, opts: FreeBoardOpts): FreeBoard {
       sizeBox.className = "fx-size";
       sizeBox.append(btn("−", () => resize(-8)), text(`大きさ ${layout.size}`, "fx-size-val"), btn("＋", () => resize(8)));
       parts.push(sizeBox);
+      if (cardGeom().hidden) {
+        parts.push(btn("配列図を出す", () => {
+          const { h: _h, hidden: _x, ...c } = cardGeom();
+          setCard(c);
+          save();
+          drawTools();
+        }));
+      }
       parts.push(
         btn("登録しなおす", startRegister),
         btn("書き出す", exportJson),
@@ -523,7 +646,7 @@ export function mountFree(area: HTMLElement, opts: FreeBoardOpts): FreeBoard {
         ? `「${mainLabel(pending)}」を置く場所を押してください`
         : selected
           ? `「${mainLabel(selected)}」の新しい場所を押してください`
-          : "ドラッグで動かす・− で外す。キーを押してから別の場所を押しても動かせます";
+          : "ドラッグで動かす・− で外す。キーを押してから別の場所を押しても動かせます。配列図は角で大きさを変えられます";
       parts.push(text(help, "fx-help"));
       const rest = unplaced();
       if (rest.length) {
@@ -559,6 +682,9 @@ export function mountFree(area: HTMLElement, opts: FreeBoardOpts): FreeBoard {
   // ---- 指 ----
   interface Drag { code: string; sx: number; sy: number; ox: number; oy: number; moved: boolean }
   const drags = new Map<number, Drag | null>(); // 調整中: キーを掴んだ指（null = 空いた場所を押した指）
+  /** 調整中: カードを掴んだ指（動かす / 角で大きさを変える） */
+  interface CardDrag { kind: "move" | "resize"; sx: number; sy: number; o: FreeCard & { h: number } }
+  const cardDrags = new Map<number, CardDrag>();
   const typing = new Map<number, string>(); // 打っている指 → キー
 
   const onDown = (e: PointerEvent) => {
@@ -575,12 +701,28 @@ export function mountFree(area: HTMLElement, opts: FreeBoardOpts): FreeBoard {
       const k = nearest(x, y, 0.8);
       if (!k || !opts.onDown(e.pointerId, k.code)) return;
       typing.set(e.pointerId, k.code);
+      opts.labeler.down(k.code, new Set(typing.values()));
       els.get(k.code)?.classList.add("is-on");
       ripple(k.code);
+      updateCard();
       return;
     }
     if (mode === "register") {
       registerAt(x, y);
+      return;
+    }
+    // 調整: カード（キーより手前にある）
+    const t = e.target as Element | null;
+    if (t?.closest?.(".fx-card")) {
+      if (t.closest(".fx-del")) {
+        const { h: _h, ...c } = cardGeom();
+        setCard({ ...c, hidden: true });
+        save();
+        drawTools();
+        return;
+      }
+      card.classList.add("is-lift");
+      cardDrags.set(e.pointerId, { kind: t.closest(".fx-card-resize") ? "resize" : "move", sx: x, sy: y, o: cardGeom() });
       return;
     }
     // 調整: 「−」は押した瞬間に外す（touchend を止めているので click は来ない）
@@ -595,6 +737,14 @@ export function mountFree(area: HTMLElement, opts: FreeBoardOpts): FreeBoard {
   };
 
   const onMove = (e: PointerEvent) => {
+    const cd = cardDrags.get(e.pointerId);
+    if (cd) {
+      const dx = e.clientX - cd.sx;
+      const dy = e.clientY - cd.sy;
+      const { h: _h, ...o } = cd.o;
+      setCard(cd.kind === "move" ? { ...o, x: o.x + dx, y: o.y + dy } : { ...o, w: Math.max(CARD_MIN_W, o.w + dx) });
+      return;
+    }
     const d = drags.get(e.pointerId);
     if (!d) return;
     const dx = e.clientX - d.sx;
@@ -617,6 +767,15 @@ export function mountFree(area: HTMLElement, opts: FreeBoardOpts): FreeBoard {
       typing.delete(e.pointerId);
       if (![...typing.values()].includes(code)) els.get(code)?.classList.remove("is-on");
       opts.onUp(e.pointerId);
+      updateCard();
+      return;
+    }
+    if (cardDrags.has(e.pointerId)) {
+      cardDrags.delete(e.pointerId);
+      card.classList.remove("is-lift");
+      const { h: _h, ...c } = cardGeom(); // 画面の内側へ寄せた位置で覚える
+      setCard(c);
+      save();
       return;
     }
     if (!drags.has(e.pointerId)) return;
@@ -663,6 +822,7 @@ export function mountFree(area: HTMLElement, opts: FreeBoardOpts): FreeBoard {
   layer.addEventListener("touchend", noZoom, { passive: false });
   layer.addEventListener("dblclick", noZoom);
   const onResize = () => {
+    renderCard();
     if (mode === "type") drawTools();
   };
   window.addEventListener("resize", onResize);

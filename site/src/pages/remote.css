@@ -295,3 +295,105 @@ body[data-mode="free"] .kb-body { padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   .fx-layer[data-mode="edit"] .fx-body { animation: none; }
 }
+
+/* 打つあいだは「調整」を 1 行目へ（状態の右・配列の選択の左）。登録・調整のあいだは 2 行目いっぱい */
+.kb-status { order: 0; }
+.kb-controls { order: 2; }
+.kb-tools { order: 3; }
+body[data-free="type"] .kb-tools {
+  flex: 0 1 auto;
+  order: 1;
+  margin-left: auto;
+}
+
+/* ---- 配列ビジュアライザ（カード）: 画面全体を縮めた図に、置いたキーを同じ位置で ---- */
+.fx-card {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none; /* 打つあいだは指を通す（カードの下にキーがあっても押せる） */
+}
+.fx-card[hidden] { display: none; }
+.fx-layer[data-mode="edit"] .fx-card { pointer-events: auto; }
+.fx-card-body {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--fg) 5%, var(--bg));
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.12);
+}
+.fx-card-screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+/* 図の中の「このカード」 */
+.fx-card-self {
+  position: absolute;
+  border: 1px dashed var(--muted);
+  border-radius: 3px;
+  opacity: 0.45;
+}
+.fx-card-status {
+  position: absolute;
+  left: 10px;
+  top: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+  pointer-events: none;
+}
+.fx-mini {
+  position: absolute;
+  width: var(--m);
+  height: var(--m);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-size: max(9px, calc(var(--m) * 0.55));
+  background: var(--bg);
+  border: 1px solid color-mix(in srgb, var(--fg) 22%, transparent);
+  transition: background 0.12s, color 0.12s, border-color 0.12s, opacity 0.12s;
+}
+.fx-mini span[data-len="2"] { font-size: 0.8em; }
+.fx-mini span[data-len="3"] { font-size: 0.62em; }
+.fx-mini span[data-len="4"] { font-size: 0.5em; }
+/* シフトして替わった刻印 */
+.fx-mini.is-shift { color: var(--accent); border-color: var(--accent); font-weight: 700; }
+/* 押しているキー */
+.fx-mini.is-on { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+/* この状態では何も出ないキー */
+.fx-mini.is-none { opacity: 0.3; }
+.fx-card .fx-del { pointer-events: auto; }
+.fx-layer[data-mode="edit"] .fx-card .fx-del { display: flex; }
+/* 角の取っ手（大きさを変える） */
+.fx-card-resize {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 26px;
+  height: 26px;
+  display: none;
+  border-right: 4px solid var(--accent);
+  border-bottom: 4px solid var(--accent);
+  border-bottom-right-radius: 10px;
+}
+.fx-layer[data-mode="edit"] .fx-card-resize { display: block; }
+.fx-layer[data-mode="edit"] .fx-card-body {
+  animation: fx-jiggle-card 0.32s ease-in-out infinite alternate;
+}
+@keyframes fx-jiggle-card {
+  from { transform: rotate(-0.5deg); }
+  to { transform: rotate(0.5deg); }
+}
+.fx-card.is-lift .fx-card-body {
+  animation: none;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-layer[data-mode="edit"] .fx-card-body { animation: none; }
+}

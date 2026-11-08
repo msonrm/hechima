@@ -247,6 +247,74 @@ await host.$eval("#editor", (e) => { e.textContent = ""; });
 pos.set("KeyJ", newJ); pos.set("KeyK", newK); pos.set("KeyL", newL);
 await freePress("KeyJ"); await freePress("KeyK"); await freePress("KeyL"); await host.waitForTimeout(300);
 check("自由配置: 動かした先で J K L → あいう", (await editor()).includes("あいう"), JSON.stringify(await editor()));
+// 8) 配列ビジュアライザ（カード）: 置いたキーを同じ位置で描き、押下の状態で刻印が替わる
+const rowOf = async (sel) => kb.$eval(sel, (e) => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; });
+const adjRow = await rowOf(".kb-tools button"), modeRow = await rowOf(".kb-mode");
+check("「調整」はバーの 1 行目（配列の選択と同じ行）", Math.abs(adjRow - modeRow) < 8, `${adjRow} / ${modeRow}`);
+const miniText = (code) => kb.$eval(`.fx-mini[data-code='${code}'] span`, (e) => e.textContent);
+check("カード: 置いたキーが全部並ぶ", (await kb.$$eval(".fx-mini", (els) => els.length)) === (await kb.$$eval(".fx-key", (els) => els.length)));
+check("カード: 打つあいだは指を通す", (await kb.$eval(".fx-card", (e) => getComputedStyle(e).pointerEvents)) === "none");
+check("カード: 素の刻印（J = あ）", (await miniText("KeyJ")) === "あ");
+await free("pointerdown", "Space");
+const shiftJ = await miniText("KeyJ");
+const shiftCls = await kb.$eval(".fx-mini[data-code='KeyJ']", (e) => e.className);
+check("カード: 親指（空白）を押している間はシフト面（J = の）", shiftJ === "の" && /is-shift/.test(shiftCls), `${shiftJ} ${shiftCls}`);
+check("カード: 押しているキーが光る", /is-on/.test(await kb.$eval(".fx-mini[data-code='Space']", (e) => e.className)));
+await free("pointerup", "Space");
+check("カード: 離すと素の刻印に戻る", (await miniText("KeyJ")) === "あ");
+await free("pointerdown", "KeyF");
+check("カード: F を押している間は F との同時押し（J = が）", (await miniText("KeyJ")) === "が", await miniText("KeyJ"));
+await free("pointerup", "KeyF");
+await host.$eval("#editor", (e) => { e.textContent = ""; });
+// 調整: 動かす・大きさ・隠す / 出す
+await kb.click(".kb-tools button"); // 調整
+const cardBox = async () => kb.$eval(".fx-card", (e) => { const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width }; });
+const c0 = await cardBox();
+await at("pointerdown", { x: c0.x + 40, y: c0.y + 40 }, 1, ".fx-card-body");
+await at("pointermove", { x: c0.x - 160, y: c0.y - 100 }, 1);
+await at("pointerup", { x: c0.x - 160, y: c0.y - 100 }, 1);
+const c1 = await cardBox();
+const savedCard = await kb.evaluate(() => JSON.parse(localStorage.getItem("lll-remote-free:jis")).card);
+check("カード: 調整で動かして保存", Math.abs(c1.x - (c0.x - 200)) < 1 && Math.abs(savedCard.y - (c0.y - 140)) < 1, JSON.stringify({ c0, c1, savedCard }));
+const rz = await kb.$eval(".fx-card-resize", (e) => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+await at("pointerdown", rz, 1, ".fx-card-resize");
+await at("pointermove", { x: rz.x + 60, y: rz.y }, 1);
+await at("pointerup", { x: rz.x + 60, y: rz.y }, 1);
+check("カード: 角で大きさを変える", Math.abs((await cardBox()).w - (c1.w + 60)) < 1, JSON.stringify(await cardBox()));
+await at("pointerdown", { x: 0, y: 0 }, 1, ".fx-card .fx-del");
+check("カード: − で隠す", await kb.$eval(".fx-card", (e) => e.hidden));
+const showBtn = await kb.$("xpath=//div[contains(@class,'kb-tools')]//button[text()='配列図を出す']");
+check("カード: 隠すと「配列図を出す」が出る", !!showBtn);
+await showBtn?.click();
+check("カード: 出し直すと前の位置に戻る", !(await kb.$eval(".fx-card", (e) => e.hidden)) && Math.abs((await cardBox()).x - c1.x) < 1);
+await kb.click(".kb-tools button.is-primary"); // 完了
+// ローマ字系はかなを出さない（綴りは打つ人が知っている）。英字のまま、k を押しても替わらない
+await kb.selectOption(".kb-mode", "romaji");
+check("受け手がローマ字を読む（カード）", /ローマ字/.test(await waitText(host, ".remote-status", /ローマ字/)));
+await kb.waitForSelector(".fx-mini");
+check("カード（ローマ字）: 英字のまま（A = A）", (await miniText("KeyA")) === "A", await miniText("KeyA"));
+check("自由配置（ローマ字）: 大きなキーも英字のまま", (await kb.$eval(".fx-key[data-code='KeyA'] .fx-main", (e) => e.textContent)) === "A");
+await freePress("KeyK");
+check("カード（ローマ字）: k のあとも A = A（かなを並べない）", (await miniText("KeyA")) === "A", await miniText("KeyA"));
+await freePress("KeyA");
+await host.waitForTimeout(300);
+check("ローマ字: 受け手に か", (await editor()).includes("か"), JSON.stringify(await editor()));
+await freePress("Enter"); // 確定（Escape は登録していない）
+// かなの逐次系（月配列）: 待っている打鍵（d）のあとはシフト面
+await kb.selectOption(".kb-mode", "tsuki2-263");
+check("受け手が月配列を読む（カード）", /月/.test(await waitText(host, ".remote-status", /月/)));
+await kb.waitForSelector(".fx-mini");
+await host.$eval("#editor", (e) => { e.textContent = ""; });
+check("カード（月配列）: 素の刻印（J = う）", (await miniText("KeyJ")) === "う", await miniText("KeyJ"));
+await freePress("KeyD");
+check("カード（月配列）: d のあとはシフト面（J = お）", (await miniText("KeyJ")) === "お", await miniText("KeyJ"));
+check("カード（月配列）: 待っている打鍵を隅に出す", (await kb.$eval(".fx-card-status", (e) => e.textContent)) === "d");
+await freePress("KeyJ");
+check("カード（月配列）: お が出たら素に戻る", (await miniText("KeyJ")) === "う");
+await host.waitForTimeout(300);
+check("月配列: 受け手に お", (await editor()).includes("お"), JSON.stringify(await editor()));
+await freePress("Enter"); // 確定（Escape は登録していない）
+await kb.selectOption(".kb-mode", "naginata");
 await freePress("Escape").catch(() => {});
 await kb.click(".kb-free"); // 図に戻す
 check("自由配置を切ると配列図に戻る", !!(await kb.$(".kb-area svg")) && !(await kb.$(".fx-layer")));
