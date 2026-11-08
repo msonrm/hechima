@@ -19,6 +19,7 @@ import { keymapLayoutFor, modOf, tapFor, type Mods } from "../remote/keys";
 import {
   mountFree, parseFreeLayout, registrationSteps, roleCodes, type FreeLayout, type KeyboardProfile,
 } from "../remote/free";
+import { makeLabeler, type ExpandedKeymapLike } from "../remote/layers";
 import type { FlickOp } from "../app";
 import "./remote.css";
 
@@ -50,6 +51,7 @@ declare const KeymapEngine: {
   decodeKeymap(json: unknown, opts?: { layout?: string }): unknown;
   keyCapLabels(km: unknown, opts?: { layout?: string }): Map<string, string>;
   hidNameToBrowserCode(name: string): string | undefined;
+  browserCodeToHID(code: string): number | undefined;
 };
 
 const STATUS_TEXT: Record<LinkStatus, string> = {
@@ -354,6 +356,15 @@ async function main(): Promise<void> {
     const start = (json: unknown) => {
       if (dead) return;
       const labels = capLabels(json, layout);
+      const physical = (code: string) =>
+        code === "Space" ? "空白" : profile.keys.find((k) => k.code === code)?.label ?? "";
+      let km: ExpandedKeymapLike = {};
+      try {
+        km = KeymapEngine.decodeKeymap(json, { layout }) as ExpandedKeymapLike;
+      } catch {
+        // 読めない配列は刻印が物理のまま（打つ分には困らない）
+      }
+      const labeler = makeLabeler(km, profile.id, labels, physical, (c) => KeymapEngine.browserCodeToHID(c));
       const roles = roleCodes(json, layout, (n) => KeymapEngine.hidNameToBrowserCode(n));
       let saved: FreeLayout | null = null;
       try {
@@ -365,7 +376,8 @@ async function main(): Promise<void> {
         profile,
         steps: registrationSteps(profile, labels, roles),
         saved,
-        labels,
+        labeler,
+        physical,
         tools: toolsEl!,
         onSave: (l) => save(freeLayoutKey(profile.id), JSON.stringify(l)),
         onDown: (id, code) => presser.down(id, code),
