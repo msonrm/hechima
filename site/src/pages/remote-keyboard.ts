@@ -7,6 +7,8 @@
  *   - **配列図**（薙刀式・AZIK・NICOLA…） … 「理想的な物理キーボード」として、押した・離したを
  *     送るだけ。配列エンジンは受け手で動き、物理キーボードと同じ経路に入る。こちらは
  *     どの配列で打つかを宣言し（{ t: "layout" }）、キーに刻む文字を配列 JSON から起こす
+ *   - **自由配置** … 配列図と同じく押した・離したを送るが、キーの位置を画面のどこにでも置ける
+ *     （キースイッチを画面に貼った自作キーボード用。`../remote/free.ts`）。受け手から見れば配列図と同じ
  *
  * 受け手からは「合成中か」「合成中の末尾」だけが返ってくる（フリックのキー表示の切り替えと
  * ゛゜小 のため）。★末尾は回線を往復するので、**まだ受け手が受け取ったと言っていない分**
@@ -14,6 +16,9 @@
  */
 import { connect, roomFromHash, REMOTE_KEYMAPS, type LinkStatus, type WireOp } from "../remote/link";
 import { keymapLayoutFor, modOf, tapFor, type Mods } from "../remote/keys";
+import {
+  mountFree, parseFreeLayout, registrationSteps, roleCodes, type FreeLayout, type KeyboardProfile,
+} from "../remote/free";
 import type { FlickOp } from "../app";
 import "./remote.css";
 
@@ -26,8 +31,6 @@ declare const FlickEngine: {
   ): { setComposing(on: boolean): void; destroy(): void };
 };
 
-interface KeyGeom { code: string; x: number; y: number; w: number; h: number }
-interface KeyboardProfile { id: string; name: string; width: number; height: number; keys: KeyGeom[] }
 
 declare const ReplayEngine: {
   KEYBOARD_PROFILES: KeyboardProfile[];
@@ -46,6 +49,7 @@ declare const ReplayEngine: {
 declare const KeymapEngine: {
   decodeKeymap(json: unknown, opts?: { layout?: string }): unknown;
   keyCapLabels(km: unknown, opts?: { layout?: string }): Map<string, string>;
+  hidNameToBrowserCode(name: string): string | undefined;
 };
 
 const STATUS_TEXT: Record<LinkStatus, string> = {
@@ -58,6 +62,9 @@ const STATUS_TEXT: Record<LinkStatus, string> = {
 
 const MODE_KEY = "lll-remote-kbd-mode";
 const PROFILE_KEY = "lll-remote-kbd-profile";
+const FREE_KEY = "lll-remote-kbd-free";
+/** 自由配置は物理配置ごとに 1 つ（配列を替えてもスイッチの位置は変わらないので、配列ごとには持たない） */
+const freeLayoutKey = (profileId: string) => `lll-remote-free:${profileId}`;
 const FLICK = "flick";
 
 const $ = <T extends HTMLElement>(sel: string): T | null => document.querySelector<T>(sel);
@@ -65,6 +72,8 @@ const statusEl = $<HTMLElement>(".kb-status");
 const areaEl = $<HTMLElement>(".kb-area");
 const modeSel = $<HTMLSelectElement>(".kb-mode");
 const profileSel = $<HTMLSelectElement>(".kb-profile");
+const freeBtn = $<HTMLButtonElement>(".kb-free");
+const toolsEl = $<HTMLElement>(".kb-tools");
 const room = roomFromHash();
 
 function load(key: string): string | null {
@@ -113,7 +122,7 @@ async function fetchKeymap(id: string): Promise<unknown> {
 }
 
 async function main(): Promise<void> {
-  if (!statusEl || !areaEl || !modeSel || !profileSel) return;
+  if (!statusEl || !areaEl || !modeSel || !profileSel || !freeBtn || !toolsEl) return;
   if (!room) {
     statusEl.textContent = "部屋がわかりません。受け手のページに出ている QR から開いてください";
     statusEl.dataset.state = "failed";
@@ -203,32 +212,90 @@ async function main(): Promise<void> {
   }
 
   /**
-   * 配列図。多指で押せる（指ごとに pointerId で追う）。押した瞬間に keydown、離したら keyup。
+   * 押した・離したを KeyTap にして送る（配列図と自由配置で共通）。指ごとに pointerId で追う。
+   * 押した瞬間の修飾キーで key を決め、離すときは押したときの KeyTap をそのまま送る
+   */
+  function makePresser(profileId: string, onChange: (pressed: Set<string>) => void) {
+    const pointers = new Map<number, { code: string; tap: Hechima.KeyTap }>();
+    const mods: Mods = { shift: false, ctrl: false, alt: false };
+    const sync = () => {
+      for (const m of ["shift", "ctrl", "alt"] as const) {
+        mods[m] = [...pointers.values()].some((p) => modOf(p.code) === m);
+      }
+      onChange(new Set([...pointers.values()].map((p) => p.code)));
+    };
+    return {
+      down(pointerId: number, code: string): boolean {
+        if ([...pointers.values()].some((p) => p.code === code)) return false; // 同じキーを別の指で
+        const tap = tapFor(code, profileId, mods);
+        pointers.set(pointerId, { code, tap });
+        sync();
+        send({ type: "keydown", tap });
+        return true;
+      },
+      up(pointerId: number): void {
+        const p = pointers.get(pointerId);
+        if (!p) return;
+        pointers.delete(pointerId);
+        sync();
+        send({ type: "keyup", tap: p.tap });
+      },
+      /** 押しっぱなしのまま盤面を替えたら、離したことにする */
+      releaseAll(): void {
+        for (const p of pointers.values()) send({ type: "keyup", tap: p.tap });
+        pointers.clear();
+      },
+    };
+  }
+
+  function currentProfile(): KeyboardProfile {
+    return ReplayEngine.findProfile(profileSel?.value ?? "jis") ?? ReplayEngine.KEYBOARD_PROFILES[0];
+  }
+
+  /** 配列 JSON から刻印（読めなければ空 = 物理の刻印のまま） */
+  function capLabels(json: unknown, layout: string): Map<string, string> {
+    try {
+      return KeymapEngine.keyCapLabels(KeymapEngine.decodeKeymap(json, { layout }), { layout });
+    } catch {
+      return new Map();
+    }
+  }
+
+  /** 盤面の上で長押しのメニューと、連打のダブルタップ拡大を止める */
+  function guardTouch(el: HTMLElement): () => void {
+    const noMenu = (e: Event) => e.preventDefault();
+    // ★**連打がダブルタップの拡大に化ける**（iPad の実機で BS を連打して拡大され、戻せなくなった）。
+    // touch-action だけでは止まらないので、FlickEngine（v1.1.1）と同じく touchend の既定動作を止める。
+    // 配列図は pointer イベントだけで動いていて click を使わないので、止めても失うものは無い
+    const noZoom = (e: Event) => {
+      if (e.cancelable) e.preventDefault();
+    };
+    el.addEventListener("contextmenu", noMenu);
+    el.addEventListener("touchend", noZoom, { passive: false });
+    el.addEventListener("dblclick", noZoom);
+    return () => {
+      el.removeEventListener("contextmenu", noMenu);
+      el.removeEventListener("touchend", noZoom);
+      el.removeEventListener("dblclick", noZoom);
+    };
+  }
+
+  /**
+   * 配列図。多指で押せる。押した瞬間に keydown、離したら keyup。
    * 押したあと指が滑っても別のキーにはしない（物理キーボードと同じく、押したキーが離れるまで続く）
    */
   function mountKeys(area: HTMLElement, keymapId: string): NonNullable<typeof board> {
-    const profile = ReplayEngine.findProfile(profileSel?.value ?? "jis") ?? ReplayEngine.KEYBOARD_PROFILES[0];
+    const profile = currentProfile();
     const layout = keymapLayoutFor(profile.id);
     const top = Math.min(...profile.keys.map((k) => k.y));
     area.style.setProperty("--kb-ratio", String(profile.width / (profile.height - top)));
     const kbd = ReplayEngine.mountKeyboard(area, { profile });
     void fetchKeymap(keymapId).then((json) => {
-      try {
-        const labels = KeymapEngine.keyCapLabels(KeymapEngine.decodeKeymap(json, { layout }), { layout });
-        kbd.setLabels(labels.size > 0 ? labels : null);
-      } catch {
-        // 刻印は物理のまま（打つ分には困らない）
-      }
+      const labels = capLabels(json, layout);
+      kbd.setLabels(labels.size > 0 ? labels : null); // 読めなければ刻印は物理のまま（打つ分には困らない）
     }).catch(() => { /* 同上 */ });
 
-    const pointers = new Map<number, { code: string; tap: Hechima.KeyTap }>();
-    const mods: Mods = { shift: false, ctrl: false, alt: false };
-    const refresh = () => {
-      for (const m of ["shift", "ctrl", "alt"] as const) {
-        mods[m] = [...pointers.values()].some((p) => modOf(p.code) === m);
-      }
-      kbd.update(new Set([...pointers.values()].map((p) => p.code)));
-    };
+    const presser = makePresser(profile.id, (pressed) => kbd.update(pressed));
 
     /** 画面上の点 → キー（盤面の座標系 u に直して、矩形に入るキーを探す） */
     function hit(clientX: number, clientY: number): string | null {
@@ -247,64 +314,89 @@ async function main(): Promise<void> {
       const code = hit(e.clientX, e.clientY);
       if (!code) return;
       e.preventDefault();
-      if ([...pointers.values()].some((p) => p.code === code)) return; // 同じキーを別の指で
       try {
         area.setPointerCapture(e.pointerId);
       } catch {
         // 取れなくても up は area に来る
       }
-      const tap = tapFor(code, profile.id, mods);
-      pointers.set(e.pointerId, { code, tap });
-      refresh();
-      send({ type: "keydown", tap });
+      presser.down(e.pointerId, code);
     };
-    const onUp = (e: PointerEvent) => {
-      const p = pointers.get(e.pointerId);
-      if (!p) return;
-      pointers.delete(e.pointerId);
-      refresh();
-      send({ type: "keyup", tap: p.tap });
-    };
+    const onUp = (e: PointerEvent) => presser.up(e.pointerId);
     area.addEventListener("pointerdown", onDown);
     area.addEventListener("pointerup", onUp);
     area.addEventListener("pointercancel", onUp);
-    // 長押しのメニューや拡大鏡を出さない
-    const noMenu = (e: Event) => e.preventDefault();
-    area.addEventListener("contextmenu", noMenu);
-    // ★**連打がダブルタップの拡大に化ける**（iPad の実機で BS を連打して拡大され、戻せなくなった）。
-    // touch-action だけでは止まらないので、FlickEngine（v1.1.1）と同じく touchend の既定動作を止める。
-    // 配列図は pointer イベントだけで動いていて click を使わないので、止めても失うものは無い
-    const noZoom = (e: Event) => {
-      if (e.cancelable) e.preventDefault();
-    };
-    area.addEventListener("touchend", noZoom, { passive: false });
-    area.addEventListener("dblclick", noZoom);
+    const unguard = guardTouch(area);
 
     return {
       setComposing() { /* 配列図は表示を切り替えない */ },
       destroy() {
-        // 押しっぱなしのまま盤面を替えたら、離したことにする
-        for (const p of pointers.values()) send({ type: "keyup", tap: p.tap });
-        pointers.clear();
+        presser.releaseAll();
         area.removeEventListener("pointerdown", onDown);
         area.removeEventListener("pointerup", onUp);
         area.removeEventListener("pointercancel", onUp);
-        area.removeEventListener("contextmenu", noMenu);
-        area.removeEventListener("touchend", noZoom);
-        area.removeEventListener("dblclick", noZoom);
+        unguard();
         kbd.destroy();
       },
     };
   }
 
+  /**
+   * 自由配置（キースイッチを画面に貼った自作キーボードなど）。配列 JSON を読んでから
+   * 登録する順（刻印・親指の役）を決めるので、盤面は読み終わってから立てる
+   */
+  function mountFreeBoard(area: HTMLElement, keymapId: string): NonNullable<typeof board> {
+    const profile = currentProfile();
+    const layout = keymapLayoutFor(profile.id);
+    const presser = makePresser(profile.id, () => { /* 押した見た目は盤面が自分で描く */ });
+    let inner: ReturnType<typeof mountFree> | null = null;
+    let dead = false;
+    toolsEl!.textContent = "配列を読んでいます…";
+    const start = (json: unknown) => {
+      if (dead) return;
+      const labels = capLabels(json, layout);
+      const roles = roleCodes(json, layout, (n) => KeymapEngine.hidNameToBrowserCode(n));
+      let saved: FreeLayout | null = null;
+      try {
+        saved = parseFreeLayout(JSON.parse(load(freeLayoutKey(profile.id)) ?? "null"));
+      } catch {
+        saved = null;
+      }
+      inner = mountFree(area, {
+        profile,
+        steps: registrationSteps(profile, labels, roles),
+        saved,
+        labels,
+        tools: toolsEl!,
+        onSave: (l) => save(freeLayoutKey(profile.id), JSON.stringify(l)),
+        onDown: (id, code) => presser.down(id, code),
+        onUp: (id) => presser.up(id),
+        onMode: (m) => { document.body.dataset.free = m; },
+      });
+    };
+    void fetchKeymap(keymapId).then(start).catch(() => start({}));
+    return {
+      setComposing() { /* 同上 */ },
+      destroy() {
+        dead = true;
+        presser.releaseAll();
+        inner?.destroy();
+        toolsEl!.replaceChildren();
+        delete document.body.dataset.free;
+      },
+    };
+  }
+
   function remount(): void {
-    if (!areaEl || !modeSel || !profileSel) return;
+    if (!areaEl || !modeSel || !profileSel || !freeBtn) return;
     board?.destroy();
     areaEl.replaceChildren();
     const mode = modeSel.value;
-    document.body.dataset.mode = mode === FLICK ? "flick" : "keys";
+    const free = mode !== FLICK && load(FREE_KEY) === "1";
+    document.body.dataset.mode = mode === FLICK ? "flick" : free ? "free" : "keys";
     profileSel.hidden = mode === FLICK; // 物理配置はフリックには関係ない
-    board = mode === FLICK ? mountFlick(areaEl) : mountKeys(areaEl, mode);
+    freeBtn.hidden = mode === FLICK;
+    freeBtn.setAttribute("aria-pressed", String(free));
+    board = mode === FLICK ? mountFlick(areaEl) : free ? mountFreeBoard(areaEl, mode) : mountKeys(areaEl, mode);
     board.setComposing(composingNow());
   }
 
@@ -312,6 +404,10 @@ async function main(): Promise<void> {
     save(MODE_KEY, modeSel.value);
     remount();
     declareLayout();
+  });
+  freeBtn.addEventListener("click", () => {
+    save(FREE_KEY, load(FREE_KEY) === "1" ? "0" : "1");
+    remount();
   });
   profileSel.addEventListener("change", () => {
     save(PROFILE_KEY, profileSel.value);
