@@ -9,6 +9,7 @@
 import jsQR from "jsqr";
 
 import { Collector, pagesFromUrl } from "../qr/format";
+import { setupPrinter } from "../qr/printer";
 
 const video = document.getElementById("qr-video") as HTMLVideoElement;
 const statusEl = document.getElementById("qr-status") as HTMLParagraphElement;
@@ -22,6 +23,8 @@ const countEl = document.getElementById("qr-count") as HTMLElement;
 const meterEl = document.getElementById("qr-meter") as HTMLElement;
 const copyBtn = document.getElementById("qr-copy") as HTMLButtonElement;
 const saveBtn = document.getElementById("qr-save") as HTMLButtonElement;
+/* レシートに印字（★受け取った本文をそのまま送る） */
+const printer = setupPrinter(() => textEl.value);
 
 /* ★★**見る大きさ**（2026-09-15・実測して決めた）—— いちばん密な v30（137 模様）を
  *   理想的な画像で読ませたときの jsQR の速さと、読めるかどうか:
@@ -196,6 +199,7 @@ async function finish(): Promise<void> {
   try {
     const text = await col.restore();
     textEl.value = text;
+    printer.refresh();
     const secs = firstAt ? (performance.now() - firstAt) / 1000 : 0;
     countEl.textContent =
       `${[...text].length} 字` + (col.pages > 1 ? ` ／ ${col.pages} 枚を ${secs.toFixed(1)} 秒で` : "");

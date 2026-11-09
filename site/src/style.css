@@ -824,6 +824,19 @@ table.km-roles td.note { font-size: 0.8rem; }
   resize: vertical;
 }
 .qr-count { font-size: 0.85rem; font-weight: normal; color: var(--muted); }
+/* レシートに印字（畳んである） */
+.qr-print { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: 0.6rem; }
+.qr-print summary { cursor: pointer; }
+.qr-print[open] summary { margin-bottom: 0.6rem; }
+.qr-print-status { min-height: 1.4em; font-size: 0.9rem; color: var(--muted); }
+.qr-print-status.ok { color: var(--accent); }
+.qr-print-status.err { color: #c0392b; }
+.qr-print-opts { display: grid; gap: 0.3rem; font-size: 0.9rem; }
+.qr-print-opts label { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.qr-print-opts input[type="number"] { width: 5em; font: inherit; }
+/* ★紙は暗い配色でも白（感熱紙の見た目のまま） */
+.qr-print-paper { background: #fff; padding: 8px; border: 1px solid var(--line); width: fit-content; max-width: 100%; max-height: 60vh; overflow: auto; }
+.qr-print-paper canvas { display: block; width: 384px; max-width: 100%; image-rendering: pixelated; }
 
 /* ---- 経路コンポーザ（/composer/ 実験ページ） ---- */
 
