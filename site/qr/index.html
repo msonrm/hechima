@@ -71,6 +71,26 @@
           <button id="qr-copy" type="button">コピー</button>
           <button id="qr-save" type="button">.txt で保存</button>
         </div>
+
+        <!-- ★プリンタを持っている人は少ないので、畳んでおく -->
+        <details id="qr-print" class="qr-print">
+          <summary>レシートに印字（58mm 感熱プリンタ）</summary>
+          <div class="qr-controls">
+            <button id="qr-print-usb" type="button">USB で接続</button>
+            <button id="qr-print-ble" type="button">Bluetooth で接続</button>
+            <button id="qr-print-go" type="button" disabled>印字</button>
+            <button id="qr-print-cancel" type="button" hidden>止める</button>
+          </div>
+          <p id="qr-print-status" class="qr-print-status">未接続</p>
+          <div class="qr-print-opts">
+            <label>文字の大きさ <input id="qr-print-size" type="range" min="14" max="48" value="24" /> <span id="qr-print-size-val">24</span> ドット</label>
+            <label><input id="qr-print-bold" type="checkbox" /> 太字</label>
+            <label>送る間隔 <input id="qr-print-pace" type="number" min="0" max="3000" step="50" value="500" /> ms / 24 行（欠けるなら増やす）</label>
+            <label>末尾の紙送り <input id="qr-print-feed" type="number" min="0" max="20" value="4" /> 行</label>
+          </div>
+          <p id="qr-print-len" class="qr-count"></p>
+          <div class="qr-print-paper"><canvas id="qr-print-preview" width="384" height="1"></canvas></div>
+        </details>
       </section>
 
       <section class="intro">
@@ -90,6 +110,8 @@
           だから 1 枚目を撮り逃しても平気ですし、機体が順番に流すだけで済みます
           ——<b>どの枚がいつ来たかを、送る側が知っている必要がない</b>ということです。</p>
         <p>このページは読み取ったものをどこにも送りません。復元は全部この端末の中で終わります。</p>
+        <p>受け取った本文は、58mm の感熱レシートプリンタに USB か Bluetooth でそのまま印字することもできます
+          （Chrome / Edge のみ。iPhone / iPad の Safari は非対応）。文字は幅 384 ドットの白黒画像にしてから送ります。</p>
       </section>
     </main>
 
